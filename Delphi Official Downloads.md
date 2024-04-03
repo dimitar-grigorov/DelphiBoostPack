@@ -188,18 +188,17 @@ Below are the download links for RAD Studio ISO images, along with their MD5, SH
 - **SHA1:** `307547925fe801d2205d18fc37ac1cd25bc00035`
 - **SHA256:** `ab09ee35d9526a658db5a23ba904a5e1e0e72742e8c18861897d12eab7a35398`
 
-### 27. Delphi 7
-
-- **Link:** [Download](https://altd.embarcadero.com/download/delphi/d7/english/ent/delphi_7_ent_en.iso)
-- **MD5:** `195ac28696c921765b3683cfe299df54`
-- **SHA1:** `e02f27ad3d1770dd204019ce60160e7f8bf347bd`
-- **SHA256:** `6c7c2b2fd7d6832dae84600c1d1fc63fee8992b015a47d3d08fc3d8165454ce0`
-
-### 28. RAD Studio 2007
+### 27. RAD Studio 2007
 
 - **Link:** [Download](https://altd.codegear.com/download/radstudio2007/CodeGearRADStudio2007_Dec2007.iso)
 - **MD5:** `b94981e3c6df7079563d6113d2c909c9`
 - **SHA1:** `21e426e9eeb50ce6c0f7626b84469688c64313d3`
 - **SHA256:** `47ba33c65a8498c0a6dd06176ddaa1e39aaf4cfa30f5c4859ef872187991ff08`
 
+### 28. Delphi 7
+
+- **Link:** [Download](https://altd.embarcadero.com/download/delphi/d7/english/ent/delphi_7_ent_en.iso)
+- **MD5:** `195ac28696c921765b3683cfe299df54`
+- **SHA1:** `e02f27ad3d1770dd204019ce60160e7f8bf347bd`
+- **SHA256:** `6c7c2b2fd7d6832dae84600c1d1fc63fee8992b015a47d3d08fc3d8165454ce0`
 
