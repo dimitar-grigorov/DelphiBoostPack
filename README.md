@@ -23,6 +23,14 @@ To maintain consistency and code readability within the DelphiBoostPack, we adhe
 
 By following these guidelines, we ensure that the codebase remains organized, intuitive, and accessible to contributors and users alike.
 
-## Contribution.
+## Contribution
 
 We welcome contributions from the Delphi community! Whether you're fixing a bug, adding a new utility, or improving documentation, your input is valuable. Please feel free to fork the repository, make your changes, and submit a pull request.
+
+## Official Delphi Downloads
+
+For those looking to download the latest or specific versions of Delphi, official ISOs and web installers can be found through the following link:
+
+- [Delphi Official Downloads](https://github.com/dimitar-grigorov/DelphiBoostPack/Delphi%20Official%20Downloads.md)
+
+This link provides access to a wide range of Delphi and RAD Studio versions, ensuring developers can find the specific version they need to support their projects or update their development environment.
