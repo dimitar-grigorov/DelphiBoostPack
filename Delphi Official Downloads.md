@@ -72,9 +72,9 @@ Below are the download links for RAD Studio ISO images, along with their MD5, SH
 ### 10. RAD Studio 10.3 Rio
 
 - **Link:** [Download](http://altd.embarcadero.com/download/radstudio/10.3/delphicbuilder10_3_0_94364.iso)
-- **MD5:** `N/A`
-- **SHA1:** `N/A`
-- **SHA256:** `N/A`
+- **MD5:** `0882d58cb53a7d0a828cc45d06c6ecd0`
+- **SHA1:** `21579b530f781895885923809d9e670b439ebf9d`
+- **SHA256:** `9213de93c2abdd6a2ee23aa84fc7e63a87d62d0344f0d0f0ee162d0e7dce7c7d`
 
 ### 11. RAD Studio 10.2.3 Tokyo
 
@@ -169,10 +169,10 @@ Below are the download links for RAD Studio ISO images, along with their MD5, SH
 
 ### 24. RAD Studio XE
 
-- **Link:** [Download](https://altd.embarcadero.com/download/RADStudioXE/delphicbuilder_xe_3953B_win.iso)
-- **MD5:** `N/A`
-- **SHA1:** `N/A`
-- **SHA256:** `N/A`
+- **Link:** [Download](https://altd.embarcadero.com/download/RADStudioXE/delphicbuilder_xe_3953b_win.iso)
+- **MD5:** `0995ad987a1f06f277fc57db7fb09778`
+- **SHA1:** `7cd9d483e71f6711f169af066b412d80af1ab086`
+- **SHA256:** `1bd9e04650a2f9a9a16c1bf264c5168cdfa452e50e62dd0c0fbf88112dcc7938`
 
 ### 25. RAD Studio 2010
 
