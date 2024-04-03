@@ -30,5 +30,6 @@
       <MainSource>MainSource</MainSource>
     </DelphiCompile>
     <DCCReference Include="Core\Classes\BpIntList.pas" />
+    <DCCReference Include="Core\Interfaces\BpIntListInterface.pas" />
   </ItemGroup>
 </Project>
