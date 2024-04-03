@@ -23,6 +23,6 @@ To maintain consistency and code readability within the DelphiBoostPack, we adhe
 
 By following these guidelines, we ensure that the codebase remains organized, intuitive, and accessible to contributors and users alike.
 
-## Contribution
+## Contribution.
 
 We welcome contributions from the Delphi community! Whether you're fixing a bug, adding a new utility, or improving documentation, your input is valuable. Please feel free to fork the repository, make your changes, and submit a pull request.
