@@ -31,6 +31,6 @@ We welcome contributions from the Delphi community! Whether you're fixing a bug,
 
 For those looking to download the latest or specific versions of Delphi, official ISOs and web installers can be found through the following link:
 
-- [Delphi Official Downloads](https://github.com/dimitar-grigorov/DelphiBoostPack/Delphi%20Official%20Downloads.md)
+- [Delphi Official Downloads](https://github.com/dimitar-grigorov/DelphiBoostPack/blob/main/Delphi%20Official%20Downloads.md)
 
 This link provides access to a wide range of Delphi and RAD Studio versions, ensuring developers can find the specific version they need to support their projects or update their development environment.
