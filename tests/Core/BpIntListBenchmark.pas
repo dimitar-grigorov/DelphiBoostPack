@@ -46,6 +46,8 @@ const
   lcIntegersToAdd = 45000000; // 45 million
   lcTwoGB: Cardinal = 2147483648; // 2GB in bytes
 begin
+  lvDurationRatio := 0;
+  lvMemoryRatio := 0;
   lvMemStatus.dwLength := SizeOf(TMemoryStatus);
   GlobalMemoryStatus(lvMemStatus); // Retrieve the memory status
   if (lvMemStatus.dwAvailPhys < lcTwoGB) then
@@ -75,7 +77,6 @@ begin
   lvProcessMemoryBefore.cb := SizeOf(lvProcessMemoryBefore);
   lvProcessMemoryAfter.cb := SizeOf(lvProcessMemoryAfter);
 
-  lvStartTick := 0;
   // Test TStringList
   lvStrList := TStringList.Create;
   try
@@ -92,7 +93,7 @@ begin
   end;
 
   // Calculate the ratios
-  if (lvDurationRatio > 0) then
+  if (lvDurationIntList > 0) then
     lvDurationRatio := lvDurationStrList / lvDurationIntList;
   if (lvMemoryIntList > 0) then
     lvMemoryRatio := lvMemoryStrList / lvMemoryIntList;
