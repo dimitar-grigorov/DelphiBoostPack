@@ -81,6 +81,9 @@ type
     procedure TestLoadFromStreamBasic;
     procedure TestLoadFromStreamEmpty;
     procedure TestLoadFromStreamWithInvalidFormat;
+    //SaveToStream
+    procedure TestSaveToStreamBasic;
+    procedure TestSaveToStreamEmptyList;
   end;
 
 implementation
@@ -455,7 +458,7 @@ end;
 procedure TestTBpIntList.TestLoadFromFileBasic;
 var
   FileName: string;
-  SavedText: TStringList;  
+  SavedText: TStringList;
 begin
   FileName := 'testfile.txt';
   // Prepare the file with known content
@@ -639,6 +642,43 @@ begin
       on E: EConvertError do
         Check(True, 'Exception raised as expected for invalid content');
     end;
+  finally
+    MemoryStream.Free;
+  end;
+end;
+
+procedure TestTBpIntList.TestSaveToStreamBasic;
+var
+  MemoryStream: TMemoryStream;
+  OutputText: string;
+begin
+  MemoryStream := TMemoryStream.Create;
+  try
+    FBpIntList.Add(1);
+    FBpIntList.Add(2);
+    FBpIntList.Add(3);
+    FBpIntList.SaveToStream(MemoryStream);
+
+    // Verify the stream content
+    SetString(OutputText, PAnsiChar(MemoryStream.Memory), MemoryStream.Size);
+    CheckEquals('1,2,3', OutputText, 'Stream content should match the list content');
+  finally
+    MemoryStream.Free;
+  end;
+end;
+
+procedure TestTBpIntList.TestSaveToStreamEmptyList;
+var
+  MemoryStream: TMemoryStream;
+  OutputText: string;
+begin
+  MemoryStream := TMemoryStream.Create;
+  try
+    FBpIntList.SaveToStream(MemoryStream);
+
+    // Verify the stream is empty
+    SetString(OutputText, PAnsiChar(MemoryStream.Memory), MemoryStream.Size);
+    CheckEquals('', OutputText, 'Stream content should be empty for an empty list');
   finally
     MemoryStream.Free;
   end;
