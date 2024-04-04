@@ -1,0 +1,44 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <ProjectGuid>{f23048ad-af6c-4b6e-b3b1-169c264b5fd7}</ProjectGuid>
+  </PropertyGroup>
+  <ItemGroup />
+  <ItemGroup>
+    <Projects Include="src\DelphiBoostPack.dproj" />
+    <Projects Include="tests\DelphiBoostPackTests.dproj" />
+  </ItemGroup>
+  <ProjectExtensions>
+    <Borland.Personality>Default.Personality</Borland.Personality>
+    <Borland.ProjectType />
+    <BorlandProject>
+  <BorlandProject xmlns=""> <Default.Personality> </Default.Personality> </BorlandProject></BorlandProject>
+  </ProjectExtensions>
+  <Target Name="DelphiBoostPack">
+    <MSBuild Projects="src\DelphiBoostPack.dproj" Targets="" />
+  </Target>
+  <Target Name="DelphiBoostPack:Clean">
+    <MSBuild Projects="src\DelphiBoostPack.dproj" Targets="Clean" />
+  </Target>
+  <Target Name="DelphiBoostPack:Make">
+    <MSBuild Projects="src\DelphiBoostPack.dproj" Targets="Make" />
+  </Target>
+  <Target Name="DelphiBoostPackTests">
+    <MSBuild Projects="tests\DelphiBoostPackTests.dproj" Targets="" />
+  </Target>
+  <Target Name="DelphiBoostPackTests:Clean">
+    <MSBuild Projects="tests\DelphiBoostPackTests.dproj" Targets="Clean" />
+  </Target>
+  <Target Name="DelphiBoostPackTests:Make">
+    <MSBuild Projects="tests\DelphiBoostPackTests.dproj" Targets="Make" />
+  </Target>
+  <Target Name="Build">
+    <CallTarget Targets="DelphiBoostPack;DelphiBoostPackTests" />
+  </Target>
+  <Target Name="Clean">
+    <CallTarget Targets="DelphiBoostPack:Clean;DelphiBoostPackTests:Clean" />
+  </Target>
+  <Target Name="Make">
+    <CallTarget Targets="DelphiBoostPack:Make;DelphiBoostPackTests:Make" />
+  </Target>
+  <Import Condition="Exists('$(MSBuildBinPath)\Borland.Group.Targets')" Project="$(MSBuildBinPath)\Borland.Group.Targets" />
+</Project>
