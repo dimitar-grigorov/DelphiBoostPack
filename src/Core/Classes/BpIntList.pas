@@ -148,7 +148,7 @@ begin
   begin
     Result := Result + IntToStr(FList[i]);
     if i < FCount - 1 then
-      Result := Result + FDelimiter;
+      Result := Result + Delimiter;
   end;
 end;
 
