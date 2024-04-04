@@ -15,40 +15,46 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    //Add
     procedure TestAdd;
-
+    //Delete
     procedure TestDelete;
     procedure TestDeleteFirstItem;
     procedure TestDeleteLastItem;
     procedure TestDeleteWithInvalidIndex;
-
+    //Clear
     procedure TestClear;
-
+    //IndexOf
     procedure TestIndexOf;
-
+    //Exchange
     procedure TestExchangeValidIndices;
     procedure TestExchangeSameIndex;
     procedure TestExchangeInvalidIndex;
     procedure TestExchangeWithEmptyList;
-
+    //Insert
     procedure TestInsert;
     procedure TestInsertAtBeginning;
     procedure TestInsertAtEnd;
     procedure TestInsertWithInvalidIndex;
-
+    //Sorted
     procedure TestSortedPropertySetTrue;
     procedure TestSortedPropertySetFalse;
     procedure TestAddItemWhenSorted;
     procedure TestSetItemWhenSorted;
-
+    //Items
     procedure TestSetItem;
     procedure TestGetItemWithInvalidIndex;
     procedure TestSetGetItem;
-
+    //CommaText
+    procedure TestSetCommaTextBasic;
+    procedure TestGetCommaTextBasic;
+    procedure TestSetCommaTextWithSpaces;
+    procedure TestCommaTextWithQuotesRaisesException;
+    //Count
     procedure TestCountAfterAdd;
     procedure TestCountAfterMultipleAdds;
     procedure TestCountAfterDelete;
-
+    //DelimitedText
     procedure TestSetDelimitedText;
     procedure TestGetDelimitedTextWithDefaultDelimiter;
     procedure TestSetDelimiterAndDelimitedText;
@@ -269,6 +275,44 @@ begin
   FBpIntList.Add(10);
   FBpIntList.Items[0] := 20;
   CheckEquals(20, FBpIntList.Items[0], 'Item should be updated to 20');
+end;
+
+procedure TestTBpIntList.TestSetCommaTextBasic;
+begin
+  FBpIntList.CommaText := '1,2,3';
+  CheckEquals(3, FBpIntList.Count, 'Count should be 3 after setting CommaText');
+  CheckEquals(1, FBpIntList.Items[0], 'First item should be 1');
+  CheckEquals(2, FBpIntList.Items[1], 'Second item should be 2');
+  CheckEquals(3, FBpIntList.Items[2], 'Third item should be 3');
+end;
+
+procedure TestTBpIntList.TestGetCommaTextBasic;
+begin
+  FBpIntList.Add(1);
+  FBpIntList.Add(2);
+  FBpIntList.Add(3);
+  CheckEquals('1,2,3', FBpIntList.CommaText, 'CommaText should correctly represent the list');
+end;
+
+procedure TestTBpIntList.TestSetCommaTextWithSpaces;
+begin
+  FBpIntList.CommaText := '1, 2, 3';
+  CheckEquals(3, FBpIntList.Count, 'Count should be 3 after setting CommaText with spaces');
+  CheckEquals(1, FBpIntList.Items[0], 'First item should be 1');
+  CheckEquals(2, FBpIntList.Items[1], 'Second item should be 2');
+end;
+
+procedure TestTBpIntList.TestCommaTextWithQuotesRaisesException;
+begin
+  try
+    FBpIntList.CommaText := '"1,5",2,"3,4"';
+    Fail('Expected exception not raised for CommaText with quotes');
+  except
+    on E: EConvertError do
+      Check(True, 'Exception raised as expected for CommaText with quotes');
+    else
+      Check(False, 'Unexpected exception type raised');
+  end;
 end;
 
 procedure TestTBpIntList.TestCountAfterAdd;
