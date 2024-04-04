@@ -52,6 +52,11 @@ type
     procedure TestDelimitedTextOnlyDelimiters;
     procedure TestLargeQuantities;
     procedure TestDelimitedTextWithConsecutiveDelimiters;
+
+    procedure TestSortWithFewItems;
+    procedure TestSortWithIdenticalItems;
+    procedure TestSortWithNegativeItems;
+    procedure TestSortAlreadySorted;
   end;
 
 implementation
@@ -299,6 +304,50 @@ begin
   CheckEquals(2, FBpIntList.Count, 'Count should be 2 with consecutive delimiters treated as single delimiter');
   CheckEquals(1, FBpIntList.Items[0], 'First item should be 1');
   CheckEquals(2, FBpIntList.Items[1], 'Second item should be 2');
+end;
+
+procedure TestTBpIntList.TestSortWithFewItems;
+begin
+  FBpIntList.Add(2);
+  FBpIntList.Add(3);
+  FBpIntList.Add(1);
+  FBpIntList.Sort;
+  CheckEquals(1, FBpIntList.Items[0], 'First item should be 1 after sorting');
+  CheckEquals(2, FBpIntList.Items[1], 'Second item should be 2 after sorting');
+  CheckEquals(3, FBpIntList.Items[2], 'Third item should be 3 after sorting');
+end;
+
+procedure TestTBpIntList.TestSortWithIdenticalItems;
+begin
+  FBpIntList.Add(1);
+  FBpIntList.Add(1);
+  FBpIntList.Add(1);
+  FBpIntList.Sort;
+  CheckEquals(1, FBpIntList.Items[0], 'First item should be 1 after sorting');
+  CheckEquals(1, FBpIntList.Items[1], 'Second item should be 1 after sorting');
+  CheckEquals(1, FBpIntList.Items[2], 'Third item should be 1 after sorting');
+end;
+
+procedure TestTBpIntList.TestSortWithNegativeItems;
+begin
+  FBpIntList.Add(-1);
+  FBpIntList.Add(-3);
+  FBpIntList.Add(-2);
+  FBpIntList.Sort;
+  CheckEquals(-3, FBpIntList.Items[0], 'First item should be -3 after sorting');
+  CheckEquals(-2, FBpIntList.Items[1], 'Second item should be -2 after sorting');
+  CheckEquals(-1, FBpIntList.Items[2], 'Third item should be -1 after sorting');
+end;
+
+procedure TestTBpIntList.TestSortAlreadySorted;
+begin
+  FBpIntList.Add(1);
+  FBpIntList.Add(2);
+  FBpIntList.Add(3);
+  FBpIntList.Sort;
+  CheckEquals(1, FBpIntList.Items[0], 'First item should still be 1 after sorting');
+  CheckEquals(2, FBpIntList.Items[1], 'Second item should still be 2 after sorting');
+  CheckEquals(3, FBpIntList.Items[2], 'Third item should still be 3 after sorting');
 end;
 
 procedure TestTBpIntList.TestLargeQuantities;
