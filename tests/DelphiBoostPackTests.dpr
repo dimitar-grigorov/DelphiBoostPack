@@ -20,7 +20,8 @@ uses
   GUITestRunner,
   TextTestRunner,
   BpIntListTests in 'Core\BpIntListTests.pas',
-  BpIntList in '..\src\Core\Classes\BpIntList.pas';
+  BpIntList in '..\src\Core\Classes\BpIntList.pas',
+  BpIntListInterface in '..\src\Core\Interfaces\BpIntListInterface.pas';
 
 {$R *.RES}
 
