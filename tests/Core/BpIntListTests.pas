@@ -73,10 +73,14 @@ type
     procedure TestLoadFromFileBasic;
     procedure TestLoadFromFileNonExisting;
     procedure TestLoadFromFileWithInvalidFormat;
+    //SaveToFile
+    procedure TestSaveToFileBasic;
+    procedure TestSaveToFileWithDelimiterChange;
+    procedure TestSaveToFileEmptyList;
     //LoadFromStream
     procedure TestLoadFromStreamBasic;
     procedure TestLoadFromStreamEmpty;
-    procedure TestLoadFromStreamWithInvalidFormat;    
+    procedure TestLoadFromStreamWithInvalidFormat;
   end;
 
 implementation
@@ -451,19 +455,21 @@ end;
 procedure TestTBpIntList.TestLoadFromFileBasic;
 var
   FileName: string;
+  SavedText: TStringList;  
 begin
   FileName := 'testfile.txt';
   // Prepare the file with known content
-  with TStringList.Create do
+  SavedText := TStringList.Create;
   try
-    Text := '1,2,3';
-    SaveToFile(FileName);
+    SavedText.Text := '1,2,3';
+    SavedText.SaveToFile(FileName);
+    
+    FBpIntList.LoadFromFile(FileName);
+    CheckEquals(3, FBpIntList.Count, 'Count should be 3 after loading from file');
   finally
-    Free;
+    SysUtils.DeleteFile(FileName); // Delete the file after test
+    SavedText.Free;
   end;
-
-  FBpIntList.LoadFromFile(FileName);
-  CheckEquals(3, FBpIntList.Count, 'Count should be 3 after loading from file');
 end;
 
 procedure TestTBpIntList.TestLoadFromFileNonExisting;
@@ -477,26 +483,94 @@ begin
   end;
 end;
 
+procedure TestTBpIntList.TestSaveToFileBasic;
+var
+  FileName: string;
+  SavedText: TStringList;
+begin
+  FileName := 'savetofiletest.txt';
+  FBpIntList.Add(1);
+  FBpIntList.Add(2);
+  FBpIntList.Add(3);
+
+  FBpIntList.SaveToFile(FileName);
+
+  // Verify the file content
+  SavedText := TStringList.Create;
+  try
+    SavedText.LoadFromFile(FileName);
+    CheckEquals('1,2,3', TrimRight(SavedText.Text), 'File content should match the list content');
+  finally
+    SavedText.Free;
+    SysUtils.DeleteFile(FileName); // Delete the file after test
+  end;
+end;
+
+procedure TestTBpIntList.TestSaveToFileWithDelimiterChange;
+var
+  FileName: string;
+  SavedText: TStringList;
+begin
+  FileName := 'delimitertest.txt';
+  FBpIntList.Delimiter := ';';
+  FBpIntList.Add(1);
+  FBpIntList.Add(2);
+  FBpIntList.Add(3);
+
+  FBpIntList.SaveToFile(FileName);
+
+  // Verify the file content
+  SavedText := TStringList.Create;
+  try
+    SavedText.LoadFromFile(FileName);
+    CheckEquals('1;2;3', TrimRight(SavedText.Text), 'File content should respect the changed delimiter');
+  finally
+    SavedText.Free;
+    SysUtils.DeleteFile(FileName); // Delete the file after test
+  end;
+end;
+
+procedure TestTBpIntList.TestSaveToFileEmptyList;
+var
+  FileName: string;
+  SavedText: TStringList;
+begin
+  FileName := 'emptylisttest.txt';
+  FBpIntList.SaveToFile(FileName);
+
+  // Verify the file is empty
+  SavedText := TStringList.Create;
+  try
+    SavedText.LoadFromFile(FileName);
+    CheckEquals('', TrimRight(SavedText.Text), 'File content should be empty for an empty list');
+  finally
+    SavedText.Free;
+    SysUtils.DeleteFile(FileName); // Delete the file after test
+  end;
+end;
+
 procedure TestTBpIntList.TestLoadFromFileWithInvalidFormat;
 var
   FileName: string;
+  SavedText: TStringList;
 begin
   FileName := 'invalidformat.txt';
   // Prepare the file with invalid content
-  with TStringList.Create do
+  SavedText := TStringList.Create;
   try
-    Text := 'not,a,number';
-    SaveToFile(FileName);
-  finally
-    Free;
-  end;
+    SavedText.Text := 'not,a,number';
+    SavedText.SaveToFile(FileName);
 
-  try
-    FBpIntList.LoadFromFile(FileName);
-    Fail('Expected exception for invalid content');
-  except
-    on E: EConvertError do
-      Check(True, 'Exception raised as expected for invalid content');
+    try
+      FBpIntList.LoadFromFile(FileName);
+      Fail('Expected exception for invalid content');
+    except
+      on E: EConvertError do
+        Check(True, 'Exception raised as expected for invalid content');
+    end;
+  finally
+    SysUtils.DeleteFile(FileName); // Delete the file after test
+    SavedText.Free;
   end;
 end;
 
@@ -569,7 +643,6 @@ begin
     MemoryStream.Free;
   end;
 end;
-
 
 procedure TestTBpIntList.TestLargeQuantities;
 var
