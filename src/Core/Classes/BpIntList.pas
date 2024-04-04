@@ -41,13 +41,16 @@ type
     constructor Create;
     destructor Destroy; override;
     function Add(const Item: Integer): Integer;
-    procedure BeginUpdate;
     procedure Delete(const Index: Integer);
     procedure Clear;
-    procedure EndUpdate;
+    procedure Exchange(Index1, Index2: Integer); virtual;
     function IndexOf(const Item: Integer): Integer;
     procedure Insert(Index: Integer; const Item: Integer);
     procedure Sort; virtual;
+
+    procedure BeginUpdate;
+    procedure EndUpdate;
+  public
     property Items[Index: Integer]: Integer read GetItem write SetItem; default;
     property CommaText: string read GetCommaText write SetCommaText;
     property Count: Integer read GetCount;
@@ -59,6 +62,11 @@ type
   end;
 
 implementation
+
+resourcestring
+  SListCapacityError = 'List capacity out of bounds (%d)';
+  SListCountError = 'List count out of bounds (%d)';
+  SListIndexError = 'List index out of bounds (%d)';
 
 constructor TBpIntList.Create;
 begin
@@ -88,7 +96,9 @@ procedure TBpIntList.SetItem(Index: Integer; const Value: Integer);
 begin
   if (Index < 0) or (Index >= FCount) then
     raise EListError.Create('List index out of bounds');
+  Changing;
   FList[Index] := Value;
+  Changed;
 end;
 
 procedure TBpIntList.SetSorted(const Value: Boolean);
@@ -107,6 +117,17 @@ begin
     FCount := NewCapacity; // Reduce count if reducing capacity below count
   if NewCapacity <> Length(FList) then
     SetLength(FList, NewCapacity);
+end;
+
+procedure TBpIntList.Exchange(Index1, Index2: Integer);
+begin
+  if (Index1 < 0) or (Index1 >= FCount) then
+    raise EListError.CreateFmt(SListIndexError, [Index1]);
+  if (Index2 < 0) or (Index2 >= FCount) then
+    raise EListError.CreateFmt(SListIndexError, [Index2]);
+  Changing;
+  ExchangeItems(Index1, Index2);
+  Changed;
 end;
 
 procedure TBpIntList.ExchangeItems(Index1, Index2: Integer);
@@ -161,12 +182,6 @@ end;
 
 function TBpIntList.Add(const Item: Integer): Integer;
 begin
-//  if FCount = Length(FList) then
-//    Grow;
-//  FList[FCount] := Item;
-//  Result := FCount;
-//  Inc(FCount);
-
   Result := GetCount;
   Insert(Result, Item);
 end;
@@ -175,15 +190,22 @@ procedure TBpIntList.Delete(const Index: Integer);
 begin
   if (Index < 0) or (Index >= FCount) then
     raise EListError.Create('List index out of bounds');
+  Changing;
   Dec(FCount);
   if Index < FCount then
     System.Move(FList[Index + 1], FList[Index], (FCount - Index) * SizeOf(Integer));
+  Changed;
 end;
 
 procedure TBpIntList.Clear;
 begin
-  SetCapacity(0);
-  FCount := 0;
+  if FCount <> 0 then
+  begin
+    Changing;
+    FCount := 0;
+    SetCapacity(0);
+    Changed;
+  end;
 end;
 
 function TBpIntList.GetDelimiter: Char;
