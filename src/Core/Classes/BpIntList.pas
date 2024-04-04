@@ -282,10 +282,10 @@ begin
     while P^ <> #0 do
     begin
       Start := P;
-      // Search for the next delimiter or end of string
-      while (P^ <> #0) and (P^ <> Delimiter) do
+      // Search for the next delimiter, end of string, or newline character
+      while (P^ <> #0) and (P^ <> Delimiter) and not (P^ in [#10, #13]) do
         Inc(P);
-      
+
       // Extract the substring from the start of the number to the delimiter
       SetString(S, Start, P - Start);
       if S <> '' then
@@ -297,14 +297,15 @@ begin
           raise EConvertError.CreateFmt('Cannot convert string "%s" to integer', [S]);
       end;
 
-      // Skip the delimiter
-      if P^ = Delimiter then
+      // Skip the delimiter and any trailing newline characters or spaces
+      while P^ in [Delimiter, #10, #13, ' '] do
         Inc(P);
     end;
   finally
     EndUpdate;
   end;
 end;
+
 
 procedure TBpIntList.LoadFromFile(const FileName: string);
 var
