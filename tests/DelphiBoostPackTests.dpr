@@ -21,7 +21,8 @@ uses
   TextTestRunner,
   BpIntListTests in 'Core\BpIntListTests.pas',
   BpIntList in '..\src\Core\Classes\BpIntList.pas',
-  BpIntListInterface in '..\src\Core\Interfaces\BpIntListInterface.pas';
+  BpIntListInterface in '..\src\Core\Interfaces\BpIntListInterface.pas',
+  BpIntListBenchmark in 'Core\BpIntListBenchmark.pas';
 
 {$R *.RES}
 
