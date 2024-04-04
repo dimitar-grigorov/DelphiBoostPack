@@ -79,6 +79,7 @@
     </DelphiCompile>
     <DCCReference Include="..\src\Core\Classes\BpIntList.pas" />
     <DCCReference Include="..\src\Core\Interfaces\BpIntListInterface.pas" />
+    <DCCReference Include="Core\BpIntListBenchmark.pas" />
     <DCCReference Include="Core\BpIntListTests.pas" />
   </ItemGroup>
 </Project>
