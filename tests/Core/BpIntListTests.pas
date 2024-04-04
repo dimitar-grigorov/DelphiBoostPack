@@ -24,6 +24,12 @@ type
 
     procedure TestClear;
 
+    procedure TestIndexOf;
+    procedure TestInsert;
+    procedure TestInsertAtBeginning;
+    procedure TestInsertAtEnd;
+    procedure TestInsertWithInvalidIndex;        
+
     procedure TestSetItem;
     procedure TestGetItemWithInvalidIndex;
     procedure TestSetGetItem;
@@ -108,6 +114,49 @@ begin
   CheckEquals(0, FBpIntList.Count, 'Count should be 0 after clearing the list');
 end;
 
+procedure TestTBpIntList.TestIndexOf;
+begin
+  FBpIntList.Add(10);
+  FBpIntList.Add(20);
+  CheckEquals(0, FBpIntList.IndexOf(10), 'IndexOf should return 0 for the first item');
+  CheckEquals(1, FBpIntList.IndexOf(20), 'IndexOf should return 1 for the second item');
+  CheckEquals(-1, FBpIntList.IndexOf(30), 'IndexOf should return -1 for a non-existent item');
+end;
+
+procedure TestTBpIntList.TestInsert;
+begin
+  FBpIntList.Add(10);
+  FBpIntList.Add(30);
+  FBpIntList.Insert(1, 20); // Insert 20 at index 1
+  CheckEquals(3, FBpIntList.Count, 'Count should be 3 after insert');
+  CheckEquals(20, FBpIntList.Items[1], 'The inserted item should be at index 1');
+end;
+
+procedure TestTBpIntList.TestInsertAtBeginning;
+begin
+  FBpIntList.Add(10);
+  FBpIntList.Insert(0, 5); // Insert at the beginning
+  CheckEquals(5, FBpIntList.Items[0], 'The inserted item should be the first item');
+end;
+
+procedure TestTBpIntList.TestInsertAtEnd;
+begin
+  FBpIntList.Add(10);
+  FBpIntList.Insert(1, 20); // Insert at the end
+  CheckEquals(20, FBpIntList.Items[1], 'The inserted item should be the last item');
+end;
+
+procedure TestTBpIntList.TestInsertWithInvalidIndex;
+begin
+  try
+    FBpIntList.Insert(-1, 10); // Attempt to insert with an invalid index
+    Fail('Expected EListError not raised for invalid index');
+  except
+    on E: EListError do
+      ; // Test passes
+  end;
+end;
+
 procedure TestTBpIntList.TestSetItem;
 begin
   FBpIntList.Add(10);
@@ -116,11 +165,9 @@ begin
 end;
 
 procedure TestTBpIntList.TestGetItemWithInvalidIndex;
-var
-  Item: Integer;
 begin
   try
-    Item := FBpIntList.Items[-1]; // Attempt to access with an invalid index
+    FBpIntList.Items[-1]; // Attempt to access with an invalid index
     Fail('Expected EListError not raised for invalid index');
   except
     on E: EListError do
