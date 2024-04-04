@@ -25,6 +25,12 @@ type
     procedure TestClear;
 
     procedure TestIndexOf;
+
+    procedure TestExchangeValidIndices;
+    procedure TestExchangeSameIndex;
+    procedure TestExchangeInvalidIndex;
+    procedure TestExchangeWithEmptyList;
+
     procedure TestInsert;
     procedure TestInsertAtBeginning;
     procedure TestInsertAtEnd;
@@ -131,6 +137,46 @@ begin
   CheckEquals(0, FBpIntList.IndexOf(10), 'IndexOf should return 0 for the first item');
   CheckEquals(1, FBpIntList.IndexOf(20), 'IndexOf should return 1 for the second item');
   CheckEquals(-1, FBpIntList.IndexOf(30), 'IndexOf should return -1 for a non-existent item');
+end;
+
+procedure TestTBpIntList.TestExchangeValidIndices;
+begin
+  FBpIntList.Add(1);
+  FBpIntList.Add(2);
+  FBpIntList.Exchange(0, 1);
+  CheckEquals(2, FBpIntList.Items[0], 'First item should be 2 after exchange');
+  CheckEquals(1, FBpIntList.Items[1], 'Second item should be 1 after exchange');
+end;
+
+procedure TestTBpIntList.TestExchangeSameIndex;
+begin
+  FBpIntList.Add(1);
+  FBpIntList.Add(2);
+  FBpIntList.Exchange(0, 0);
+  CheckEquals(1, FBpIntList.Items[0], 'Item should remain unchanged when indices are the same');
+end;
+
+procedure TestTBpIntList.TestExchangeInvalidIndex;
+begin
+  FBpIntList.Add(1);
+  try
+    FBpIntList.Exchange(0, 2); // Invalid index
+    Fail('Expected EListError not raised for invalid index');
+  except
+    on E: EListError do
+      ; // Pass the test
+  end;
+end;
+
+procedure TestTBpIntList.TestExchangeWithEmptyList;
+begin
+  try
+    FBpIntList.Exchange(0, 1); // Attempt to exchange in an empty list
+    Fail('Expected EListError not raised for empty list');
+  except
+    on E: EListError do
+      ; // Pass the test
+  end;
 end;
 
 procedure TestTBpIntList.TestInsert;
