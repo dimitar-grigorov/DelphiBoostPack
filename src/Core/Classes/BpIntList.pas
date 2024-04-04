@@ -14,18 +14,24 @@ type
     FDefined: TbpIntListDefined;
     FUpdateCount: Integer;
     FCount: Integer;
+    FSorted: Boolean;
     FDelimiter: Char;
     FOnChange: TNotifyEvent;
     FOnChanging: TNotifyEvent;
     function GetItem(Index: Integer): Integer;
     procedure SetItem(Index: Integer; const Value: Integer);
     procedure SetCapacity(const NewCapacity: Integer);
+    procedure ExchangeItems(Index1, Index2: Integer);
     procedure Grow;
+    procedure QuickSort(L, R: Integer);
     function GetDelimitedText: string;
     procedure SetDelimitedText(const Value: string);
     function GetDelimiter: Char;
     procedure SetDelimiter(const Value: Char);
-    function GetCount: Integer;     
+    function GetCount: Integer;
+    function GetCommaText: string;
+    procedure SetCommaText(const Value: string);
+    procedure SetSorted(const Value: Boolean);
   protected
     procedure Changed; virtual;
     procedure Changing; virtual;
@@ -41,10 +47,13 @@ type
     procedure EndUpdate;
     function IndexOf(const Item: Integer): Integer;
     procedure Insert(Index: Integer; const Item: Integer);
+    procedure Sort; virtual;
     property Items[Index: Integer]: Integer read GetItem write SetItem; default;
-    property Count: Integer read FCount;
+    property CommaText: string read GetCommaText write SetCommaText;
+    property Count: Integer read GetCount;
     property Delimiter: Char read GetDelimiter write SetDelimiter;
     property DelimitedText: string read GetDelimitedText write SetDelimitedText;
+    property Sorted: Boolean read FSorted write SetSorted;
     property OnChange: TNotifyEvent read FOnChange write FOnChange;
     property OnChanging: TNotifyEvent read FOnChanging write FOnChanging;
   end;
@@ -55,6 +64,7 @@ constructor TBpIntList.Create;
 begin
   inherited;
   FCount := 0;
+  FSorted := False;
   SetCapacity(0);
 end;
 
@@ -81,12 +91,31 @@ begin
   FList[Index] := Value;
 end;
 
+procedure TBpIntList.SetSorted(const Value: Boolean);
+begin
+  if FSorted <> Value then
+  begin
+    if Value then
+      Sort;
+    FSorted := Value;
+  end;
+end;
+
 procedure TBpIntList.SetCapacity(const NewCapacity: Integer);
 begin
   if NewCapacity < FCount then
     FCount := NewCapacity; // Reduce count if reducing capacity below count
   if NewCapacity <> Length(FList) then
     SetLength(FList, NewCapacity);
+end;
+
+procedure TBpIntList.ExchangeItems(Index1, Index2: Integer);
+var
+  Temp: Integer;
+begin
+  Temp := FList[Index1];
+  FList[Index1] := FList[Index2];
+  FList[Index2] := Temp;
 end;
 
 procedure TBpIntList.Grow;
@@ -102,13 +131,44 @@ begin
   SetCapacity(NewCapacity);
 end;
 
+procedure TBpIntList.QuickSort(L, R: Integer);
+var
+  I, J, Pivot: Integer;
+begin
+  if L < R then
+  begin
+    Pivot := FList[(L + R) div 2]; // Choose the pivot element
+    I := L;
+    J := R;
+    repeat
+      while FList[I] < Pivot do
+        Inc(I);
+      while FList[J] > Pivot do
+        Dec(J);
+      if I <= J then
+      begin
+        // Swap elements
+        ExchangeItems(I, J);
+        Inc(I);
+        Dec(J);
+      end;
+    until I > J;
+    // Recursively sort the partitions
+    QuickSort(L, J);
+    QuickSort(I, R);
+  end;
+end;
+
 function TBpIntList.Add(const Item: Integer): Integer;
 begin
-  if FCount = Length(FList) then
-    Grow;
-  FList[FCount] := Item;
-  Result := FCount;
-  Inc(FCount);
+//  if FCount = Length(FList) then
+//    Grow;
+//  FList[FCount] := Item;
+//  Result := FCount;
+//  Inc(FCount);
+
+  Result := GetCount;
+  Insert(Result, Item);
 end;
 
 procedure TBpIntList.Delete(const Index: Integer);
@@ -142,6 +202,28 @@ begin
   end
 end;
 
+function TBpIntList.GetCommaText: string;
+var
+  lvOldDefined: TbpIntListDefined;
+  lvOldDelimiter: Char;
+begin
+  lvOldDefined := FDefined;
+  lvOldDelimiter := Delimiter;
+  Delimiter := ',';
+  try
+    Result := GetDelimitedText;
+  finally
+    Delimiter := lvOldDelimiter;
+    FDefined := lvOldDefined;
+  end;
+end;
+
+procedure TBpIntList.SetCommaText(const Value: string);
+begin
+  Delimiter := ',';
+  SetDelimitedText(Value);
+end;
+
 function TBpIntList.GetCount: Integer;
 begin
   Result := FCount;
@@ -152,10 +234,10 @@ var
   i: Integer;
 begin
   Result := '';
-  for i := 0 to FCount - 1 do
+  for i := 0 to Count - 1 do
   begin
     Result := Result + IntToStr(FList[i]);
-    if i < FCount - 1 then
+    if i < Count - 1 then
       Result := Result + Delimiter;
   end;
 end;
@@ -228,15 +310,16 @@ procedure TBpIntList.Insert(Index: Integer; const Item: Integer);
 begin
   if (Index < 0) or (Index > Count) then
     raise EListError.Create('List index out of bounds');
-
+  Changing;
   if Count = Length(FList) then
     Grow;
   // Shift elements to make space for the new item.
   if Index < Count then
     System.Move(FList[Index], FList[Index + 1], (Count - Index) * SizeOf(Integer));
-    
+
   FList[Index] := Item;
   Inc(FCount);
+  Changed;
 end;
 
 procedure TBpIntList.SetUpdateState(const Updating: Boolean);
@@ -245,6 +328,16 @@ begin
     Changing
   else
     Changed;
+end;
+
+procedure TBpIntList.Sort;
+begin
+  if not Sorted and (FCount > 1) then
+  begin
+    Changing;
+    QuickSort(0, FCount - 1);
+    Changed;
+  end;
 end;
 
 procedure TBpIntList.Changed;
