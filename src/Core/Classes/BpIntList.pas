@@ -329,18 +329,37 @@ begin
 end;
 
 procedure TBpIntList.Insert(Index: Integer; const Item: Integer);
+var
+  CorrectIndex, I: Integer;
 begin
   if (Index < 0) or (Index > Count) then
     raise EListError.Create('List index out of bounds');
+
   Changing;
+
+  if Sorted then
+  begin
+    // Find the correct index for the new item to maintain sort order
+    CorrectIndex := 0;
+    for I := 0 to Count - 1 do
+    begin
+      if FList[I] > Item then
+        Break;
+      Inc(CorrectIndex);
+    end;
+    Index := CorrectIndex; // Ignore the provided index since we are sorted
+  end;
+
   if Count = Length(FList) then
     Grow;
+
   // Shift elements to make space for the new item.
   if Index < Count then
     System.Move(FList[Index], FList[Index + 1], (Count - Index) * SizeOf(Integer));
 
   FList[Index] := Item;
   Inc(FCount);
+
   Changed;
 end;
 
