@@ -48,6 +48,11 @@ type
     procedure Insert(Index: Integer; const Item: Integer);
     procedure Sort; virtual;
 
+    procedure LoadFromFile(const FileName: string); virtual;
+    procedure LoadFromStream(Stream: TStream); virtual;
+    procedure SaveToFile(const FileName: string); virtual;
+    procedure SaveToStream(Stream: TStream); virtual;    
+
     procedure BeginUpdate;
     procedure EndUpdate;
   public
@@ -298,6 +303,56 @@ begin
     end;
   finally
     EndUpdate;
+  end;
+end;
+
+procedure TBpIntList.LoadFromFile(const FileName: string);
+var
+  FileStream: TFileStream;
+begin
+  FileStream := TFileStream.Create(FileName, fmOpenRead or fmShareDenyWrite);
+  try
+    LoadFromStream(FileStream);
+  finally
+    FileStream.Free;
+  end;
+end;
+
+procedure TBpIntList.LoadFromStream(Stream: TStream);
+var
+  ListText: TStringList;
+begin
+  ListText := TStringList.Create;
+  try
+    ListText.LoadFromStream(Stream);
+    SetDelimitedText(ListText.Text);
+  finally
+    ListText.Free;
+  end;
+end;
+
+procedure TBpIntList.SaveToFile(const FileName: string);
+var
+  FileStream: TFileStream;
+begin
+  FileStream := TFileStream.Create(FileName, fmCreate);
+  try
+    SaveToStream(FileStream);
+  finally
+    FileStream.Free;
+  end;
+end;
+
+procedure TBpIntList.SaveToStream(Stream: TStream);
+var
+  ListText: TStringList;
+begin
+  ListText := TStringList.Create;
+  try
+    ListText.Text := GetDelimitedText;
+    ListText.SaveToStream(Stream);
+  finally
+    ListText.Free;
   end;
 end;
 
