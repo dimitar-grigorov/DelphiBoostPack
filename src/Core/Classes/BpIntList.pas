@@ -321,16 +321,23 @@ end;
 
 procedure TBpIntList.LoadFromStream(Stream: TStream);
 var
-  ListText: TStringList;
+  S: string;
+  Buffer: array of Byte;
 begin
-  ListText := TStringList.Create;
+  BeginUpdate;
   try
-    ListText.LoadFromStream(Stream);
-    SetDelimitedText(ListText.Text);
+    Clear;
+    SetLength(Buffer, Stream.Size);
+    Stream.Position := 0; // Ensure the stream's read pointer is at the beginning.
+    Stream.Read(Buffer[0], Stream.Size);
+    // Convert buffer into string
+    SetString(S, PAnsiChar(@Buffer[0]), Length(Buffer));
+    SetDelimitedText(S);
   finally
-    ListText.Free;
+    EndUpdate;
   end;
 end;
+
 
 procedure TBpIntList.SaveToFile(const FileName: string);
 var
@@ -346,15 +353,11 @@ end;
 
 procedure TBpIntList.SaveToStream(Stream: TStream);
 var
-  ListText: TStringList;
+  Text: string;
 begin
-  ListText := TStringList.Create;
-  try
-    ListText.Text := GetDelimitedText;
-    ListText.SaveToStream(Stream);
-  finally
-    ListText.Free;
-  end;
+  Text := GetDelimitedText; // Get the delimited text representation of the list
+  if Length(Text) > 0 then
+    Stream.WriteBuffer(Text[1], Length(Text));
 end;
 
 procedure TBpIntList.BeginUpdate;
