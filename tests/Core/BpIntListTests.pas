@@ -73,6 +73,10 @@ type
     procedure TestLoadFromFileBasic;
     procedure TestLoadFromFileNonExisting;
     procedure TestLoadFromFileWithInvalidFormat;
+    //LoadFromStream
+    procedure TestLoadFromStreamBasic;
+    procedure TestLoadFromStreamEmpty;
+    procedure TestLoadFromStreamWithInvalidFormat;    
   end;
 
 implementation
@@ -495,6 +499,77 @@ begin
       Check(True, 'Exception raised as expected for invalid content');
   end;
 end;
+
+procedure TestTBpIntList.TestLoadFromStreamBasic;
+var
+  MemoryStream: TMemoryStream;
+  InputText: string;
+begin
+  InputText := '1,2,3';
+  MemoryStream := TMemoryStream.Create;
+  try
+    // Prepare the stream with known content
+    with TStringList.Create do
+    try
+      Text := InputText;
+      SaveToStream(MemoryStream);
+    finally
+      Free;
+    end;
+    MemoryStream.Position := 0; // Reset stream position for reading
+
+    FBpIntList.LoadFromStream(MemoryStream);
+  finally
+    MemoryStream.Free;
+  end;
+
+  CheckEquals(3, FBpIntList.Count, 'Count should be 3 after loading from stream');
+end;
+
+procedure TestTBpIntList.TestLoadFromStreamEmpty;
+var
+  MemoryStream: TMemoryStream;
+begin
+  MemoryStream := TMemoryStream.Create;
+  try
+    FBpIntList.LoadFromStream(MemoryStream);
+  finally
+    MemoryStream.Free;
+  end;
+
+  CheckEquals(0, FBpIntList.Count, 'Count should be 0 after loading from an empty stream');
+end;
+
+procedure TestTBpIntList.TestLoadFromStreamWithInvalidFormat;
+var
+  MemoryStream: TMemoryStream;
+  InputText: string;
+begin
+  InputText := 'invalid,data';
+  MemoryStream := TMemoryStream.Create;
+  try
+    // Prepare the stream with invalid content
+    with TStringList.Create do
+    try
+      Text := InputText;
+      SaveToStream(MemoryStream);
+    finally
+      Free;
+    end;
+    MemoryStream.Position := 0; // Reset stream position for reading
+
+    try
+      FBpIntList.LoadFromStream(MemoryStream);
+      Fail('Expected exception for invalid content');
+    except
+      on E: EConvertError do
+        Check(True, 'Exception raised as expected for invalid content');
+    end;
+  finally
+    MemoryStream.Free;
+  end;
+end;
+
 
 procedure TestTBpIntList.TestLargeQuantities;
 var
