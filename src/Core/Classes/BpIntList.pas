@@ -2,6 +2,8 @@ unit bpIntList;
 
 interface
 
+// Tags: TIntegerList, TIntList, Delphi 7, Delphi 2007
+
 uses
   Classes, SysUtils, BpIntListInterface;
 
