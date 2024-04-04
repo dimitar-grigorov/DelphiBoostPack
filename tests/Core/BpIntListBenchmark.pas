@@ -47,13 +47,21 @@ procedure TbpIntListBenchmark.TestAddPerformance;
 var
   lvIntList: TBpIntList;
   lvStrList: TStringList;
-  lvStartTick, lvEndTick: DWORD;
-  lvDurationIntList, lvDurationStrList, lvMemoryIntList, lvMemoryStrList: DWORD;
+  lvStartTick, lvEndTick: Cardinal;
+  lvDurationIntList, lvDurationStrList, lvMemoryIntList, lvMemoryStrList: Cardinal;
+  lvDurationRatio, lvMemoryRatio: Double;
   lvProcessMemoryBefore, lvProcessMemoryAfter: PROCESS_MEMORY_COUNTERS;
+  lvMemStatus: TMemoryStatus;
   I: Integer;
 const
-  lvIntegersToAdd = 45000000; // 45 million
+  lcIntegersToAdd = 45000000; // 45 million
+  lcTwoGB: Cardinal = 2147483648; // 2GB in bytes
 begin
+  lvMemStatus.dwLength := SizeOf(TMemoryStatus);
+  GlobalMemoryStatus(lvMemStatus); // Retrieve the memory status
+  if (lvMemStatus.dwAvailPhys < lcTwoGB) then
+    Fail('Insufficient memory available to run test: less than 2 GB RAM free');
+
   lvProcessMemoryBefore.cb := SizeOf(lvProcessMemoryBefore);
   lvProcessMemoryAfter.cb := SizeOf(lvProcessMemoryAfter);
 
@@ -62,7 +70,7 @@ begin
   try
     GetProcessMemoryInfo(GetCurrentProcess(), @lvProcessMemoryBefore, SizeOf(lvProcessMemoryBefore));
     lvStartTick := GetTickCount;
-    for I := 1 to lvIntegersToAdd do
+    for I := 1 to lcIntegersToAdd do
       lvIntList.Add(I);
     lvEndTick := GetTickCount;
     GetProcessMemoryInfo(GetCurrentProcess(), @lvProcessMemoryAfter, SizeOf(lvProcessMemoryAfter));
@@ -72,18 +80,20 @@ begin
     lvIntList.Free;
   end;
 
-  // Reset memory measurement
+  // Reset memory measurement for TStringList
   FillChar(lvProcessMemoryBefore, SizeOf(lvProcessMemoryBefore), 0);
   FillChar(lvProcessMemoryAfter, SizeOf(lvProcessMemoryAfter), 0);
   lvProcessMemoryBefore.cb := SizeOf(lvProcessMemoryBefore);
   lvProcessMemoryAfter.cb := SizeOf(lvProcessMemoryAfter);
 
+  lvStartTick := 0;
+  lvEndTick := 0;
   // Test TStringList
   lvStrList := TStringList.Create;
   try
     GetProcessMemoryInfo(GetCurrentProcess(), @lvProcessMemoryBefore, SizeOf(lvProcessMemoryBefore));
     lvStartTick := GetTickCount;
-    for I := 1 to lvIntegersToAdd do
+    for I := 1 to lcIntegersToAdd do
       lvStrList.Add(IntToStr(I));
     lvEndTick := GetTickCount;
     GetProcessMemoryInfo(GetCurrentProcess(), @lvProcessMemoryAfter, SizeOf(lvProcessMemoryAfter));
@@ -93,14 +103,22 @@ begin
     lvStrList.Free;
   end;
 
+  // Calculate the ratios
+  if (lvDurationRatio > 0) then
+    lvDurationRatio := lvDurationStrList / lvDurationIntList;
+  if (lvMemoryIntList > 0) then
+    lvMemoryRatio := lvMemoryStrList / lvMemoryIntList;
+
+  // Output results
   Status(Format('TBpIntList Duration: %d ms', [lvDurationIntList]));
   Status(Format('TStringList Duration: %d ms', [lvDurationStrList]));
+  Status(Format('Duration Ratio (String/Int List): %.2f', [lvDurationRatio]));
   Status(Format('TBpIntList Memory Usage: %d KB', [lvMemoryIntList]));
   Status(Format('TStringList Memory Usage: %d KB', [lvMemoryStrList]));
+  Status(Format('Memory Usage Ratio (String/Int List): %.2f', [lvMemoryRatio]));
 end;
 
 initialization
-  // Register any test cases with the test runner
   RegisterTest(TbpIntListBenchmark.Suite);
 
 end.
