@@ -64,11 +64,15 @@ type
     procedure TestDelimitedTextOnlyDelimiters;
     procedure TestLargeQuantities;
     procedure TestDelimitedTextWithConsecutiveDelimiters;
-
+    //Sort
     procedure TestSortWithFewItems;
     procedure TestSortWithIdenticalItems;
     procedure TestSortWithNegativeItems;
     procedure TestSortAlreadySorted;
+    //LoadFromFile
+    procedure TestLoadFromFileBasic;
+    procedure TestLoadFromFileNonExisting;
+    procedure TestLoadFromFileWithInvalidFormat;
   end;
 
 implementation
@@ -438,6 +442,58 @@ begin
   CheckEquals(1, FBpIntList.Items[0], 'First item should still be 1 after sorting');
   CheckEquals(2, FBpIntList.Items[1], 'Second item should still be 2 after sorting');
   CheckEquals(3, FBpIntList.Items[2], 'Third item should still be 3 after sorting');
+end;
+
+procedure TestTBpIntList.TestLoadFromFileBasic;
+var
+  FileName: string;
+begin
+  FileName := 'testfile.txt';
+  // Prepare the file with known content
+  with TStringList.Create do
+  try
+    Text := '1,2,3';
+    SaveToFile(FileName);
+  finally
+    Free;
+  end;
+
+  FBpIntList.LoadFromFile(FileName);
+  CheckEquals(3, FBpIntList.Count, 'Count should be 3 after loading from file');
+end;
+
+procedure TestTBpIntList.TestLoadFromFileNonExisting;
+begin
+  try
+    FBpIntList.LoadFromFile('nonexistingfile.txt');
+    Fail('Expected exception for non-existing file');
+  except
+    on E: Exception do
+      Check(True, 'Exception raised as expected');
+  end;
+end;
+
+procedure TestTBpIntList.TestLoadFromFileWithInvalidFormat;
+var
+  FileName: string;
+begin
+  FileName := 'invalidformat.txt';
+  // Prepare the file with invalid content
+  with TStringList.Create do
+  try
+    Text := 'not,a,number';
+    SaveToFile(FileName);
+  finally
+    Free;
+  end;
+
+  try
+    FBpIntList.LoadFromFile(FileName);
+    Fail('Expected exception for invalid content');
+  except
+    on E: EConvertError do
+      Check(True, 'Exception raised as expected for invalid content');
+  end;
 end;
 
 procedure TestTBpIntList.TestLargeQuantities;
