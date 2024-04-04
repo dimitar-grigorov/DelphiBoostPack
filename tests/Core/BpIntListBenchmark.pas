@@ -30,7 +30,7 @@ type
 implementation
 
 uses
-  Windows;
+  Windows, PsAPI;
 
 procedure TbpIntListBenchmark.SetUp;
 begin
@@ -47,40 +47,56 @@ procedure TbpIntListBenchmark.TestAddPerformance;
 var
   lvIntList: TBpIntList;
   lvStrList: TStringList;
-  lvStart, lvEnd: DWORD;
-  lvDurationIntList, lvDurationStrList: DWORD;
+  lvStartTick, lvEndTick: DWORD;
+  lvDurationIntList, lvDurationStrList, lvMemoryIntList, lvMemoryStrList: DWORD;
+  lvProcessMemoryBefore, lvProcessMemoryAfter: PROCESS_MEMORY_COUNTERS;
   I: Integer;
 const
-  lcIntegersToAdd = 45000000; // 45 million. TStringList often OOMs with bigger number.
+  lvIntegersToAdd = 45000000; // 45 million
 begin
+  lvProcessMemoryBefore.cb := SizeOf(lvProcessMemoryBefore);
+  lvProcessMemoryAfter.cb := SizeOf(lvProcessMemoryAfter);
+
   // Test TBpIntList
   lvIntList := TBpIntList.Create;
   try
-    lvStart := GetTickCount;
-    for I := 1 to lcIntegersToAdd do
+    GetProcessMemoryInfo(GetCurrentProcess(), @lvProcessMemoryBefore, SizeOf(lvProcessMemoryBefore));
+    lvStartTick := GetTickCount;
+    for I := 1 to lvIntegersToAdd do
       lvIntList.Add(I);
-    lvEnd := GetTickCount;
-    lvDurationIntList := lvEnd - lvStart;
+    lvEndTick := GetTickCount;
+    GetProcessMemoryInfo(GetCurrentProcess(), @lvProcessMemoryAfter, SizeOf(lvProcessMemoryAfter));
+    lvDurationIntList := lvEndTick - lvStartTick;
+    lvMemoryIntList := (lvProcessMemoryAfter.WorkingSetSize - lvProcessMemoryBefore.WorkingSetSize) div 1024;
   finally
     lvIntList.Free;
   end;
 
-  // Test TStringList  
+  // Reset memory measurement
+  FillChar(lvProcessMemoryBefore, SizeOf(lvProcessMemoryBefore), 0);
+  FillChar(lvProcessMemoryAfter, SizeOf(lvProcessMemoryAfter), 0);
+  lvProcessMemoryBefore.cb := SizeOf(lvProcessMemoryBefore);
+  lvProcessMemoryAfter.cb := SizeOf(lvProcessMemoryAfter);
+
+  // Test TStringList
   lvStrList := TStringList.Create;
   try
-    lvStart := GetTickCount;
-    for I := 1 to lcIntegersToAdd do
+    GetProcessMemoryInfo(GetCurrentProcess(), @lvProcessMemoryBefore, SizeOf(lvProcessMemoryBefore));
+    lvStartTick := GetTickCount;
+    for I := 1 to lvIntegersToAdd do
       lvStrList.Add(IntToStr(I));
-    lvEnd := GetTickCount;
-    lvDurationStrList := lvEnd - lvStart;
+    lvEndTick := GetTickCount;
+    GetProcessMemoryInfo(GetCurrentProcess(), @lvProcessMemoryAfter, SizeOf(lvProcessMemoryAfter));
+    lvDurationStrList := lvEndTick - lvStartTick;
+    lvMemoryStrList := (lvProcessMemoryAfter.WorkingSetSize - lvProcessMemoryBefore.WorkingSetSize) div 1024;
   finally
     lvStrList.Free;
   end;
 
-  // Output results
-  Status(Format('Integers count: %d', [lcIntegersToAdd]));
-  Status(Format('TBpIntList: %d ms', [lvDurationIntList]));
-  Status(Format('TStringList: %d ms', [lvDurationStrList]));
+  Status(Format('TBpIntList Duration: %d ms', [lvDurationIntList]));
+  Status(Format('TStringList Duration: %d ms', [lvDurationStrList]));
+  Status(Format('TBpIntList Memory Usage: %d KB', [lvMemoryIntList]));
+  Status(Format('TStringList Memory Usage: %d KB', [lvMemoryStrList]));
 end;
 
 initialization
