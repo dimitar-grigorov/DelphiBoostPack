@@ -28,7 +28,12 @@ type
     procedure TestInsert;
     procedure TestInsertAtBeginning;
     procedure TestInsertAtEnd;
-    procedure TestInsertWithInvalidIndex;        
+    procedure TestInsertWithInvalidIndex;
+
+    procedure TestSortedPropertySetTrue;
+    procedure TestSortedPropertySetFalse;
+    procedure TestAddItemWhenSorted;
+    procedure TestSetItemWhenSorted;
 
     procedure TestSetItem;
     procedure TestGetItemWithInvalidIndex;
@@ -155,6 +160,39 @@ begin
     on E: EListError do
       ; // Test passes
   end;
+end;
+
+procedure TestTBpIntList.TestSortedPropertySetTrue;
+begin
+  FBpIntList.Add(3);
+  FBpIntList.Add(1);
+  FBpIntList.Add(2);
+  FBpIntList.Sorted := True;
+  CheckEquals(1, FBpIntList.Items[0], 'First item should be 1 after sorting');
+  CheckEquals(True, FBpIntList.Sorted, 'Sorted property should be True after setting it to True');
+end;
+
+procedure TestTBpIntList.TestSortedPropertySetFalse;
+begin
+  FBpIntList.Sorted := False;
+  CheckEquals(False, FBpIntList.Sorted, 'Sorted property should be False after setting it to False');
+end;
+
+procedure TestTBpIntList.TestAddItemWhenSorted;
+begin
+  FBpIntList.Sorted := True;
+  FBpIntList.Add(3);
+  FBpIntList.Add(1);
+  CheckEquals(1, FBpIntList.Items[0], 'Items should be added in sorted order');
+end;
+
+procedure TestTBpIntList.TestSetItemWhenSorted;
+begin
+  FBpIntList.Add(1);
+  FBpIntList.Add(3);
+  FBpIntList.Sorted := True;
+  FBpIntList.Items[1] := 2; // This should either raise an exception or require a re-sort
+  CheckEquals(2, FBpIntList.Items[1], 'Setting item in a sorted list should maintain order');
 end;
 
 procedure TestTBpIntList.TestSetItem;
