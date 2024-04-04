@@ -22,11 +22,13 @@ uses
   BpIntListTests in 'Core\BpIntListTests.pas',
   BpIntList in '..\src\Core\Classes\BpIntList.pas',
   BpIntListInterface in '..\src\Core\Interfaces\BpIntListInterface.pas',
-  BpIntListBenchmark in 'Core\BpIntListBenchmark.pas';
+  BpIntListBenchmark in 'Core\BpIntListBenchmark.pas',
+  BpIntListMemoryTests in 'Core\BpIntListMemoryTests.pas';
 
 {$R *.RES}
 
 begin
+  System.ReportMemoryLeaksOnShutdown := True;
   Application.Initialize;
   if IsConsole then
     TextTestRunner.RunRegisteredTests

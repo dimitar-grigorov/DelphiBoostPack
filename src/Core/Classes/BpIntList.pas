@@ -8,7 +8,7 @@ uses
 type
   TbpIntListDefined = set of (idDelimiter, idLineBreak, idStrictDelimiter);
 
-  TBpIntList = class(TInterfacedPersistent, IBpIntList)
+  TBpIntList = class(TInterfacedObject, IBpIntList)
   private
     FList: array of Integer;
     FDefined: TbpIntListDefined;
