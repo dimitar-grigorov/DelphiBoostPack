@@ -26,6 +26,7 @@
     <DCC_DcuOutput>.\!dcu\Debug</DCC_DcuOutput>
     <DCC_ObjOutput>.\!dcu\Debug</DCC_ObjOutput>
     <DCC_HppOutput>.\!dcu\Debug</DCC_HppOutput>
+    <DCC_Optimize>False</DCC_Optimize>
   </PropertyGroup>
   <ProjectExtensions>
     <Borland.Personality>Delphi.Personality</Borland.Personality>
