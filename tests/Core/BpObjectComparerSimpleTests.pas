@@ -16,12 +16,22 @@ type
     procedure TestCompareObjectsWithNoDifferences;
     procedure TestCompareObjectsWithDifferences;
     procedure TestCompareObjectsAsString;
+
+    procedure TestCompareWithSameCollectionData;
+    procedure TestCompareWithDifferentCollectionData;
+    procedure TestCompareWithEmptyAndPopulatedCollection;
+    procedure TestCompareCollectionsWithDifferentNames;
+
+    procedure TestCompareCollectionsWithDifferentCharProps;
+    procedure TestCompareCollectionsWithDifferentFloatProps;
+    procedure TestCompareCollectionsWithDifferentEnumProps;
+    procedure TestCompareCollectionsWithMultipleDifferences;
   end;
 
 implementation
 
 uses
-  StrUtils;
+  StrUtils, BpObjectComparerCollectionClasses;
 
 procedure TestTBpObjectComparer.SetUp;
 begin
@@ -102,6 +112,198 @@ begin
 
     CheckTrue(AnsiContainsStr(DiffStr, 'EnumProp; OldValue: meFirst; NewValue: meSecond'), 'Difference in EnumProp should be correctly formatted in DiffStr');
     CheckTrue(AnsiContainsStr(DiffStr, 'VariantProp; OldValue: Variant1; NewValue: Variant2'), 'Difference in VariantProp should be correctly formatted in DiffStr');
+  finally
+    Obj1.Free;
+    Obj2.Free;
+  end;
+end;
+
+procedure TestTBpObjectComparer.TestCompareWithSameCollectionData;
+var
+  Obj1, Obj2: TTestClassWithCollection;
+  Diffs: TPropDifferences;
+begin
+  Obj1 := TTestClassWithCollection.Create;
+  Obj2 := TTestClassWithCollection.Create;
+  try
+    Obj1.MyCollection.Add.ID := 1;
+    Obj2.MyCollection.Add.ID := 1;
+
+    Diffs := FComparer.CompareObjects(Obj1, Obj2);
+    CheckEquals(0, Length(Diffs), 'Collections are identical, no differences should be found');
+  finally
+    Obj1.Free;
+    Obj2.Free;
+  end;
+end;
+
+procedure TestTBpObjectComparer.TestCompareWithDifferentCollectionData;
+var
+  Obj1, Obj2: TTestClassWithCollection;
+  Diffs: TPropDifferences;
+begin
+  Obj1 := TTestClassWithCollection.Create;
+  Obj2 := TTestClassWithCollection.Create;
+  try
+    Obj1.MyCollection.Add.ID := 1;
+    Obj2.MyCollection.Add.ID := 2; // Different ID
+
+    Diffs := FComparer.CompareObjects(Obj1, Obj2);
+    CheckEquals(2, Length(Diffs), 'Should find differences in collections for each item');
+  finally
+    Obj1.Free;
+    Obj2.Free;
+  end;
+end;
+
+procedure TestTBpObjectComparer.TestCompareWithEmptyAndPopulatedCollection;
+var
+  Obj1, Obj2: TTestClassWithCollection;
+  Diffs: TPropDifferences;
+begin
+  Obj1 := TTestClassWithCollection.Create;
+  Obj2 := TTestClassWithCollection.Create;
+  try
+    // Obj1 has no items added to MyCollection
+    Obj2.MyCollection.Add.ID := 1; // Obj2 has one item
+
+    Diffs := FComparer.CompareObjects(Obj1, Obj2);
+    CheckEquals(2, Length(Diffs), 'Should find differences for count and the missing item');
+  finally
+    Obj1.Free;
+    Obj2.Free;
+  end;
+end;
+
+procedure TestTBpObjectComparer.TestCompareCollectionsWithDifferentNames;
+var
+  Obj1, Obj2: TTestClassWithCollection;
+  Item1, Item2: TSimpleTestItem;
+  Diffs: TPropDifferences;
+begin
+  Obj1 := TTestClassWithCollection.Create;
+  Obj2 := TTestClassWithCollection.Create;
+  try
+    Item1 := Obj1.MyCollection.Add;
+    Item1.ID := 1;
+    Item1.Name := 'Item1';
+
+    Item2 := Obj2.MyCollection.Add;
+    Item2.ID := 1;
+    Item2.Name := 'Item2';
+
+    Diffs := FComparer.CompareObjects(Obj1, Obj2);
+    CheckEquals(1, Length(Diffs), 'One difference expected');
+    CheckEquals('MyCollection[1].Name', Diffs[0].PropPath, 'Property path should match');
+    CheckEquals('Item1', Diffs[0].OldValue, 'Old value should match');
+    CheckEquals('Item2', Diffs[0].NewValue, 'New value should match');
+  finally
+    Obj1.Free;
+    Obj2.Free;
+  end;
+end;
+
+
+procedure TestTBpObjectComparer.TestCompareCollectionsWithDifferentCharProps;
+var
+  Obj1, Obj2: TTestClassWithCollection;
+  Item1, Item2: TSimpleTestItem;
+  Diffs: TPropDifferences;
+begin
+  Obj1 := TTestClassWithCollection.Create;
+  Obj2 := TTestClassWithCollection.Create;
+  try
+    Item1 := Obj1.MyCollection.Add;
+    Item1.ID := 1;
+    Item1.CharProp := 'A';
+
+    Item2 := Obj2.MyCollection.Add;
+    Item2.ID := 1;
+    Item2.CharProp := 'B';
+
+    Diffs := FComparer.CompareObjects(Obj1, Obj2);
+    CheckEquals(1, Length(Diffs), 'Should find differences in character properties');
+  finally
+    Obj1.Free;
+    Obj2.Free;
+  end;
+end;
+
+procedure TestTBpObjectComparer.TestCompareCollectionsWithDifferentFloatProps;
+var
+  Obj1, Obj2: TTestClassWithCollection;
+  Item1, Item2: TSimpleTestItem;
+  Diffs: TPropDifferences;
+begin
+  Obj1 := TTestClassWithCollection.Create;
+  Obj2 := TTestClassWithCollection.Create;
+  try
+    Item1 := Obj1.MyCollection.Add;
+    Item1.ID := 1;
+    Item1.FloatProp := 1.0;
+
+    Item2 := Obj2.MyCollection.Add;
+    Item2.ID := 1;
+    Item2.FloatProp := 2.0;
+
+    Diffs := FComparer.CompareObjects(Obj1, Obj2);
+    CheckEquals(1, Length(Diffs), 'Should find differences in float properties');
+  finally
+    Obj1.Free;
+    Obj2.Free;
+  end;
+end;
+
+procedure TestTBpObjectComparer.TestCompareCollectionsWithDifferentEnumProps;
+var
+  Obj1, Obj2: TTestClassWithCollection;
+  Item1, Item2: TSimpleTestItem;
+  Diffs: TPropDifferences;
+begin
+  Obj1 := TTestClassWithCollection.Create;
+  Obj2 := TTestClassWithCollection.Create;
+  try
+    Item1 := Obj1.MyCollection.Add;
+    Item1.ID := 1;
+    Item1.EnumProp := meValueOne;
+
+    Item2 := Obj2.MyCollection.Add;
+    Item2.ID := 1;
+    Item2.EnumProp := meValueTwo;
+
+    Diffs := FComparer.CompareObjects(Obj1, Obj2);
+    CheckEquals(1, Length(Diffs), 'Should find differences in enum properties');
+  finally
+    Obj1.Free;
+    Obj2.Free;
+  end;
+end;
+
+procedure TestTBpObjectComparer.TestCompareCollectionsWithMultipleDifferences;
+var
+  Obj1, Obj2: TTestClassWithCollection;
+  Item1, Item2: TSimpleTestItem;
+  Diffs: TPropDifferences;
+begin
+  Obj1 := TTestClassWithCollection.Create;
+  Obj2 := TTestClassWithCollection.Create;
+  try
+    Item1 := Obj1.MyCollection.Add;
+    Item1.ID := 1;
+    Item1.Name := 'Item1';
+    Item1.CharProp := 'A';
+    Item1.FloatProp := 1.0;
+    Item1.EnumProp := meValueOne;
+
+    Item2 := Obj2.MyCollection.Add;
+    Item2.ID := 1;
+    Item2.Name := 'Item2';
+    Item2.CharProp := 'B';
+    Item2.FloatProp := 2.0;
+    Item2.EnumProp := meValueTwo;
+
+    Diffs := FComparer.CompareObjects(Obj1, Obj2);
+    CheckEquals(4, Length(Diffs), 'Should find differences in multiple properties');
   finally
     Obj1.Free;
     Obj2.Free;
