@@ -7,11 +7,6 @@ uses
 
 type
   TestTBpObjectComparer = class(TTestCase)
-  private
-    FComparer: TBpObjectComparer;
-  protected
-    procedure SetUp; override;
-    procedure TearDown; override;
   published
     procedure TestCompareObjectsWithNoDifferences;
     procedure TestCompareObjectsWithDifferences;
@@ -34,16 +29,6 @@ implementation
 uses
   StrUtils, BpObjectComparerCollectionClasses;
 
-procedure TestTBpObjectComparer.SetUp;
-begin
-  FComparer := TBpObjectComparer.Create;
-end;
-
-procedure TestTBpObjectComparer.TearDown;
-begin
-  FComparer.Free;
-end;
-
 procedure TestTBpObjectComparer.TestCompareObjectsWithNoDifferences;
 var
   Obj1, Obj2: TTestClassA;
@@ -57,7 +42,7 @@ begin
     Obj1.StringProp := 'Test';
     Obj2.StringProp := 'Test';
 
-    Diffs := FComparer.CompareObjects(Obj1, Obj2);
+    Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(0, Length(Diffs), 'There should be no differences');
   finally
     Obj1.Free;
@@ -78,7 +63,7 @@ begin
     Obj1.FloatProp := 1.1;
     Obj2.FloatProp := 1.2;
 
-    Diffs := FComparer.CompareObjects(Obj1, Obj2);
+    Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(2, Length(Diffs), 'There should be two differences');
 
     CheckEquals('CharProp', Diffs[0].PropPath, 'First difference should be in CharProp');
@@ -108,7 +93,7 @@ begin
     Obj1.VariantProp := 'Variant1';
     Obj2.VariantProp := 'Variant2';
 
-    DiffStr := FComparer.CompareObjectsAsString(Obj1, Obj2);
+    DiffStr := TBpObjectComparer.CompareObjectsAsString(Obj1, Obj2);
     CheckNotEquals('', DiffStr, 'The difference string should not be empty');
 
     CheckTrue(AnsiContainsStr(DiffStr, 'EnumProp; OldValue: meFirst; NewValue: meSecond'), 'Difference in EnumProp should be correctly formatted in DiffStr');
@@ -130,7 +115,7 @@ begin
     Obj1.MyCollection.Add.ID := 1;
     Obj2.MyCollection.Add.ID := 1;
 
-    Diffs := FComparer.CompareObjects(Obj1, Obj2);
+    Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(0, Length(Diffs), 'Collections are identical, no differences should be found');
   finally
     Obj1.Free;
@@ -149,7 +134,7 @@ begin
     Obj1.MyCollection.Add.ID := 1;
     Obj2.MyCollection.Add.ID := 2; // Different ID
 
-    Diffs := FComparer.CompareObjects(Obj1, Obj2);
+    Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(2, Length(Diffs), 'Should find differences in collections for each item');
   finally
     Obj1.Free;
@@ -168,7 +153,7 @@ begin
     // Obj1 has no items added to MyCollection
     Obj2.MyCollection.Add.ID := 1; // Obj2 has one item
 
-    Diffs := FComparer.CompareObjects(Obj1, Obj2);
+    Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(2, Length(Diffs), 'Should find differences for count and the missing item');
   finally
     Obj1.Free;
@@ -193,7 +178,7 @@ begin
     Item2.ID := 1;
     Item2.Name := 'Item2';
 
-    Diffs := FComparer.CompareObjects(Obj1, Obj2);
+    Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(1, Length(Diffs), 'One difference expected');
     CheckEquals('MyCollection[1].Name', Diffs[0].PropPath, 'Property path should match');
     CheckEquals('Item1', Diffs[0].OldValue, 'Old value should match');
@@ -221,7 +206,7 @@ begin
     Item2.ID := 1;
     Item2.CharProp := 'B';
 
-    Diffs := FComparer.CompareObjects(Obj1, Obj2);
+    Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(1, Length(Diffs), 'One difference expected');
     CheckEquals('MyCollection[1].CharProp', Diffs[0].PropPath, 'Property path should match');
     CheckEquals('A', Diffs[0].OldValue, 'Old value should match');
@@ -249,7 +234,7 @@ begin
     Item2.ID := 1;
     Item2.FloatProp := 2.0;
 
-    Diffs := FComparer.CompareObjects(Obj1, Obj2);
+    Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(1, Length(Diffs), 'One difference expected');
     CheckEquals('MyCollection[1].FloatProp', Diffs[0].PropPath, 'Property path should match');
     CheckEquals(1.0, VarAsType(Diffs[0].OldValue, varDouble), 0.001, 'Old value should match');
@@ -277,7 +262,7 @@ begin
     Item2.ID := 1;
     Item2.EnumProp := meValueTwo;
 
-    Diffs := FComparer.CompareObjects(Obj1, Obj2);
+    Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(1, Length(Diffs), 'One difference expected');
     CheckEquals('MyCollection[1].EnumProp', Diffs[0].PropPath, 'Property path should match');
 
@@ -313,7 +298,7 @@ begin
     Item2.FloatProp := 2.0;
     Item2.EnumProp := meValueTwo;
 
-    Diffs := FComparer.CompareObjects(Obj1, Obj2);
+    Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(4, Length(Diffs), 'Four differences expected');
 
     CheckEquals('MyCollection[1].CharProp', Diffs[0].PropPath);
@@ -367,7 +352,7 @@ begin
       Name := 'Item1';
     end;
 
-    Diffs := FComparer.CompareObjects(Obj1, Obj2);
+    Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(0, Length(Diffs), 'No differences should be found if order is not considered');
   finally
     Obj1.Free;
