@@ -129,34 +129,47 @@ var
   end;
 
 begin
+  // Check for count difference but do not exit
   if aOldColl.Count <> aNewColl.Count then
-  begin
-    AppendDifference(aDiffs, TPropDifference.Create(aPropPath, aOldColl.Count, aNewColl.Count));
-    Exit;
-  end;
+    AppendDifference(aDiffs, TPropDifference.Create(aPropPath + '.Count', aOldColl.Count, aNewColl.Count));
 
+  // Compare items from the old collection to the new collection
   for I := 0 to aOldColl.Count - 1 do
   begin
     lvItem1 := aOldColl.Items[I] as TPersistent;
-    lvFound := False;
     if Supports(lvItem1, IUniqueId, lvUniqueIdIntf) then
     begin
       lvUniqueId := lvUniqueIdIntf.GetUniqueId;
-      // Find the matching item in aCol2 by UniqueId
       lvItem2 := _FindItemByUniqueId(aNewColl, lvUniqueId);
+
       if Assigned(lvItem2) then
       begin
         AppendDifferences(aDiffs, InternalCompareProperties(lvItem1, lvItem2, aPropPath + '[' + lvUniqueId + ']'));
-        lvFound := True;
+      end
+      else
+      begin
+        AppendDifference(aDiffs, TPropDifference.Create(aPropPath + '[' + lvUniqueId + ']', 'Exists in old', 'Missing in new'));
       end;
     end;
-    if not lvFound then
+  end;
+
+  // Check for items in the new collection that are not in the old collection
+  for I := 0 to aNewColl.Count - 1 do
+  begin
+    lvItem2 := aNewColl.Items[I] as TPersistent;
+    if Supports(lvItem2, IUniqueId, lvUniqueIdIntf) then
     begin
-      // Handle the case where no unique identifier is available or matching item not found
-      // This could involve logging, raising an error, or appending a specific difference indicating the mismatch.
+      lvUniqueId := lvUniqueIdIntf.GetUniqueId;
+      lvItem1 := _FindItemByUniqueId(aOldColl, lvUniqueId);
+
+      if not Assigned(lvItem1) then
+      begin
+        AppendDifference(aDiffs, TPropDifference.Create(aPropPath + '[' + lvUniqueId + ']', 'Missing in old', 'Exists in new'));
+      end;
     end;
   end;
 end;
+
 
 function TBpObjectComparer.CompareObjects(aOld, aNew: TPersistent): TPropDifferences;
 begin
