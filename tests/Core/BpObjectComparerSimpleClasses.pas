@@ -2,32 +2,35 @@ unit BpObjectComparerSimpleClasses;
 
 interface
 
+uses
+  Classes;
+
 type
   TMyEnum = (meFirst, meSecond, meThird);
 
-  TTestClassA = class
+  TTestClassA = class(TPersistent)
   private
     FIntegerProp: Integer;
     FStringProp: string;
-  public
+  published
     property IntegerProp: Integer read FIntegerProp write FIntegerProp;
     property StringProp: string read FStringProp write FStringProp;
   end;
 
-  TTestClassB = class
+  TTestClassB = class(TPersistent)
   private
     FCharProp: Char;
     FFloatProp: Double;
-  public
+  published
     property CharProp: Char read FCharProp write FCharProp;
     property FloatProp: Double read FFloatProp write FFloatProp;
   end;
 
-  TTestClassC = class
+  TTestClassC = class(TPersistent)
   private
     FEnumProp: TMyEnum;
     FVariantProp: Variant;
-  public
+  published
     property EnumProp: TMyEnum read FEnumProp write FEnumProp;
     property VariantProp: Variant read FVariantProp write FVariantProp;
   end;

@@ -24,8 +24,11 @@ uses
   IBpIntListUnit in '..\src\Core\Interfaces\IBpIntListUnit.pas',
   BpIntListBenchmark in 'Core\BpIntListBenchmark.pas',
   BpIntListMemoryTests in 'Core\BpIntListMemoryTests.pas',
-  SimpleClasses in 'Core\ClassesForTesting\SimpleClasses.pas',
-  CollectionClasses in 'Core\ClassesForTesting\CollectionClasses.pas';
+  BpObjectComparerCollectionClasses in 'Core\BpObjectComparerCollectionClasses.pas',
+  BpObjectComparerSimpleClasses in 'Core\BpObjectComparerSimpleClasses.pas',
+  BpObjectComparerSimpleTests in 'Core\BpObjectComparerSimpleTests.pas',
+  BpObjectComparerUnit in '..\src\Core\Classes\BpObjectComparerUnit.pas',
+  IUniqueIdUnit in '..\src\Core\Interfaces\IUniqueIdUnit.pas';
 
 {$R *.RES}
 
