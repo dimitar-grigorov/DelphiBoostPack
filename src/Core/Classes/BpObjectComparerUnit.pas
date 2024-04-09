@@ -68,26 +68,31 @@ begin
     for i := 0 to PropCount - 1 do
     begin
       PropInfo := PropList^[i];
-      NewPropPath := IfThen(aPropPath <> '', aPropPath + '.', '') + string(PropInfo^.Name);
+      NewPropPath := IfThen(aPropPath <> '', aPropPath + '.', '') + PropInfo^.Name;
 
-      if PropInfo^.PropType^.Kind in [tkInteger, tkEnumeration, tkFloat, tkString, tkSet, tkLString, tkWString, tkVariant] then
-      begin
-        lvOldValue := GetPropValue(aOld, PropInfo^.Name);
-        lvNewValue := GetPropValue(aNew, PropInfo^.Name);
-        if (lvOldValue <> lvNewValue) then
-          AppendDifference(Result, TPropDifference.Create(NewPropPath, lvOldValue, lvNewValue))
-      end
-      else if PropInfo^.PropType^.Kind in [tkChar, tkWChar] then
-      begin
-        lvOldValue := Chr(GetOrdProp(aOld, PropInfo^.Name));
-        lvNewValue := Chr(GetOrdProp(aNew, PropInfo^.Name));
-        if (lvOldValue <> lvNewValue) then
-          AppendDifference(Result, TPropDifference.Create(NewPropPath, lvOldValue, lvNewValue))
-      end
-      else if (PropInfo^.PropType^.Kind = tkClass) and (GetObjectProp(aOld, PropInfo) is TCollection) then
-      begin
-        CompareCollectionItems(TCollection(GetObjectProp(aOld, PropInfo)), TCollection(GetObjectProp(aNew, PropInfo)), NewPropPath, Result);
+      case PropInfo^.PropType^.Kind of
+        tkInteger, tkEnumeration, tkFloat, tkString, tkSet, tkLString, tkWString, tkVariant:
+        begin
+          lvOldValue := GetPropValue(aOld, PropInfo^.Name);
+          lvNewValue := GetPropValue(aNew, PropInfo^.Name);
+        end;
+        tkChar, tkWChar:
+        begin
+          lvOldValue := Char(GetOrdProp(aOld, PropInfo^.Name));
+          lvNewValue := Char(GetOrdProp(aNew, PropInfo^.Name));
+        end;
+        tkClass:
+        begin
+          if GetObjectProp(aOld, PropInfo) is TCollection then
+            CompareCollectionItems(TCollection(GetObjectProp(aOld, PropInfo)), TCollection(GetObjectProp(aNew, PropInfo)), NewPropPath, Result);
+          Continue; // Skip the AppendDifference call for collections, as CompareCollectionItems handles it.
+        end;
+      else
+        Continue; // Skip properties that don't match any handled types.
       end;
+
+      if lvOldValue <> lvNewValue then
+        AppendDifference(Result, TPropDifference.Create(NewPropPath, lvOldValue, lvNewValue));
     end;
   finally
     FreeMem(PropList);
