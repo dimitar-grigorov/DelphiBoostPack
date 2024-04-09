@@ -57,7 +57,7 @@ var
   PropList: PPropList;
   PropCount, i: Integer;
   PropInfo: PPropInfo;
-  NewValue, OldValue: Variant;
+  lvOldValue, lvNewValue: Variant;
   NewPropPath: string;
 begin
   SetLength(Result, 0);
@@ -70,12 +70,19 @@ begin
       PropInfo := PropList^[i];
       NewPropPath := IfThen(aPropPath <> '', aPropPath + '.', '') + string(PropInfo^.Name);
 
-      if PropInfo^.PropType^.Kind in [tkInteger, tkChar, tkEnumeration, tkFloat, tkString, tkSet, tkWChar, tkLString, tkWString, tkVariant] then
+      if PropInfo^.PropType^.Kind in [tkInteger, tkEnumeration, tkFloat, tkString, tkSet, tkLString, tkWString, tkVariant] then
       begin
-        NewValue := GetPropValue(aOld, PropInfo^.Name);
-        OldValue := GetPropValue(aNew, PropInfo^.Name);
-        if NewValue <> OldValue then
-          AppendDifference(Result, TPropDifference.Create(NewPropPath, OldValue, NewValue))
+        lvOldValue := GetPropValue(aOld, PropInfo^.Name);
+        lvNewValue := GetPropValue(aNew, PropInfo^.Name);
+        if (lvOldValue <> lvNewValue) then
+          AppendDifference(Result, TPropDifference.Create(NewPropPath, lvOldValue, lvNewValue))
+      end
+      else if PropInfo^.PropType^.Kind in [tkChar, tkWChar] then
+      begin
+        lvOldValue := Chr(GetOrdProp(aOld, PropInfo^.Name));
+        lvNewValue := Chr(GetOrdProp(aNew, PropInfo^.Name));
+        if (lvOldValue <> lvNewValue) then
+          AppendDifference(Result, TPropDifference.Create(NewPropPath, lvOldValue, lvNewValue))
       end
       else if (PropInfo^.PropType^.Kind = tkClass) and (GetObjectProp(aOld, PropInfo) is TCollection) then
       begin
