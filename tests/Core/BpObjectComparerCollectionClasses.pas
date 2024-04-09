@@ -35,6 +35,17 @@ type
     property Items[Index: Integer]: TSimpleTestItem read GetItem write SetItem; default;
   end;
 
+  // Sample class with TSimpleTestCollection as a published property
+  TTestClassWithCollection = class(TPersistent)
+  private
+    FMyCollection: TSimpleTestCollection;
+  public
+    constructor Create;
+    destructor Destroy; override;
+  published
+    property MyCollection: TSimpleTestCollection read FMyCollection write FMyCollection;
+  end;
+
 implementation
 
 uses
@@ -65,6 +76,20 @@ end;
 function TSimpleTestItem.GetUniqueId: string;
 begin
  Result := IntToStr(Self.ID)
+end;
+
+{ TTestClassWithCollection }
+
+constructor TTestClassWithCollection.Create;
+begin
+  inherited Create;
+  FMyCollection := TSimpleTestCollection.Create;
+end;
+
+destructor TTestClassWithCollection.Destroy;
+begin
+  FMyCollection.Free;
+  inherited Destroy;
 end;
 
 end.
