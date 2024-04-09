@@ -8,7 +8,7 @@ uses
 type
   // Test methods for class TBpIntList
 
-  TestTBpIntList = class(TTestCase)
+  TBpIntListTests = class(TTestCase)
   strict private
     FBpIntList: TBpIntList;
   public
@@ -88,25 +88,25 @@ type
 
 implementation
 
-procedure TestTBpIntList.SetUp;
+procedure TBpIntListTests.SetUp;
 begin
   FBpIntList := TBpIntList.Create;
 end;
 
-procedure TestTBpIntList.TearDown;
+procedure TBpIntListTests.TearDown;
 begin
   FBpIntList.Free;
   FBpIntList := nil;
 end;
 
-procedure TestTBpIntList.TestAdd;
+procedure TBpIntListTests.TestAdd;
 begin
   FBpIntList.Add(10);
   CheckEquals(1, FBpIntList.Count, 'Count should be 1 after adding an item');
   CheckEquals(10, FBpIntList.Items[0], 'The item added should be 10');
 end;
 
-procedure TestTBpIntList.TestDelete;
+procedure TBpIntListTests.TestDelete;
 begin
   FBpIntList.Add(10);
   FBpIntList.Add(20);
@@ -115,7 +115,7 @@ begin
   CheckEquals(20, FBpIntList.Items[0], 'The remaining item should be 20');
 end;
 
-procedure TestTBpIntList.TestDeleteFirstItem;
+procedure TBpIntListTests.TestDeleteFirstItem;
 begin
   FBpIntList.Add(10);
   FBpIntList.Add(20);
@@ -124,7 +124,7 @@ begin
   CheckEquals(20, FBpIntList.Items[0], 'The first item should now be 20');
 end;
 
-procedure TestTBpIntList.TestDeleteLastItem;
+procedure TBpIntListTests.TestDeleteLastItem;
 begin
   FBpIntList.Add(10);
   FBpIntList.Add(20);
@@ -133,7 +133,7 @@ begin
   CheckEquals(10, FBpIntList.Items[0], 'The remaining item should be 10');
 end;
 
-procedure TestTBpIntList.TestDeleteWithInvalidIndex;
+procedure TBpIntListTests.TestDeleteWithInvalidIndex;
 begin
   try
     FBpIntList.Delete(-1); // Attempt to delete with an invalid index
@@ -144,14 +144,14 @@ begin
   end;
 end;
 
-procedure TestTBpIntList.TestClear;
+procedure TBpIntListTests.TestClear;
 begin
   FBpIntList.Add(10);
   FBpIntList.Clear;
   CheckEquals(0, FBpIntList.Count, 'Count should be 0 after clearing the list');
 end;
 
-procedure TestTBpIntList.TestIndexOf;
+procedure TBpIntListTests.TestIndexOf;
 begin
   FBpIntList.Add(10);
   FBpIntList.Add(20);
@@ -160,7 +160,7 @@ begin
   CheckEquals(-1, FBpIntList.IndexOf(30), 'IndexOf should return -1 for a non-existent item');
 end;
 
-procedure TestTBpIntList.TestExchangeValidIndices;
+procedure TBpIntListTests.TestExchangeValidIndices;
 begin
   FBpIntList.Add(1);
   FBpIntList.Add(2);
@@ -169,7 +169,7 @@ begin
   CheckEquals(1, FBpIntList.Items[1], 'Second item should be 1 after exchange');
 end;
 
-procedure TestTBpIntList.TestExchangeSameIndex;
+procedure TBpIntListTests.TestExchangeSameIndex;
 begin
   FBpIntList.Add(1);
   FBpIntList.Add(2);
@@ -177,7 +177,7 @@ begin
   CheckEquals(1, FBpIntList.Items[0], 'Item should remain unchanged when indices are the same');
 end;
 
-procedure TestTBpIntList.TestExchangeInvalidIndex;
+procedure TBpIntListTests.TestExchangeInvalidIndex;
 begin
   FBpIntList.Add(1);
   try
@@ -189,7 +189,7 @@ begin
   end;
 end;
 
-procedure TestTBpIntList.TestExchangeWithEmptyList;
+procedure TBpIntListTests.TestExchangeWithEmptyList;
 begin
   try
     FBpIntList.Exchange(0, 1); // Attempt to exchange in an empty list
@@ -200,7 +200,7 @@ begin
   end;
 end;
 
-procedure TestTBpIntList.TestInsert;
+procedure TBpIntListTests.TestInsert;
 begin
   FBpIntList.Add(10);
   FBpIntList.Add(30);
@@ -209,21 +209,21 @@ begin
   CheckEquals(20, FBpIntList.Items[1], 'The inserted item should be at index 1');
 end;
 
-procedure TestTBpIntList.TestInsertAtBeginning;
+procedure TBpIntListTests.TestInsertAtBeginning;
 begin
   FBpIntList.Add(10);
   FBpIntList.Insert(0, 5); // Insert at the beginning
   CheckEquals(5, FBpIntList.Items[0], 'The inserted item should be the first item');
 end;
 
-procedure TestTBpIntList.TestInsertAtEnd;
+procedure TBpIntListTests.TestInsertAtEnd;
 begin
   FBpIntList.Add(10);
   FBpIntList.Insert(1, 20); // Insert at the end
   CheckEquals(20, FBpIntList.Items[1], 'The inserted item should be the last item');
 end;
 
-procedure TestTBpIntList.TestInsertWithInvalidIndex;
+procedure TBpIntListTests.TestInsertWithInvalidIndex;
 begin
   try
     FBpIntList.Insert(-1, 10); // Attempt to insert with an invalid index
@@ -234,7 +234,7 @@ begin
   end;
 end;
 
-procedure TestTBpIntList.TestSortedPropertySetTrue;
+procedure TBpIntListTests.TestSortedPropertySetTrue;
 begin
   FBpIntList.Add(3);
   FBpIntList.Add(1);
@@ -244,13 +244,13 @@ begin
   CheckEquals(True, FBpIntList.Sorted, 'Sorted property should be True after setting it to True');
 end;
 
-procedure TestTBpIntList.TestSortedPropertySetFalse;
+procedure TBpIntListTests.TestSortedPropertySetFalse;
 begin
   FBpIntList.Sorted := False;
   CheckEquals(False, FBpIntList.Sorted, 'Sorted property should be False after setting it to False');
 end;
 
-procedure TestTBpIntList.TestAddItemWhenSorted;
+procedure TBpIntListTests.TestAddItemWhenSorted;
 begin
   FBpIntList.Sorted := True;
   FBpIntList.Add(3);
@@ -258,7 +258,7 @@ begin
   CheckEquals(1, FBpIntList.Items[0], 'Items should be added in sorted order');
 end;
 
-procedure TestTBpIntList.TestSetItemWhenSorted;
+procedure TBpIntListTests.TestSetItemWhenSorted;
 begin
   FBpIntList.Add(1);
   FBpIntList.Add(3);
@@ -267,14 +267,14 @@ begin
   CheckEquals(2, FBpIntList.Items[1], 'Setting item in a sorted list should maintain order');
 end;
 
-procedure TestTBpIntList.TestSetItem;
+procedure TBpIntListTests.TestSetItem;
 begin
   FBpIntList.Add(10);
   FBpIntList.Items[0] := 20; // Set item at index 0 to 20
   CheckEquals(20, FBpIntList.Items[0], 'Item at index 0 should be set to 20');
 end;
 
-procedure TestTBpIntList.TestGetItemWithInvalidIndex;
+procedure TBpIntListTests.TestGetItemWithInvalidIndex;
 begin
   try
     FBpIntList.Items[-1]; // Attempt to access with an invalid index
@@ -285,14 +285,14 @@ begin
   end;
 end;
 
-procedure TestTBpIntList.TestSetGetItem;
+procedure TBpIntListTests.TestSetGetItem;
 begin
   FBpIntList.Add(10);
   FBpIntList.Items[0] := 20;
   CheckEquals(20, FBpIntList.Items[0], 'Item should be updated to 20');
 end;
 
-procedure TestTBpIntList.TestSetCommaTextBasic;
+procedure TBpIntListTests.TestSetCommaTextBasic;
 begin
   FBpIntList.CommaText := '1,2,3';
   CheckEquals(3, FBpIntList.Count, 'Count should be 3 after setting CommaText');
@@ -301,7 +301,7 @@ begin
   CheckEquals(3, FBpIntList.Items[2], 'Third item should be 3');
 end;
 
-procedure TestTBpIntList.TestGetCommaTextBasic;
+procedure TBpIntListTests.TestGetCommaTextBasic;
 begin
   FBpIntList.Add(1);
   FBpIntList.Add(2);
@@ -309,7 +309,7 @@ begin
   CheckEquals('1,2,3', FBpIntList.CommaText, 'CommaText should correctly represent the list');
 end;
 
-procedure TestTBpIntList.TestSetCommaTextWithSpaces;
+procedure TBpIntListTests.TestSetCommaTextWithSpaces;
 begin
   FBpIntList.CommaText := '1, 2, 3';
   CheckEquals(3, FBpIntList.Count, 'Count should be 3 after setting CommaText with spaces');
@@ -317,7 +317,7 @@ begin
   CheckEquals(2, FBpIntList.Items[1], 'Second item should be 2');
 end;
 
-procedure TestTBpIntList.TestCommaTextWithQuotesRaisesException;
+procedure TBpIntListTests.TestCommaTextWithQuotesRaisesException;
 begin
   try
     FBpIntList.CommaText := '"1,5",2,"3,4"';
@@ -330,20 +330,20 @@ begin
   end;
 end;
 
-procedure TestTBpIntList.TestCountAfterAdd;
+procedure TBpIntListTests.TestCountAfterAdd;
 begin
   FBpIntList.Add(10);
   CheckEquals(1, FBpIntList.Count, 'Count should be 1 after adding one item');
 end;
 
-procedure TestTBpIntList.TestCountAfterMultipleAdds;
+procedure TBpIntListTests.TestCountAfterMultipleAdds;
 begin
   FBpIntList.Add(10);
   FBpIntList.Add(20);
   CheckEquals(2, FBpIntList.Count, 'Count should be 2 after adding two items');
 end;
 
-procedure TestTBpIntList.TestCountAfterDelete;
+procedure TBpIntListTests.TestCountAfterDelete;
 begin
   FBpIntList.Add(10);
   FBpIntList.Add(20);
@@ -351,21 +351,21 @@ begin
   CheckEquals(1, FBpIntList.Count, 'Count should be 1 after deleting one item');
 end;
 
-procedure TestTBpIntList.TestSetDelimitedText;
+procedure TBpIntListTests.TestSetDelimitedText;
 begin
   FBpIntList.DelimitedText := '1,2,3';
   CheckEquals(3, FBpIntList.Count, 'Count should be 3');
   CheckEquals(2, FBpIntList.Items[1], 'The second item should be 2');
 end;
 
-procedure TestTBpIntList.TestGetDelimitedTextWithDefaultDelimiter;
+procedure TBpIntListTests.TestGetDelimitedTextWithDefaultDelimiter;
 begin
   FBpIntList.Add(1);
   FBpIntList.Add(2);
   CheckEquals('1,2', FBpIntList.DelimitedText, 'DelimitedText should be "1,2" with default delimiter');
 end;
 
-procedure TestTBpIntList.TestSetDelimiterAndDelimitedText;
+procedure TBpIntListTests.TestSetDelimiterAndDelimitedText;
 begin
   FBpIntList.Delimiter := ';';
   FBpIntList.DelimitedText := '1;2';
@@ -373,7 +373,7 @@ begin
   CheckEquals('1;2', FBpIntList.DelimitedText, 'DelimitedText should respect the set delimiter ";"');
 end;
 
-procedure TestTBpIntList.TestClearAndResetDelimiter;
+procedure TBpIntListTests.TestClearAndResetDelimiter;
 begin
   FBpIntList.Delimiter := ';';
   FBpIntList.Clear;
@@ -381,13 +381,13 @@ begin
   CheckEquals(',', FBpIntList.Delimiter, 'Delimiter should be reset to "," after clearing and setting');
 end;
 
-procedure TestTBpIntList.TestDelimitedTextEmptyString;
+procedure TBpIntListTests.TestDelimitedTextEmptyString;
 begin
   FBpIntList.DelimitedText := '';
   CheckEquals(0, FBpIntList.Count, 'Count should be 0 for empty DelimitedText');
 end;
 
-procedure TestTBpIntList.TestDelimitedTextEndsWithDelimiter;
+procedure TBpIntListTests.TestDelimitedTextEndsWithDelimiter;
 begin
   FBpIntList.Delimiter := ',';
   FBpIntList.DelimitedText := '1,2,3,';
@@ -395,14 +395,14 @@ begin
   CheckEquals(3, FBpIntList.Items[2], 'Last item should be 3');
 end;
 
-procedure TestTBpIntList.TestDelimitedTextOnlyDelimiters;
+procedure TBpIntListTests.TestDelimitedTextOnlyDelimiters;
 begin
   FBpIntList.Delimiter := ',';
   FBpIntList.DelimitedText := ',,,';
   CheckEquals(0, FBpIntList.Count, 'Count should be 0 if DelimitedText contains only delimiters');
 end;
 
-procedure TestTBpIntList.TestDelimitedTextWithConsecutiveDelimiters;
+procedure TBpIntListTests.TestDelimitedTextWithConsecutiveDelimiters;
 begin
   FBpIntList.Delimiter := ',';
   FBpIntList.DelimitedText := '1,,2';
@@ -411,7 +411,7 @@ begin
   CheckEquals(2, FBpIntList.Items[1], 'Second item should be 2');
 end;
 
-procedure TestTBpIntList.TestSortWithFewItems;
+procedure TBpIntListTests.TestSortWithFewItems;
 begin
   FBpIntList.Add(2);
   FBpIntList.Add(3);
@@ -422,7 +422,7 @@ begin
   CheckEquals(3, FBpIntList.Items[2], 'Third item should be 3 after sorting');
 end;
 
-procedure TestTBpIntList.TestSortWithIdenticalItems;
+procedure TBpIntListTests.TestSortWithIdenticalItems;
 begin
   FBpIntList.Add(1);
   FBpIntList.Add(1);
@@ -433,7 +433,7 @@ begin
   CheckEquals(1, FBpIntList.Items[2], 'Third item should be 1 after sorting');
 end;
 
-procedure TestTBpIntList.TestSortWithNegativeItems;
+procedure TBpIntListTests.TestSortWithNegativeItems;
 begin
   FBpIntList.Add(-1);
   FBpIntList.Add(-3);
@@ -444,7 +444,7 @@ begin
   CheckEquals(-1, FBpIntList.Items[2], 'Third item should be -1 after sorting');
 end;
 
-procedure TestTBpIntList.TestSortAlreadySorted;
+procedure TBpIntListTests.TestSortAlreadySorted;
 begin
   FBpIntList.Add(1);
   FBpIntList.Add(2);
@@ -455,7 +455,7 @@ begin
   CheckEquals(3, FBpIntList.Items[2], 'Third item should still be 3 after sorting');
 end;
 
-procedure TestTBpIntList.TestLoadFromFileBasic;
+procedure TBpIntListTests.TestLoadFromFileBasic;
 var
   FileName: string;
   SavedText: TStringList;
@@ -475,7 +475,7 @@ begin
   end;
 end;
 
-procedure TestTBpIntList.TestLoadFromFileNonExisting;
+procedure TBpIntListTests.TestLoadFromFileNonExisting;
 begin
   try
     FBpIntList.LoadFromFile('nonexistingfile.txt');
@@ -486,7 +486,7 @@ begin
   end;
 end;
 
-procedure TestTBpIntList.TestSaveToFileBasic;
+procedure TBpIntListTests.TestSaveToFileBasic;
 var
   FileName: string;
   SavedText: TStringList;
@@ -509,7 +509,7 @@ begin
   end;
 end;
 
-procedure TestTBpIntList.TestSaveToFileWithDelimiterChange;
+procedure TBpIntListTests.TestSaveToFileWithDelimiterChange;
 var
   FileName: string;
   SavedText: TStringList;
@@ -533,7 +533,7 @@ begin
   end;
 end;
 
-procedure TestTBpIntList.TestSaveToFileEmptyList;
+procedure TBpIntListTests.TestSaveToFileEmptyList;
 var
   FileName: string;
   SavedText: TStringList;
@@ -552,7 +552,7 @@ begin
   end;
 end;
 
-procedure TestTBpIntList.TestLoadFromFileWithInvalidFormat;
+procedure TBpIntListTests.TestLoadFromFileWithInvalidFormat;
 var
   FileName: string;
   SavedText: TStringList;
@@ -577,7 +577,7 @@ begin
   end;
 end;
 
-procedure TestTBpIntList.TestLoadFromStreamBasic;
+procedure TBpIntListTests.TestLoadFromStreamBasic;
 var
   MemoryStream: TMemoryStream;
   InputText: string;
@@ -603,7 +603,7 @@ begin
   CheckEquals(3, FBpIntList.Count, 'Count should be 3 after loading from stream');
 end;
 
-procedure TestTBpIntList.TestLoadFromStreamEmpty;
+procedure TBpIntListTests.TestLoadFromStreamEmpty;
 var
   MemoryStream: TMemoryStream;
 begin
@@ -617,7 +617,7 @@ begin
   CheckEquals(0, FBpIntList.Count, 'Count should be 0 after loading from an empty stream');
 end;
 
-procedure TestTBpIntList.TestLoadFromStreamWithInvalidFormat;
+procedure TBpIntListTests.TestLoadFromStreamWithInvalidFormat;
 var
   MemoryStream: TMemoryStream;
   InputText: string;
@@ -647,7 +647,7 @@ begin
   end;
 end;
 
-procedure TestTBpIntList.TestSaveToStreamBasic;
+procedure TBpIntListTests.TestSaveToStreamBasic;
 var
   MemoryStream: TMemoryStream;
   OutputText: string;
@@ -667,7 +667,7 @@ begin
   end;
 end;
 
-procedure TestTBpIntList.TestSaveToStreamEmptyList;
+procedure TBpIntListTests.TestSaveToStreamEmptyList;
 var
   MemoryStream: TMemoryStream;
   OutputText: string;
@@ -684,7 +684,7 @@ begin
   end;
 end;
 
-procedure TestTBpIntList.TestLargeQuantities;
+procedure TBpIntListTests.TestLargeQuantities;
 var
   I, N: Integer;
 begin
@@ -699,7 +699,7 @@ begin
 end;
 
 initialization
-  RegisterTest(TestTBpIntList.Suite);
+  RegisterTest(TBpIntListTests.Suite);
 
 end.
 

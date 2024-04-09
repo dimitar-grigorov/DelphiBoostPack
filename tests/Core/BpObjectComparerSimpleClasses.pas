@@ -1,4 +1,4 @@
-unit SimpleClasses;
+unit BpObjectComparerSimpleClasses;
 
 interface
 

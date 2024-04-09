@@ -1,4 +1,4 @@
-unit CollectionClasses;
+unit BpObjectComparerCollectionClasses;
 
 interface
 
