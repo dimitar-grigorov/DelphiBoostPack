@@ -3,7 +3,7 @@ unit BpIntListMemoryTests;
 interface
 
 uses
-  TestFramework, BpIntListInterface, BpIntList, SysUtils, Classes;
+  TestFramework, IBpIntListUnit, BpIntListUnit, SysUtils, Classes;
 
 type
   TestTBpIntListMemoryTests = class(TTestCase)

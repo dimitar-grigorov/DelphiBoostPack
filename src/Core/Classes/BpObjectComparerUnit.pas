@@ -1,4 +1,4 @@
-unit BpObjectComparer;
+unit BpObjectComparerUnit;
 
 interface
 
@@ -6,50 +6,45 @@ uses
   Classes;
 
 type
-  IUniqueId = interface
-    ['{3C43BE0B-C5A3-4C7E-949C-E15DF5E082A4}']
-    function GetUniqueId: string;
-  end;
-
-  TPropertyDifference = record
+  TPropDifference = record
     PropPath: string;
     OldValue, NewValue: Variant;
-    class function Create(const aPropPath: string; const aOldValue, aNewValue: Variant): TPropertyDifference; static;
+    class function Create(const aPropPath: string; const aOldValue, aNewValue: Variant): TPropDifference; static;
   end;
 
-  TPropertyDifferences = array of TPropertyDifference;
+  TPropDifferences = array of TPropDifference;
 
 type
   TBpObjectComparer = class
   private
-    procedure AppendDifference(var Differences: TPropertyDifferences; const Diff: TPropertyDifference);
-    procedure AppendDifferences(var TargetDiffs: TPropertyDifferences; const SourceDiffs: TPropertyDifferences);
-    function InternalCompareProperties(aOld, aNew: TPersistent; const aPropPath: string): TPropertyDifferences;
-    procedure CompareCollectionItems(aOldColl, aNewColl: TCollection; const aPropPath: string; var aDifferences: TPropertyDifferences);
+    procedure AppendDifference(var Differences: TPropDifferences; const Diff: TPropDifference);
+    procedure AppendDifferences(var TargetDiffs: TPropDifferences; const SourceDiffs: TPropDifferences);
+    function InternalCompareProperties(aOld, aNew: TPersistent; const aPropPath: string): TPropDifferences;
+    procedure CompareCollectionItems(aOldColl, aNewColl: TCollection; const aPropPath: string; var aDifferences: TPropDifferences);
   public
-    function CompareObjects(aOld, aNew: TPersistent): TPropertyDifferences;
+    function CompareObjects(aOld, aNew: TPersistent): TPropDifferences;
     function CompareObjectsAsString(aOld, aNew: TPersistent): string;
   end;
 
 implementation
 
 uses
-  TypInfo, StrUtils, SysUtils, Variants;
+  TypInfo, StrUtils, SysUtils, Variants, IUniqueIdUnit;
 
-class function TPropertyDifference.Create(const aPropPath: string; const aOldValue, aNewValue: Variant): TPropertyDifference;
+class function TPropDifference.Create(const aPropPath: string; const aOldValue, aNewValue: Variant): TPropDifference;
 begin
   Result.PropPath := aPropPath;
   Result.OldValue := aOldValue;
   Result.NewValue := aNewValue;
 end;
 
-procedure TBpObjectComparer.AppendDifference(var Differences: TPropertyDifferences; const Diff: TPropertyDifference);
+procedure TBpObjectComparer.AppendDifference(var Differences: TPropDifferences; const Diff: TPropDifference);
 begin
   SetLength(Differences, Length(Differences) + 1);
   Differences[High(Differences)] := Diff;
 end;
 
-procedure TBpObjectComparer.AppendDifferences(var TargetDiffs: TPropertyDifferences; const SourceDiffs: TPropertyDifferences);
+procedure TBpObjectComparer.AppendDifferences(var TargetDiffs: TPropDifferences; const SourceDiffs: TPropDifferences);
 var
   i: Integer;
 begin
@@ -57,7 +52,7 @@ begin
     AppendDifference(TargetDiffs, SourceDiffs[i]);
 end;
 
-function TBpObjectComparer.InternalCompareProperties(aOld, aNew: TPersistent; const aPropPath: string): TPropertyDifferences;
+function TBpObjectComparer.InternalCompareProperties(aOld, aNew: TPersistent; const aPropPath: string): TPropDifferences;
 var
   PropList: PPropList;
   PropCount, i: Integer;
@@ -80,7 +75,7 @@ begin
         NewValue := GetPropValue(aOld, PropInfo^.Name);
         OldValue := GetPropValue(aNew, PropInfo^.Name);
         if NewValue <> OldValue then
-          AppendDifference(Result, TPropertyDifference.Create(NewPropPath, OldValue, NewValue))
+          AppendDifference(Result, TPropDifference.Create(NewPropPath, OldValue, NewValue))
       end
       else if (PropInfo^.PropType^.Kind = tkClass) and (GetObjectProp(aOld, PropInfo) is TCollection) then
       begin
@@ -92,7 +87,7 @@ begin
   end;
 end;
 
-procedure TBpObjectComparer.CompareCollectionItems(aOldColl, aNewColl: TCollection; const aPropPath: string; var aDifferences: TPropertyDifferences);
+procedure TBpObjectComparer.CompareCollectionItems(aOldColl, aNewColl: TCollection; const aPropPath: string; var aDifferences: TPropDifferences);
 var
   I: Integer;
   lvItem1, lvItem2: TPersistent;
@@ -124,7 +119,7 @@ var
 begin
   if aOldColl.Count <> aNewColl.Count then
   begin
-    AppendDifference(aDifferences, TPropertyDifference.Create(aPropPath, aOldColl.Count, aNewColl.Count));
+    AppendDifference(aDifferences, TPropDifference.Create(aPropPath, aOldColl.Count, aNewColl.Count));
     Exit;
   end;
 
@@ -151,14 +146,14 @@ begin
   end;
 end;
 
-function TBpObjectComparer.CompareObjects(aOld, aNew: TPersistent): TPropertyDifferences;
+function TBpObjectComparer.CompareObjects(aOld, aNew: TPersistent): TPropDifferences;
 begin
   Result := InternalCompareProperties(aOld, aNew, '');
 end;
 
 function TBpObjectComparer.CompareObjectsAsString(aOld, aNew: TPersistent): string;
 var
-  lvDiffs: TPropertyDifferences;
+  lvDiffs: TPropDifferences;
   lvStrings: TStringList;
   I: Integer;
 begin
@@ -167,8 +162,7 @@ begin
   try
     for I := 0 to High(lvDiffs) do
     begin
-      lvStrings.Add(Format('%s; OldValue: %s; NewValue: %s',
-        [lvDiffs[I].PropPath, VarToStr(lvDiffs[I].OldValue), VarToStr(lvDiffs[I].NewValue)]));
+      lvStrings.Add(Format('%s; OldValue: %s; NewValue: %s', [lvDiffs[I].PropPath, VarToStr(lvDiffs[I].OldValue), VarToStr(lvDiffs[I].NewValue)]));
     end;
     Result := lvStrings.Text;
   finally

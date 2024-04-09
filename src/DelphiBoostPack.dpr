@@ -5,9 +5,10 @@ program DelphiBoostPack;
 uses
   SysUtils,
   Classes,
-  BpIntList in 'Core\Classes\BpIntList.pas',
-  BpIntListInterface in 'Core\Interfaces\BpIntListInterface.pas',
-  BpObjectComparer in 'Core\Classes\BpObjectComparer.pas';
+  BpIntListUnit in 'Core\Classes\BpIntListUnit.pas',
+  IBpIntListUnit in 'Core\Interfaces\IBpIntListUnit.pas',
+  BpObjectComparerUnit in 'Core\Classes\BpObjectComparerUnit.pas',
+  IUniqueIdUnit in 'Core\Interfaces\IUniqueIdUnit.pas';
 
 begin
   System.ReportMemoryLeaksOnShutdown := True;
