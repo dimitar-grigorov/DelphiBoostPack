@@ -20,10 +20,12 @@ uses
   GUITestRunner,
   TextTestRunner,
   BpIntListTests in 'Core\BpIntListTests.pas',
-  BpIntList in '..\src\Core\Classes\BpIntList.pas',
-  BpIntListInterface in '..\src\Core\Interfaces\BpIntListInterface.pas',
+  BpIntListUnit in '..\src\Core\Classes\BpIntListUnit.pas',
+  IBpIntListUnit in '..\src\Core\Interfaces\IBpIntListUnit.pas',
   BpIntListBenchmark in 'Core\BpIntListBenchmark.pas',
-  BpIntListMemoryTests in 'Core\BpIntListMemoryTests.pas';
+  BpIntListMemoryTests in 'Core\BpIntListMemoryTests.pas',
+  SimpleClasses in 'Core\ClassesForTesting\SimpleClasses.pas',
+  CollectionClasses in 'Core\ClassesForTesting\CollectionClasses.pas';
 
 {$R *.RES}
 
