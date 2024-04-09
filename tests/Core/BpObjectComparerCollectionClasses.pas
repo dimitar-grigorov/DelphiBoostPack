@@ -3,16 +3,26 @@ unit BpObjectComparerCollectionClasses;
 interface
 
 uses
-  Classes;
+  Classes, IUniqueIdUnit, InterfacedCollectionItemUnit;
 
 type
-  TSimpleTestItem = class(TCollectionItem)
+  TMyEnumCol = (meValueOne, meValueTwo);
+
+  TSimpleTestItem = class(TInterfacedCollectionItem, IUniqueId)
   private
     FID: Integer;
     FName: string;
+    FCharProp: Char;
+    FFloatProp: Double;
+    FEnumProp: TMyEnumCol;
+  public
+    function GetUniqueId: string;
   published
     property ID: Integer read FID write FID;
     property Name: string read FName write FName;
+    property CharProp: Char read FCharProp write FCharProp;
+    property FloatProp: Double read FFloatProp write FFloatProp;
+    property EnumProp: TMyEnumCol read FEnumProp write FEnumProp;
   end;
 
   TSimpleTestCollection = class(TCollection)
@@ -26,6 +36,9 @@ type
   end;
 
 implementation
+
+uses
+  SysUtils;
 
 constructor TSimpleTestCollection.Create;
 begin
@@ -45,6 +58,13 @@ end;
 procedure TSimpleTestCollection.SetItem(Index: Integer; const Value: TSimpleTestItem);
 begin
   Items[Index].Assign(Value);
+end;
+
+{ TSimpleTestItem }
+
+function TSimpleTestItem.GetUniqueId: string;
+begin
+ Result := IntToStr(Self.ID)
 end;
 
 end.
