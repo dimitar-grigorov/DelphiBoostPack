@@ -26,6 +26,7 @@ type
     procedure TestCompareCollectionsWithDifferentFloatProps;
     procedure TestCompareCollectionsWithDifferentEnumProps;
     procedure TestCompareCollectionsWithMultipleDifferences;
+    procedure TestCompareCollectionsWithItemsInDifferentOrder;
   end;
 
 implementation
@@ -203,7 +204,6 @@ begin
   end;
 end;
 
-
 procedure TestTBpObjectComparer.TestCompareCollectionsWithDifferentCharProps;
 var
   Obj1, Obj2: TTestClassWithCollection;
@@ -222,7 +222,10 @@ begin
     Item2.CharProp := 'B';
 
     Diffs := FComparer.CompareObjects(Obj1, Obj2);
-    CheckEquals(1, Length(Diffs), 'Should find differences in character properties');
+    CheckEquals(1, Length(Diffs), 'One difference expected');
+    CheckEquals('MyCollection[1].CharProp', Diffs[0].PropPath, 'Property path should match');
+    CheckEquals('A', Diffs[0].OldValue, 'Old value should match');
+    CheckEquals('B', Diffs[0].NewValue, 'New value should match');
   finally
     Obj1.Free;
     Obj2.Free;
@@ -247,7 +250,10 @@ begin
     Item2.FloatProp := 2.0;
 
     Diffs := FComparer.CompareObjects(Obj1, Obj2);
-    CheckEquals(1, Length(Diffs), 'Should find differences in float properties');
+    CheckEquals(1, Length(Diffs), 'One difference expected');
+    CheckEquals('MyCollection[1].FloatProp', Diffs[0].PropPath, 'Property path should match');
+    CheckEquals(1.0, VarAsType(Diffs[0].OldValue, varDouble), 0.001, 'Old value should match');
+    CheckEquals(2.0, VarAsType(Diffs[0].NewValue, varDouble), 0.001, 'New value should match');
   finally
     Obj1.Free;
     Obj2.Free;
@@ -272,7 +278,12 @@ begin
     Item2.EnumProp := meValueTwo;
 
     Diffs := FComparer.CompareObjects(Obj1, Obj2);
-    CheckEquals(1, Length(Diffs), 'Should find differences in enum properties');
+    CheckEquals(1, Length(Diffs), 'One difference expected');
+    CheckEquals('MyCollection[1].EnumProp', Diffs[0].PropPath, 'Property path should match');
+
+    // Compare the string representations of the enum values
+    CheckEquals('meValueOne', Diffs[0].OldValue, 'Old value should match');
+    CheckEquals('meValueTwo', Diffs[0].NewValue, 'New value should match');
   finally
     Obj1.Free;
     Obj2.Free;
@@ -303,7 +314,61 @@ begin
     Item2.EnumProp := meValueTwo;
 
     Diffs := FComparer.CompareObjects(Obj1, Obj2);
-    CheckEquals(4, Length(Diffs), 'Should find differences in multiple properties');
+    CheckEquals(4, Length(Diffs), 'Four differences expected');
+
+    CheckEquals('MyCollection[1].CharProp', Diffs[0].PropPath);
+    CheckEquals('A', Diffs[0].OldValue);
+    CheckEquals('B', Diffs[0].NewValue);
+
+    CheckEquals('MyCollection[1].EnumProp', Diffs[1].PropPath);
+    CheckEquals('meValueOne', Diffs[1].OldValue);
+    CheckEquals('meValueTwo', Diffs[1].NewValue);
+
+    CheckEquals('MyCollection[1].FloatProp', Diffs[2].PropPath);
+    CheckEquals(1.0, VarAsType(Diffs[2].OldValue, varDouble), 0.001);
+    CheckEquals(2.0, VarAsType(Diffs[2].NewValue, varDouble), 0.001);
+
+    CheckEquals('MyCollection[1].Name', Diffs[3].PropPath);
+    CheckEquals('Item1', Diffs[3].OldValue);
+    CheckEquals('Item2', Diffs[3].NewValue);
+  finally
+    Obj1.Free;
+    Obj2.Free;
+  end;
+end;
+
+procedure TestTBpObjectComparer.TestCompareCollectionsWithItemsInDifferentOrder;
+var
+  Obj1, Obj2: TTestClassWithCollection;
+  Diffs: TPropDifferences;
+begin
+  Obj1 := TTestClassWithCollection.Create;
+  Obj2 := TTestClassWithCollection.Create;
+  try
+    with Obj1.MyCollection.Add do
+    begin
+      ID := 1;
+      Name := 'Item1';
+    end;
+    with Obj1.MyCollection.Add do
+    begin
+      ID := 2;
+      Name := 'Item2';
+    end;
+
+    with Obj2.MyCollection.Add do
+    begin
+      ID := 2; // Reverse order
+      Name := 'Item2';
+    end;
+    with Obj2.MyCollection.Add do
+    begin
+      ID := 1;
+      Name := 'Item1';
+    end;
+
+    Diffs := FComparer.CompareObjects(Obj1, Obj2);
+    CheckEquals(0, Length(Diffs), 'No differences should be found if order is not considered');
   finally
     Obj1.Free;
     Obj2.Free;
