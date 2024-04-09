@@ -1,11 +1,11 @@
-unit bpIntList;
+unit BpIntListUnit;
 
 interface
 
 // Tags: TIntegerList, TIntList, Delphi 7, Delphi 2007
 
 uses
-  Classes, SysUtils, BpIntListInterface;
+  Classes, SysUtils, IBpIntListUnit;
 
 type
   TbpIntListDefined = set of (idDelimiter, idLineBreak, idStrictDelimiter);

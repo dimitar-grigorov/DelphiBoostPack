@@ -41,8 +41,9 @@
     <DelphiCompile Include="DelphiBoostPack.dpr">
       <MainSource>MainSource</MainSource>
     </DelphiCompile>
-    <DCCReference Include="Core\Classes\BpIntList.pas" />
-    <DCCReference Include="Core\Classes\BpObjectComparer.pas" />
-    <DCCReference Include="Core\Interfaces\BpIntListInterface.pas" />
+    <DCCReference Include="Core\Classes\BpIntListUnit.pas" />
+    <DCCReference Include="Core\Classes\BpObjectComparerUnit.pas" />
+    <DCCReference Include="Core\Interfaces\IBpIntListUnit.pas" />
+    <DCCReference Include="Core\Interfaces\IUniqueIdUnit.pas" />
   </ItemGroup>
 </Project>
