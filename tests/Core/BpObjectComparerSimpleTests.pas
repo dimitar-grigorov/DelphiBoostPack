@@ -69,11 +69,20 @@ begin
     Diffs := FComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(2, Length(Diffs), 'There should be two differences');
 
+    CheckEquals('CharProp', Diffs[0].PropPath, 'First difference should be in CharProp');
+    CheckEquals('A', VarToStr(Diffs[0].OldValue), 'Old value of CharProp should be A');
+    CheckEquals('B', VarToStr(Diffs[0].NewValue), 'New value of CharProp should be B');
+
+    CheckEquals('FloatProp', Diffs[1].PropPath, 'Second difference should be in FloatProp');
+    CheckTrue(VarIsFloat(Diffs[1].OldValue) and VarIsFloat(Diffs[1].NewValue), 'Old and New values of FloatProp should be floats');
+    CheckEquals(1.1, Diffs[1].OldValue, 0.001, 'Old value of FloatProp should be 1.1');
+    CheckEquals(1.2, Diffs[1].NewValue, 0.001, 'New value of FloatProp should be 1.2');
   finally
     Obj1.Free;
     Obj2.Free;
   end;
 end;
+
 
 procedure TestTBpObjectComparer.TestCompareObjectsAsString;
 var
