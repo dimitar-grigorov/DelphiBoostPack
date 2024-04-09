@@ -1,11 +1,9 @@
 unit BpObjectComparerSimpleTests;
 
 interface
+
 uses
-  TestFramework, // Assuming use of DUnit or a similar testing framework
-  BpObjectComparerUnit,
-  BpObjectComparerSimpleClasses,
-  Variants;
+  TestFramework, BpObjectComparerUnit, BpObjectComparerSimpleClasses, Variants;
 
 type
   TestTBpObjectComparer = class(TTestCase)
@@ -21,6 +19,9 @@ type
   end;
 
 implementation
+
+uses
+  StrUtils;
 
 procedure TestTBpObjectComparer.SetUp;
 begin
@@ -83,7 +84,6 @@ begin
   end;
 end;
 
-
 procedure TestTBpObjectComparer.TestCompareObjectsAsString;
 var
   Obj1, Obj2: TTestClassC;
@@ -99,6 +99,9 @@ begin
 
     DiffStr := FComparer.CompareObjectsAsString(Obj1, Obj2);
     CheckNotEquals('', DiffStr, 'The difference string should not be empty');
+
+    CheckTrue(AnsiContainsStr(DiffStr, 'EnumProp; OldValue: meFirst; NewValue: meSecond'), 'Difference in EnumProp should be correctly formatted in DiffStr');
+    CheckTrue(AnsiContainsStr(DiffStr, 'VariantProp; OldValue: Variant1; NewValue: Variant2'), 'Difference in VariantProp should be correctly formatted in DiffStr');
   finally
     Obj1.Free;
     Obj2.Free;
@@ -109,3 +112,4 @@ initialization
   TestFramework.RegisterTest(TestTBpObjectComparer.Suite);
 
 end.
+
