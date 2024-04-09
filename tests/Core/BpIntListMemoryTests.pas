@@ -6,7 +6,7 @@ uses
   TestFramework, IBpIntListUnit, BpIntListUnit, SysUtils, Classes;
 
 type
-  TestTBpIntListMemoryTests = class(TTestCase)
+  TBpIntListMemoryTests = class(TTestCase)
   private
     procedure TestList(aList: IBpIntList);
   public
@@ -17,13 +17,13 @@ type
 
 implementation
 
-procedure TestTBpIntListMemoryTests.SetUp;
+procedure TBpIntListMemoryTests.SetUp;
 begin
   inherited;
   System.ReportMemoryLeaksOnShutdown := True;
 end;
 
-procedure TestTBpIntListMemoryTests.TestMemoryLeak;
+procedure TBpIntListMemoryTests.TestMemoryLeak;
 var
   il: IBpIntList;
 begin
@@ -33,13 +33,13 @@ begin
   TestList(il);
 end;
 
-procedure TestTBpIntListMemoryTests.TestList(aList: IBpIntList);
+procedure TBpIntListMemoryTests.TestList(aList: IBpIntList);
 begin
   Status(Format('IBpIntList.Count: %d', [aList.Count]));
 end;
 
 initialization
-  RegisterTest(TestTBpIntListMemoryTests.Suite);
+  RegisterTest(TBpIntListMemoryTests.Suite);
 
 end.
 
