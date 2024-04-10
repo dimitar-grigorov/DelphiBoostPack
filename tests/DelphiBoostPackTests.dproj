@@ -40,11 +40,13 @@
     <DelphiCompile Include="DelphiBoostPackTests.dpr">
       <MainSource>MainSource</MainSource>
     </DelphiCompile>
+    <DCCReference Include="..\src\Core\Classes\BpHashBobJenkinsUnit.pas" />
     <DCCReference Include="..\src\Core\Classes\BpIntListUnit.pas" />
     <DCCReference Include="..\src\Core\Classes\BpObjectComparerUnit.pas" />
     <DCCReference Include="..\src\Core\Classes\InterfacedCollectionItemUnit.pas" />
     <DCCReference Include="..\src\Core\Interfaces\IBpIntListUnit.pas" />
     <DCCReference Include="..\src\Core\Interfaces\IUniqueIdUnit.pas" />
+    <DCCReference Include="Core\BpHashBobJenkinsTests.pas" />
     <DCCReference Include="Core\BpIntListBenchmark.pas" />
     <DCCReference Include="Core\BpIntListMemoryTests.pas" />
     <DCCReference Include="Core\BpIntListTests.pas" />

@@ -29,7 +29,9 @@ uses
   BpObjectComparerSimpleTests in 'Core\BpObjectComparerSimpleTests.pas',
   BpObjectComparerUnit in '..\src\Core\Classes\BpObjectComparerUnit.pas',
   IUniqueIdUnit in '..\src\Core\Interfaces\IUniqueIdUnit.pas',
-  InterfacedCollectionItemUnit in '..\src\Core\Classes\InterfacedCollectionItemUnit.pas';
+  InterfacedCollectionItemUnit in '..\src\Core\Classes\InterfacedCollectionItemUnit.pas',
+  BpHashBobJenkinsTests in 'Core\BpHashBobJenkinsTests.pas',
+  BpHashBobJenkinsUnit in '..\src\Core\Classes\BpHashBobJenkinsUnit.pas';
 
 {$R *.RES}
 
