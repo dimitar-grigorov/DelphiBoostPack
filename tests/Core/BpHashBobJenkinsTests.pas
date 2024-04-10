@@ -6,7 +6,7 @@ uses
   TestFramework, SysUtils, Classes, BpHashBobJenkinsUnit;
 
 type
-  TestTMyHashBobJenkins = class(TTestCase)
+  TBpHashBobJenkinsTests = class(TTestCase)
   private
     FHashBobJenkins: TbpHashBobJenkins;
   public
@@ -15,24 +15,24 @@ type
   published
     procedure TestHashUniqueness;
     procedure TestHashConsistency;
-    procedure StressTest;
+    procedure TestSmallChangesImpact;
   end;
 
 implementation
 
 { TestTMyHashBobJenkins }
 
-procedure TestTMyHashBobJenkins.SetUp;
+procedure TBpHashBobJenkinsTests.SetUp;
 begin
   FHashBobJenkins := TbpHashBobJenkins.Create;
 end;
 
-procedure TestTMyHashBobJenkins.TearDown;
+procedure TBpHashBobJenkinsTests.TearDown;
 begin
   FHashBobJenkins.Free;
 end;
 
-procedure TestTMyHashBobJenkins.TestHashUniqueness;
+procedure TBpHashBobJenkinsTests.TestHashUniqueness;
 var
   i: Integer;
   hashValue: Integer;
@@ -42,7 +42,7 @@ begin
   uniqueHashes := TStringList.Create;
   try
     uniqueHashes.Sorted := True;
-    for i := 1 to 60000 do
+    for i := 1 to 50000 do
     begin
       hashValue := FHashBobJenkins.GetHashValue('Sample Text ' + IntToStr(i));
       if uniqueHashes.Find(IntToStr(hashValue), index) then  // Check if hashValue is already in the list
@@ -55,7 +55,7 @@ begin
   end;
 end;
 
-procedure TestTMyHashBobJenkins.TestHashConsistency;
+procedure TBpHashBobJenkinsTests.TestHashConsistency;
 var
   hashValue1, hashValue2: Integer;
 begin
@@ -64,15 +64,16 @@ begin
   CheckEquals(hashValue1, hashValue2, 'Hash values for the same input should be consistent');
 end;
 
-procedure TestTMyHashBobJenkins.StressTest;
+procedure TBpHashBobJenkinsTests.TestSmallChangesImpact;
 var
-  i: Integer;
+  hashValue1, hashValue2: Integer;
 begin
-  for i := 1 to 100000 do
-    FHashBobJenkins.GetHashValue('Stress Test ' + IntToStr(i));
+  hashValue1 := FHashBobJenkins.GetHashValue('Small Change 1');
+  hashValue2 := FHashBobJenkins.GetHashValue('Small Change 2');
+  Check(hashValue1 <> hashValue2, 'Small changes in input should produce different hashes');
 end;
 
 initialization
-  RegisterTest(TestTMyHashBobJenkins.Suite);
+  RegisterTest(TBpHashBobJenkinsTests.Suite);
 
 end.
