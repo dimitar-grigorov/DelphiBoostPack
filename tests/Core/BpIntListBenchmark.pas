@@ -236,7 +236,7 @@ procedure TbpIntListBenchmark.TestInsertPerformanceComparison;
 var
   lvStartTick, lvEndTick, lvFrequency: Int64;
   I: Integer;
-  lvElapsedTimeSorted, lvElapsedTimeUnsorted: Double;
+  lvElapsedTimeSorted, lvElapsedTimeUnsorted, lvElapsedTimeSorting: Double;
 begin
   QueryPerformanceFrequency(lvFrequency);
 
@@ -245,11 +245,11 @@ begin
   FBpIntList.Sorted := True;
   QueryPerformanceCounter(lvStartTick);
   for I := 0 to 100000 do
-    FBpIntList.Insert(Random(I + 1), I);  // Attempt to maintain sorting during insert
+    FBpIntList.Insert(Random(I + 1), I);  // Insert with sorting maintained during each insertion
   QueryPerformanceCounter(lvEndTick);
   lvElapsedTimeSorted := (lvEndTick - lvStartTick) * 1000.0 / lvFrequency;
 
-  // Test inserting into an unsorted list
+  // Test inserting into an unsorted list and then sorting
   FBpIntList.Clear;
   FBpIntList.Sorted := False;
   QueryPerformanceCounter(lvStartTick);
@@ -258,11 +258,17 @@ begin
   QueryPerformanceCounter(lvEndTick);
   lvElapsedTimeUnsorted := (lvEndTick - lvStartTick) * 1000.0 / lvFrequency;
 
+  // Measure the time taken to sort the list after population
+  QueryPerformanceCounter(lvStartTick);
+  FBpIntList.Sort;  // Sort the entire list
+  QueryPerformanceCounter(lvEndTick);
+  lvElapsedTimeSorting := (lvEndTick - lvStartTick) * 1000.0 / lvFrequency;
+
   // Output the results
   Status(Format('Insert into Sorted List Time: %f ms', [lvElapsedTimeSorted]));
   Status(Format('Insert into Unsorted List Time: %f ms', [lvElapsedTimeUnsorted]));
+  Status(Format('Time to Sort After Insertion: %f ms', [lvElapsedTimeSorting]));
 end;
-
 
 initialization
   RegisterTest(TbpIntListBenchmark.Suite);
