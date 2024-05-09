@@ -117,6 +117,7 @@ var
   I, J: Integer;
   FoundIndex: Integer;
   ElapsedTimeIndexOf, ElapsedTimeBinarySearch, SingleRunTime: Double;
+  TotalStepsIndexOf, TotalStepsBinarySearch: Int64;
 const
   SearchValues: array[0..9] of Integer = (1, 250, 500, 750, 1000, 5000, 7500, 10000, 50000, 100000);
   RepeatCount = 100; // Number of times to repeat the search to average the timings
@@ -128,31 +129,42 @@ begin
   QueryPerformanceFrequency(Frequency);
   ElapsedTimeIndexOf := 0;
   ElapsedTimeBinarySearch := 0;
+  TotalStepsIndexOf := 0;
+  TotalStepsBinarySearch := 0;
 
   // Testing IndexOf
   for J := 1 to RepeatCount do
   begin
     QueryPerformanceCounter(lvStartTick);
     for I := Low(SearchValues) to High(SearchValues) do
+    begin
       FBpIntList.IndexOf(SearchValues[I]);
+      TotalStepsIndexOf := TotalStepsIndexOf + FBpIntList.StepCount;
+    end;
     QueryPerformanceCounter(lvEndTick);
     SingleRunTime := (lvEndTick - lvStartTick) * 1000.0 / Frequency;
     ElapsedTimeIndexOf := ElapsedTimeIndexOf + SingleRunTime;
   end;
   Status(Format('IndexOf Average Time: %f ms', [ElapsedTimeIndexOf / RepeatCount]));
+  Status(Format('IndexOf Average Steps: %f', [TotalStepsIndexOf / (RepeatCount * Length(SearchValues))]));
 
   // Testing BinarySearch
   for J := 1 to RepeatCount do
   begin
     QueryPerformanceCounter(lvStartTick);
     for I := Low(SearchValues) to High(SearchValues) do
+    begin
       FBpIntList.BinarySearch(SearchValues[I], FoundIndex);
+      TotalStepsBinarySearch := TotalStepsBinarySearch + FBpIntList.StepCount;
+    end;
     QueryPerformanceCounter(lvEndTick);
     SingleRunTime := (lvEndTick - lvStartTick) * 1000.0 / Frequency;
     ElapsedTimeBinarySearch := ElapsedTimeBinarySearch + SingleRunTime;
   end;
   Status(Format('BinarySearch Average Time: %f ms', [ElapsedTimeBinarySearch / RepeatCount]));
+  Status(Format('BinarySearch Average Steps: %f', [TotalStepsBinarySearch / (RepeatCount * Length(SearchValues))]));
 end;
+
 
 
 
