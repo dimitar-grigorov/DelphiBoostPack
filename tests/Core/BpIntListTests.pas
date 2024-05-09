@@ -26,6 +26,10 @@ type
     procedure TestClear;
     //IndexOf
     procedure TestIndexOf;
+    //BinarySearch
+    procedure TestBinarySearchEmptyList;
+    procedure TestBinarySearchSingleElement;
+    procedure TestBinarySearchMultipleElements;
     //Exchange
     procedure TestExchangeValidIndices;
     procedure TestExchangeSameIndex;
@@ -158,6 +162,49 @@ begin
   CheckEquals(0, FBpIntList.IndexOf(10), 'IndexOf should return 0 for the first item');
   CheckEquals(1, FBpIntList.IndexOf(20), 'IndexOf should return 1 for the second item');
   CheckEquals(-1, FBpIntList.IndexOf(30), 'IndexOf should return -1 for a non-existent item');
+end;
+
+procedure TBpIntListTests.TestBinarySearchEmptyList;
+var
+  FoundIndex: Integer;
+begin
+  FBpIntList.Sorted := True;
+  CheckFalse(FBpIntList.BinarySearch(10, FoundIndex), 'Search in an empty list should return False.');
+end;
+
+procedure TBpIntListTests.TestBinarySearchSingleElement;
+var
+  FoundIndex: Integer;
+begin
+  FBpIntList.Add(5);
+  FBpIntList.Sorted := True;
+  CheckTrue(FBpIntList.BinarySearch(5, FoundIndex), 'Item should be found.');
+  CheckEquals(0, FoundIndex, 'FoundIndex should be 0.');
+
+  CheckFalse(FBpIntList.BinarySearch(3, FoundIndex), 'Item should not be found.');
+  CheckEquals(0, FoundIndex, 'Insertion index should be 0 for a smaller element.');
+end;
+
+procedure TBpIntListTests.TestBinarySearchMultipleElements;
+var
+  FoundIndex: Integer;
+begin
+  FBpIntList.Add(5);
+  FBpIntList.Add(10);
+  FBpIntList.Add(20);
+  FBpIntList.Sorted := True;
+
+  CheckTrue(FBpIntList.BinarySearch(10, FoundIndex), 'Item should be found.');
+  CheckEquals(1, FoundIndex, 'FoundIndex should be 1.');
+
+  CheckFalse(FBpIntList.BinarySearch(15, FoundIndex), 'Item should not be found.');
+  CheckEquals(2, FoundIndex, 'Insertion index should be 2.');
+
+  CheckTrue(FBpIntList.BinarySearch(5, FoundIndex), 'First element should be found.');
+  CheckEquals(0, FoundIndex, 'FoundIndex should be 0.');
+
+  CheckTrue(FBpIntList.BinarySearch(20, FoundIndex), 'Last element should be found.');
+  CheckEquals(2, FoundIndex, 'FoundIndex should be 2.');
 end;
 
 procedure TBpIntListTests.TestExchangeValidIndices;
