@@ -40,6 +40,7 @@ type
     procedure Clear;
     procedure Exchange(Index1, Index2: Integer); virtual;
     function IndexOf(const Item: Integer): Integer;
+    function BinarySearch(const Item: Integer; out FoundIndex: Integer): Boolean;    
     procedure Insert(Index: Integer; const Item: Integer);
     procedure Sort; virtual;
 
@@ -47,6 +48,7 @@ type
     procedure LoadFromStream(Stream: TStream); virtual;
     procedure SaveToFile(const FileName: string); virtual;
     procedure SaveToStream(Stream: TStream); virtual;
+    class function CompareInt(I1, I2: Integer): Integer;    
   public
     property Items[Index: Integer]: Integer read GetItem write SetItem; default;
     property CommaText: string read GetCommaText write SetCommaText;
@@ -69,6 +71,7 @@ resourcestring
   SListCapacityError = 'List capacity out of bounds (%d)';
   SListCountError = 'List count out of bounds (%d)';
   SListIndexError = 'List index out of bounds (%d)';
+  SListMustBeSortedForBinarySearch = 'List must be sorted before performing binary search';
 
 constructor TBpIntList.Create;
 begin
@@ -347,6 +350,44 @@ begin
       Result := I;
       Break;
     end;
+end;
+
+function TBpIntList.BinarySearch(const Item: Integer; out FoundIndex: Integer): Boolean;
+var
+  L, H, M, CmpResult: Integer;
+begin
+  if not Sorted then
+    raise EListError.Create(SListMustBeSortedForBinarySearch);
+
+  L := 0;
+  H := FCount - 1;
+  while L <= H do
+  begin
+    M := (L + H) shr 1;
+    CmpResult := CompareInt(FList[M], Item);
+    if CmpResult < 0 then
+      L := M + 1
+    else if CmpResult > 0 then
+      H := M - 1
+    else
+    begin
+      FoundIndex := M;
+      Result := True;
+      Exit;
+    end;
+  end;
+  FoundIndex := L; // Return the insertion point if not found
+  Result := False;
+end;
+
+class function TBpIntList.CompareInt(I1, I2: Integer): Integer;
+begin
+  if I1 < I2 then
+    Result := -1
+  else if I1 > I2 then
+    Result := 1
+  else
+    Result := 0;
 end;
 
 procedure TBpIntList.Insert(Index: Integer; const Item: Integer);
