@@ -1,3 +1,5 @@
+{.$DEFINE BENCHMARK}
+
 unit BpIntListUnit;
 
 interface
@@ -10,6 +12,9 @@ type
 
   TBpIntList = class(TInterfacedObject, IBpIntList)
   private
+    {$IFDEF BENCHMARK}
+    FStepCount: Integer;
+    {$ENDIF}  
     FList: array of Integer;
     FDefined: TbpIntListDefined;
     FUpdateCount: Integer;
@@ -56,6 +61,10 @@ type
     property Delimiter: Char read GetDelimiter write SetDelimiter;
     property DelimitedText: string read GetDelimitedText write SetDelimitedText;
     property Sorted: Boolean read FSorted write SetSorted;
+
+    {$IFDEF BENCHMARK}
+    property StepCount: Integer read FStepCount;
+    {$ENDIF}
   end;
 
 {$IFNDEF NEXTGEN}
@@ -344,12 +353,20 @@ var
   I: Integer;
 begin
   Result := -1;
-  for I := 0 to Count - 1 do
+  {$IFDEF BENCHMARK}
+  FStepCount := 0;
+  {$ENDIF}
+  for I := 0 to FCount - 1 do
+  begin
+    {$IFDEF BENCHMARK}
+    Inc(FStepCount);
+    {$ENDIF}
     if (FList[I] = Item) then
     begin
       Result := I;
       Break;
     end;
+  end;
 end;
 
 function TBpIntList.BinarySearch(const Item: Integer; out FoundIndex: Integer): Boolean;
@@ -357,13 +374,19 @@ var
   L, H, M, CmpResult: Integer;
 begin
   if not Sorted then
-    raise EListError.Create(SListMustBeSortedForBinarySearch);
-
+    raise EListError.Create('List must be sorted for binary search');
+  
   L := 0;
   H := FCount - 1;
+  {$IFDEF BENCHMARK}
+  FStepCount := 0;
+  {$ENDIF}
   while L <= H do
   begin
     M := (L + H) shr 1;
+    {$IFDEF BENCHMARK}
+    Inc(FStepCount);
+    {$ENDIF}
     CmpResult := CompareInt(FList[M], Item);
     if CmpResult < 0 then
       L := M + 1
