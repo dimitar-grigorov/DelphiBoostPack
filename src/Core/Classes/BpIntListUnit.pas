@@ -416,22 +416,24 @@ end;
 
 procedure TBpIntList.Insert(Index: Integer; const Item: Integer);
 var
-  CorrectIndex, I: Integer;
+  Low, High, Mid: Integer;
 begin
   if (Index < 0) or (Index > Count) then
     raise EListError.Create('List index out of bounds');
 
   if Sorted then
   begin
-    // Find the correct index for the new item to maintain sort order
-    CorrectIndex := 0;
-    for I := 0 to Count - 1 do
+    Low := 0;
+    High := Count - 1;
+    while Low <= High do
     begin
-      if FList[I] > Item then
-        Break;
-      Inc(CorrectIndex);
+      Mid := Low + (High - Low) div 2;
+      if FList[Mid] < Item then
+        Low := Mid + 1
+      else
+        High := Mid - 1;
     end;
-    Index := CorrectIndex; // Ignore the provided index since we are sorted
+    Index := Low;  // Low will be the correct insertion index
   end;
 
   if Count = Length(FList) then
