@@ -350,32 +350,45 @@ end;
 
 function TBpIntList.IndexOf(const Item: Integer): Integer;
 var
-  I: Integer;
+  lvFound: Boolean;
+  lvFoundIndex: Integer;
 begin
   Result := -1;
   {$IFDEF BENCHMARK}
   FStepCount := 0;
   {$ENDIF}
-  for I := 0 to FCount - 1 do
+  if Sorted then
   begin
-    {$IFDEF BENCHMARK}
-    Inc(FStepCount);
-    {$ENDIF}
-    if (FList[I] = Item) then
+    lvFound := BinarySearch(Item, lvFoundIndex);
+    if lvFound then
+      Result := lvFoundIndex
+    else
+      Result := -1;
+  end
+  else
+  begin
+    // If the list is not sorted, use the linear search approach
+    for lvFoundIndex := 0 to FCount - 1 do
     begin
-      Result := I;
-      Break;
+      {$IFDEF BENCHMARK}
+      Inc(FStepCount);
+      {$ENDIF}
+      if (FList[lvFoundIndex] = Item) then
+      begin
+        Result := lvFoundIndex;
+        Break;
+      end;
     end;
   end;
 end;
 
 function TBpIntList.BinarySearch(const Item: Integer; out FoundIndex: Integer): Boolean;
 var
-  L, H, M, CmpResult: Integer;
+  L, H, M, lvCompResult: Integer;
 begin
   FoundIndex := -1;
   if not Sorted then
-    raise EListError.Create('List must be sorted for binary search');
+    raise EListError.Create(SListMustBeSortedForBinarySearch);
   
   L := 0;
   H := FCount - 1;
@@ -388,10 +401,10 @@ begin
     {$IFDEF BENCHMARK}
     Inc(FStepCount);
     {$ENDIF}
-    CmpResult := CompareInt(FList[M], Item);
-    if CmpResult < 0 then
+    lvCompResult := CompareInt(FList[M], Item);
+    if lvCompResult < 0 then
       L := M + 1
-    else if CmpResult > 0 then
+    else if lvCompResult > 0 then
       H := M - 1
     else
     begin
