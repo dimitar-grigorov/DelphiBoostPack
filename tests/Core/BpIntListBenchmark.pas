@@ -14,6 +14,7 @@ type
     procedure TearDown; override;
   published
     procedure TestAddPerformance;
+    procedure TestSearchPerformance;
   end;
 
 implementation
@@ -109,6 +110,51 @@ begin
   Status(Format('TStringList Memory Usage: %d KB', [lvMemoryStrList]));
   Status(Format('Memory Usage Ratio (String/Int List): %.2f', [lvMemoryRatio]));
 end;
+
+procedure TbpIntListBenchmark.TestSearchPerformance;
+var
+  lvStartTick, lvEndTick, Frequency: Int64;
+  I, J: Integer;
+  FoundIndex: Integer;
+  ElapsedTimeIndexOf, ElapsedTimeBinarySearch, SingleRunTime: Double;
+const
+  SearchValues: array[0..9] of Integer = (1, 250, 500, 750, 1000, 5000, 7500, 10000, 50000, 100000);
+  RepeatCount = 100; // Number of times to repeat the search to average the timings
+begin
+  FBpIntList.Sorted := True;
+  for I := 1 to 100000 do
+    FBpIntList.Add(I);
+
+  QueryPerformanceFrequency(Frequency);
+  ElapsedTimeIndexOf := 0;
+  ElapsedTimeBinarySearch := 0;
+
+  // Testing IndexOf
+  for J := 1 to RepeatCount do
+  begin
+    QueryPerformanceCounter(lvStartTick);
+    for I := Low(SearchValues) to High(SearchValues) do
+      FBpIntList.IndexOf(SearchValues[I]);
+    QueryPerformanceCounter(lvEndTick);
+    SingleRunTime := (lvEndTick - lvStartTick) * 1000.0 / Frequency;
+    ElapsedTimeIndexOf := ElapsedTimeIndexOf + SingleRunTime;
+  end;
+  Status(Format('IndexOf Average Time: %f ms', [ElapsedTimeIndexOf / RepeatCount]));
+
+  // Testing BinarySearch
+  for J := 1 to RepeatCount do
+  begin
+    QueryPerformanceCounter(lvStartTick);
+    for I := Low(SearchValues) to High(SearchValues) do
+      FBpIntList.BinarySearch(SearchValues[I], FoundIndex);
+    QueryPerformanceCounter(lvEndTick);
+    SingleRunTime := (lvEndTick - lvStartTick) * 1000.0 / Frequency;
+    ElapsedTimeBinarySearch := ElapsedTimeBinarySearch + SingleRunTime;
+  end;
+  Status(Format('BinarySearch Average Time: %f ms', [ElapsedTimeBinarySearch / RepeatCount]));
+end;
+
+
 
 initialization
   RegisterTest(TbpIntListBenchmark.Suite);
