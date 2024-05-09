@@ -125,7 +125,6 @@ const
 begin
   for I := 1 to 2000000 do
     FBpIntList.Add(I);
-  FBpIntList.Sorted := True;
 
   QueryPerformanceFrequency(lvFrequency);
   ElapsedTimeIndexOf := 0;
@@ -134,6 +133,9 @@ begin
   TotalStepsBinarySearch := 0;
 
   // Testing IndexOf
+  // Set Sorted to be false, to force the linear search
+  FBpIntList.Sorted := True;
+  FBpIntList.Sorted := False;    
   for J := 1 to lcRepeatCount do
   begin
     QueryPerformanceCounter(lvStartTick);
@@ -150,6 +152,7 @@ begin
   Status(Format('IndexOf Average Steps: %f', [TotalStepsIndexOf / (lcRepeatCount * Length(lcSearchValues))]));
 
   // Testing BinarySearch
+  FBpIntList.Sorted := True;
   for J := 1 to lcRepeatCount do
   begin
     QueryPerformanceCounter(lvStartTick);
@@ -183,7 +186,6 @@ begin
   for I := 1 to 2000000 do
     if Random(10) > 2 then  // 80% chance to add the number, creating some gaps
       FBpIntList.Add(I);
-  FBpIntList.Sorted := True;
 
   for I := 0 to High(SearchValues) do
   begin
@@ -200,6 +202,9 @@ begin
   TotalStepsBinarySearch := 0;
 
   // Testing IndexOf
+  // Set Sorted to be false, to force the linear search
+  FBpIntList.Sorted := True;
+  FBpIntList.Sorted := False;  
   for J := 1 to lcRepeatCount do
   begin
     QueryPerformanceCounter(lvStartTick);
@@ -216,6 +221,7 @@ begin
   Status(Format('IndexOf Average Steps: %f', [TotalStepsIndexOf / (lcRepeatCount * lcNumSearchValues)]));
 
   // Testing BinarySearch
+  FBpIntList.Sorted := True;  
   for J := 1 to lcRepeatCount do
   begin
     QueryPerformanceCounter(lvStartTick);
