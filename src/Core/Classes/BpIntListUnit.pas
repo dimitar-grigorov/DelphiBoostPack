@@ -373,6 +373,7 @@ function TBpIntList.BinarySearch(const Item: Integer; out FoundIndex: Integer): 
 var
   L, H, M, CmpResult: Integer;
 begin
+  FoundIndex := -1;
   if not Sorted then
     raise EListError.Create('List must be sorted for binary search');
   
