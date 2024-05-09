@@ -16,6 +16,7 @@ type
     procedure TestAddPerformance;
     procedure TestSearchPerformance;
     procedure TestSearchPerformanceDistributed;
+    procedure TestInsertPerformanceComparison;
   end;
 
 implementation
@@ -230,6 +231,38 @@ begin
   Status(Format('BinarySearch Average Time: %f ms', [ElapsedTimeBinarySearch / lcRepeatCount]));
   Status(Format('BinarySearch Average Steps: %f', [TotalStepsBinarySearch / (lcRepeatCount * lcNumSearchValues)]));
 end;
+
+procedure TbpIntListBenchmark.TestInsertPerformanceComparison;
+var
+  lvStartTick, lvEndTick, lvFrequency: Int64;
+  I: Integer;
+  lvElapsedTimeSorted, lvElapsedTimeUnsorted: Double;
+begin
+  QueryPerformanceFrequency(lvFrequency);
+
+  // Test inserting into a sorted list
+  FBpIntList.Clear;
+  FBpIntList.Sorted := True;
+  QueryPerformanceCounter(lvStartTick);
+  for I := 0 to 100000 do
+    FBpIntList.Insert(Random(I + 1), I);  // Attempt to maintain sorting during insert
+  QueryPerformanceCounter(lvEndTick);
+  lvElapsedTimeSorted := (lvEndTick - lvStartTick) * 1000.0 / lvFrequency;
+
+  // Test inserting into an unsorted list
+  FBpIntList.Clear;
+  FBpIntList.Sorted := False;
+  QueryPerformanceCounter(lvStartTick);
+  for I := 0 to 100000 do
+    FBpIntList.Insert(Random(I + 1), I);  // Insert without sorting
+  QueryPerformanceCounter(lvEndTick);
+  lvElapsedTimeUnsorted := (lvEndTick - lvStartTick) * 1000.0 / lvFrequency;
+
+  // Output the results
+  Status(Format('Insert into Sorted List Time: %f ms', [lvElapsedTimeSorted]));
+  Status(Format('Insert into Unsorted List Time: %f ms', [lvElapsedTimeUnsorted]));
+end;
+
 
 initialization
   RegisterTest(TbpIntListBenchmark.Suite);
