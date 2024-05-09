@@ -2,8 +2,6 @@ unit BpIntListUnit;
 
 interface
 
-// Tags: TIntegerList, TIntList, Delphi 7, Delphi 2007
-
 uses
   Classes, SysUtils, IBpIntListUnit;
 
@@ -18,8 +16,6 @@ type
     FCount: Integer;
     FSorted: Boolean;
     FDelimiter: Char;
-    FOnChange: TNotifyEvent;
-    FOnChanging: TNotifyEvent;
     function GetItem(Index: Integer): Integer;
     procedure SetItem(Index: Integer; const Value: Integer);
     procedure SetCapacity(const NewCapacity: Integer);
@@ -35,9 +31,6 @@ type
     procedure SetCommaText(const Value: string);
     procedure SetSorted(const Value: Boolean);
   protected
-    procedure Changed; virtual;
-    procedure Changing; virtual;
-    procedure SetUpdateState(const Updating: Boolean); virtual;
     property UpdateCount: Integer read FUpdateCount;
   public
     constructor Create;
@@ -53,10 +46,7 @@ type
     procedure LoadFromFile(const FileName: string); virtual;
     procedure LoadFromStream(Stream: TStream); virtual;
     procedure SaveToFile(const FileName: string); virtual;
-    procedure SaveToStream(Stream: TStream); virtual;    
-
-    procedure BeginUpdate;
-    procedure EndUpdate;
+    procedure SaveToStream(Stream: TStream); virtual;
   public
     property Items[Index: Integer]: Integer read GetItem write SetItem; default;
     property CommaText: string read GetCommaText write SetCommaText;
@@ -64,9 +54,14 @@ type
     property Delimiter: Char read GetDelimiter write SetDelimiter;
     property DelimitedText: string read GetDelimitedText write SetDelimitedText;
     property Sorted: Boolean read FSorted write SetSorted;
-    property OnChange: TNotifyEvent read FOnChange write FOnChange;
-    property OnChanging: TNotifyEvent read FOnChanging write FOnChanging;
   end;
+
+{$IFNDEF NEXTGEN}
+  TIntegerList = class(TBpIntList)
+  end;
+  TIntList = class(TBpIntList)
+  end;
+{$ENDIF}
 
 implementation
 
@@ -85,8 +80,6 @@ end;
 
 destructor TBpIntList.Destroy;
 begin
-  FOnChange := nil;
-  FOnChanging := nil;
   inherited Destroy;
   FCount := 0;
   SetCapacity(0);
@@ -103,9 +96,7 @@ procedure TBpIntList.SetItem(Index: Integer; const Value: Integer);
 begin
   if (Index < 0) or (Index >= FCount) then
     raise EListError.Create('List index out of bounds');
-  Changing;
   FList[Index] := Value;
-  Changed;
 end;
 
 procedure TBpIntList.SetSorted(const Value: Boolean);
@@ -132,9 +123,7 @@ begin
     raise EListError.CreateFmt(SListIndexError, [Index1]);
   if (Index2 < 0) or (Index2 >= FCount) then
     raise EListError.CreateFmt(SListIndexError, [Index2]);
-  Changing;
   ExchangeItems(Index1, Index2);
-  Changed;
 end;
 
 procedure TBpIntList.ExchangeItems(Index1, Index2: Integer);
@@ -197,21 +186,17 @@ procedure TBpIntList.Delete(const Index: Integer);
 begin
   if (Index < 0) or (Index >= FCount) then
     raise EListError.Create('List index out of bounds');
-  Changing;
   Dec(FCount);
-  if Index < FCount then
+  if (Index < FCount) then
     System.Move(FList[Index + 1], FList[Index], (FCount - Index) * SizeOf(Integer));
-  Changed;
 end;
 
 procedure TBpIntList.Clear;
 begin
   if FCount <> 0 then
   begin
-    Changing;
     FCount := 0;
     SetCapacity(0);
-    Changed;
   end;
 end;
 
@@ -277,34 +262,29 @@ var
   S: string;
   Num: Integer;
 begin
-  BeginUpdate;
-  try
-    Clear;
-    P := PChar(Value);
-    while P^ <> #0 do
+  Clear;
+  P := PChar(Value);
+  while P^ <> #0 do
+  begin
+    Start := P;
+    // Search for the next delimiter, end of string, or newline character
+    while (P^ <> #0) and (P^ <> Delimiter) and not (P^ in [#10, #13]) do
+      Inc(P);
+
+    // Extract the substring from the start of the number to the delimiter
+    SetString(S, Start, P - Start);
+    if S <> '' then
     begin
-      Start := P;
-      // Search for the next delimiter, end of string, or newline character
-      while (P^ <> #0) and (P^ <> Delimiter) and not (P^ in [#10, #13]) do
-        Inc(P);
-
-      // Extract the substring from the start of the number to the delimiter
-      SetString(S, Start, P - Start);
-      if S <> '' then
-      begin
-        // Try to convert the substring into a number and add it to the list
-        if TryStrToInt(S, Num) then
-          Add(Num)
-        else
-          raise EConvertError.CreateFmt('Cannot convert string "%s" to integer', [S]);
-      end;
-
-      // Skip the delimiter and any trailing newline characters or spaces
-      while P^ in [Delimiter, #10, #13, ' '] do
-        Inc(P);
+      // Try to convert the substring into a number and add it to the list
+      if TryStrToInt(S, Num) then
+        Add(Num)
+      else
+        raise EConvertError.CreateFmt('Cannot convert string "%s" to integer', [S]);
     end;
-  finally
-    EndUpdate;
+
+    // Skip the delimiter and any trailing newline characters or spaces
+    while P^ in [Delimiter, #10, #13, ' '] do
+      Inc(P);
   end;
 end;
 
@@ -326,20 +306,14 @@ var
   S: string;
   Buffer: array of Byte;
 begin
-  BeginUpdate;
-  try
-    Clear;
-    SetLength(Buffer, Stream.Size);
-    Stream.Position := 0; // Ensure the stream's read pointer is at the beginning.
-    Stream.Read(Buffer[0], Stream.Size);
-    // Convert buffer into string
-    SetString(S, PAnsiChar(@Buffer[0]), Length(Buffer));
-    SetDelimitedText(S);
-  finally
-    EndUpdate;
-  end;
+  Clear;
+  SetLength(Buffer, Stream.Size);
+  Stream.Position := 0; // Ensure the stream's read pointer is at the beginning.
+  Stream.Read(Buffer[0], Stream.Size);
+  // Convert buffer into string
+  SetString(S, PAnsiChar(@Buffer[0]), Length(Buffer));
+  SetDelimitedText(S);
 end;
-
 
 procedure TBpIntList.SaveToFile(const FileName: string);
 var
@@ -362,20 +336,6 @@ begin
     Stream.WriteBuffer(Text[1], Length(Text));
 end;
 
-procedure TBpIntList.BeginUpdate;
-begin
-  if FUpdateCount = 0 then
-    SetUpdateState(True);
-  Inc(FUpdateCount);
-end;
-
-procedure TBpIntList.EndUpdate;
-begin
-  Dec(FUpdateCount);
-  if FUpdateCount = 0 then
-    SetUpdateState(False);
-end;
-
 function TBpIntList.IndexOf(const Item: Integer): Integer;
 var
   I: Integer;
@@ -395,8 +355,6 @@ var
 begin
   if (Index < 0) or (Index > Count) then
     raise EListError.Create('List index out of bounds');
-
-  Changing;
 
   if Sorted then
   begin
@@ -420,38 +378,12 @@ begin
 
   FList[Index] := Item;
   Inc(FCount);
-
-  Changed;
-end;
-
-procedure TBpIntList.SetUpdateState(const Updating: Boolean);
-begin
-  if Updating then
-    Changing
-  else
-    Changed;
 end;
 
 procedure TBpIntList.Sort;
 begin
   if not Sorted and (FCount > 1) then
-  begin
-    Changing;
     QuickSort(0, FCount - 1);
-    Changed;
-  end;
-end;
-
-procedure TBpIntList.Changed;
-begin
-  if (FUpdateCount = 0) and Assigned(FOnChange) then
-    FOnChange(Self);
-end;
-
-procedure TBpIntList.Changing;
-begin
-  if (FUpdateCount = 0) and Assigned(FOnChanging) then
-    FOnChanging(Self);
 end;
 
 end.
