@@ -31,7 +31,9 @@ uses
   IUniqueIdUnit in '..\src\Core\Interfaces\IUniqueIdUnit.pas',
   InterfacedCollectionItemUnit in '..\src\Core\Classes\InterfacedCollectionItemUnit.pas',
   BpHashBobJenkinsTests in 'Core\BpHashBobJenkinsTests.pas',
-  BpHashBobJenkinsUnit in '..\src\Core\Classes\BpHashBobJenkinsUnit.pas';
+  BpHashBobJenkinsUnit in '..\src\Core\Classes\BpHashBobJenkinsUnit.pas',
+  BpSysUtilsTests in 'Core\BpSysUtilsTests.pas',
+  BpSysUtils in '..\src\Core\Units\BpSysUtils.pas';
 
 {$R *.RES}
 

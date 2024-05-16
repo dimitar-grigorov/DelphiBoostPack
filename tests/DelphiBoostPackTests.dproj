@@ -46,6 +46,7 @@
     <DCCReference Include="..\src\Core\Classes\InterfacedCollectionItemUnit.pas" />
     <DCCReference Include="..\src\Core\Interfaces\IBpIntListUnit.pas" />
     <DCCReference Include="..\src\Core\Interfaces\IUniqueIdUnit.pas" />
+    <DCCReference Include="..\src\Core\Units\BpSysUtils.pas" />
     <DCCReference Include="Core\BpHashBobJenkinsTests.pas" />
     <DCCReference Include="Core\BpIntListBenchmark.pas" />
     <DCCReference Include="Core\BpIntListMemoryTests.pas" />
@@ -53,5 +54,6 @@
     <DCCReference Include="Core\BpObjectComparerCollectionClasses.pas" />
     <DCCReference Include="Core\BpObjectComparerSimpleClasses.pas" />
     <DCCReference Include="Core\BpObjectComparerSimpleTests.pas" />
+    <DCCReference Include="Core\BpSysUtilsTests.pas" />
   </ItemGroup>
 </Project>
