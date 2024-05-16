@@ -47,5 +47,6 @@
     <DCCReference Include="Core\Classes\InterfacedCollectionItemUnit.pas" />
     <DCCReference Include="Core\Interfaces\IBpIntListUnit.pas" />
     <DCCReference Include="Core\Interfaces\IUniqueIdUnit.pas" />
+    <DCCReference Include="Core\Units\BpSysUtils.pas" />
   </ItemGroup>
 </Project>
