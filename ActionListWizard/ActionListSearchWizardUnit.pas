@@ -17,14 +17,14 @@ type
   private
     FDefaultWidth: Integer;
     FDefaultHeight: Integer;
-    procedure SearchEditChange(Sender: TObject);
-    procedure SearchEditEnter(Sender: TObject);
-    procedure SearchEditExit(Sender: TObject);
+    procedure edSearchChange(Sender: TObject);
+    procedure edSearchEnter(Sender: TObject);
+    procedure edSearchExit(Sender: TObject);
     procedure ApplicationEventsIdle(Sender: TObject; var Done: Boolean);
     procedure FormClose(Sender: TObject; var Action: TCloseAction);
-    procedure AddSearchFunctionality(aForm: TForm);    
     procedure SaveFormSizeToRegistry(aForm: TForm);
     procedure LoadFormSizeFromRegistry(aForm: TForm);
+    procedure AddSearchFunctionality(aForm: TForm);    
   public
     constructor Create;
     destructor Destroy; override;
@@ -127,7 +127,8 @@ begin
   pnlSearch.Caption := '';
   pnlSearch.Top := lvToolBar1.Top + lvToolBar1.Height;
   pnlSearch.Align := alTop;
-  //Move all the controls that are below pnlSearch
+
+  // Move all the controls that are below pnlSearch
   for I := 0 to aForm.ControlCount - 1 do
   begin
     if (aForm.Controls[I] <> pnlSearch) and (aForm.Controls[I].Top >= pnlSearch.Top) then
@@ -149,9 +150,9 @@ begin
   edSearch.Name := 'edSearch';
   edSearch.Text := SSearchPlaceholder;
   edSearch.Font.Color := clGray;
-  edSearch.OnEnter := SearchEditEnter;
-  edSearch.OnExit := SearchEditExit;
-  edSearch.OnChange := SearchEditChange;
+  edSearch.OnEnter := edSearchEnter;
+  edSearch.OnExit := edSearchExit;
+  edSearch.OnChange := edSearchChange;
 
   aForm.OnClose := FormClose;
 
@@ -162,7 +163,7 @@ begin
   LoadFormSizeFromRegistry(aForm);
 end;
 
-procedure TActionListSearchWizard.SearchEditChange(Sender: TObject);
+procedure TActionListSearchWizard.edSearchChange(Sender: TObject);
 var
   I: Integer;
   lvSearchText: string;
@@ -208,7 +209,7 @@ begin
     TEdit(Sender).SetFocus;
 end;
 
-procedure TActionListSearchWizard.SearchEditEnter(Sender: TObject);
+procedure TActionListSearchWizard.edSearchEnter(Sender: TObject);
 begin
   if TEdit(Sender).Text = SSearchPlaceholder then
   begin
@@ -217,7 +218,7 @@ begin
   end;
 end;
 
-procedure TActionListSearchWizard.SearchEditExit(Sender: TObject);
+procedure TActionListSearchWizard.edSearchExit(Sender: TObject);
 begin
   if TEdit(Sender).Text = '' then
   begin
