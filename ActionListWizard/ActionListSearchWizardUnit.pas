@@ -3,7 +3,8 @@ unit ActionListSearchWizardUnit;
 interface
 
 uses
-  ToolsAPI, Classes, ActnList, Forms, StdCtrls, Controls, ExtCtrls, SysUtils, DockForm, Windows, AppEvnts, ComCtrls, Graphics, Registry;
+  ToolsAPI, Classes, ActnList, Forms, StdCtrls, Controls, ExtCtrls, SysUtils,
+  DockForm, Windows, AppEvnts, ComCtrls, Graphics, Registry;
 
 type
   TActionListSearchWizard = class(TNotifierObject, IOTAWizard, IOTANotifier)
@@ -12,10 +13,10 @@ type
     FSearchPanel: TPanel;
     FSearchLabel: TLabel;
     FSearchEdit: TEdit;
-    ActionListView: TListView;
+    FActionListView: TListView;
     FDefaultWidth: Integer;
     FDefaultHeight: Integer;
-    procedure AddSearchField(Form: TForm);
+    procedure AddSearchFunctionality(Form: TForm);
     procedure SearchEditChange(Sender: TObject);
     procedure SearchEditEnter(Sender: TObject);
     procedure SearchEditExit(Sender: TObject);
@@ -39,21 +40,24 @@ implementation
 uses
   Dialogs;
 
+const
+  REG_PATH = 'Software\Speedy\ActionListSearchWizard';
+  REG_FORM_HEIGHT = 'FormHeight';  
+  REG_FORM_WIDTH = 'FormWidth';
+
+resourcestring
+  SSearchPlaceholder = 'Search...';
+
 procedure Register;
 begin
   RegisterPackageWizard(TActionListSearchWizard.Create as IOTAWizard);
 end;
-
-{ TActionListSearchWizard }
 
 constructor TActionListSearchWizard.Create;
 begin
   inherited Create;
   FApplicationEvents := TApplicationEvents.Create(nil);
   FApplicationEvents.OnIdle := ApplicationEventsIdle;
-  {$IFDEF DEBUG}
-  ShowMessage('TActionListSearchWizard created and application events hooked');
-  {$ENDIF}
 end;
 
 destructor TActionListSearchWizard.Destroy;
@@ -62,134 +66,138 @@ begin
   inherited Destroy;
 end;
 
-procedure TActionListSearchWizard.AddSearchField(Form: TForm);
-const
-  OFFSET = 8;
+procedure TActionListSearchWizard.FormClose(Sender: TObject; var Action: TCloseAction);
+begin
+  SaveFormSizeToRegistry(TForm(Sender));
+  Action := caFree;
+end;
+
+procedure TActionListSearchWizard.ApplicationEventsIdle(Sender: TObject; var Done: Boolean);
 var
-  ToolBar1: TToolBar;
   I: Integer;
 begin
-  {$IFDEF DEBUG}
-  ShowMessage('AddSearchField called for form: ' + Form.Name);
-  {$ENDIF}
+  for I := 0 to Screen.FormCount - 1 do
+  begin
+    if Screen.Forms[I].ClassName = 'TActionListDesigner' then
+      AddSearchFunctionality(Screen.Forms[I]);
+  end;
+end;
 
-  // Check if the search panel is already added
+procedure TActionListSearchWizard.AddSearchFunctionality(Form: TForm);
+const
+  CONTROLS_OFFSET = 8;
+var
+  lvToolBar1: TToolBar;
+  I: Integer;
+begin
   if Form.FindComponent('ActionListSearchPanel') <> nil then
     Exit;
-
-  // Find the ListView1 component on the form
-  ActionListView := Form.FindComponent('ListView1') as TListView;
-  if not Assigned(ActionListView) then
+  
+  FActionListView := Form.FindComponent('ListView1') as TListView;
+  if not Assigned(FActionListView) then
   begin
     ShowMessage('ListView1 not found on form: ' + Form.Name);
     Exit;
   end;
-
-  // Find the ToolBar1 component on the form
-  ToolBar1 := Form.FindComponent('ToolBar1') as TToolBar;
-  if not Assigned(ToolBar1) then
+  
+  lvToolBar1 := Form.FindComponent('ToolBar1') as TToolBar;
+  if not Assigned(lvToolBar1) then
   begin
     ShowMessage('ToolBar1 not found on form: ' + Form.Name);
     Exit;
   end;
 
-  // Create a panel to hold the search controls
   FSearchPanel := TPanel.Create(Form);
   FSearchPanel.Name := 'ActionListSearchPanel';
   FSearchPanel.Parent := Form;
   FSearchPanel.Height := 30;
   FSearchPanel.Caption := '';
-
-  // Insert the panel below ToolBar1
-  FSearchPanel.Top := ToolBar1.Top + ToolBar1.Height;
+  FSearchPanel.Top := lvToolBar1.Top + lvToolBar1.Height;
   FSearchPanel.Align := alTop;
 
-  // Adjust the Top property of the components below FSearchPanel
-  for i := 0 to Form.ControlCount - 1 do
+  for I := 0 to Form.ControlCount - 1 do
   begin
-    if (Form.Controls[i] <> FSearchPanel) and (Form.Controls[i].Top >= FSearchPanel.Top) then
-      Form.Controls[i].Top := Form.Controls[i].Top + FSearchPanel.Height;
+    if (Form.Controls[I] <> FSearchPanel) and (Form.Controls[I].Top >= FSearchPanel.Top) then
+      Form.Controls[I].Top := Form.Controls[I].Top + FSearchPanel.Height;
   end;
 
-  // Create the search label
   FSearchLabel := TLabel.Create(FSearchPanel);
   FSearchLabel.Parent := FSearchPanel;
   FSearchLabel.Caption := 'Search:';
-  FSearchLabel.Left := OFFSET;
-  FSearchLabel.Top := 8;
+  FSearchLabel.Left := CONTROLS_OFFSET;
+  FSearchLabel.Top := CONTROLS_OFFSET;
 
-  // Create the search edit field
   FSearchEdit := TEdit.Create(FSearchPanel);
   FSearchEdit.Parent := FSearchPanel;
-  FSearchEdit.Left := FSearchLabel.Left + FSearchLabel.Width + OFFSET;
+  FSearchEdit.Left := FSearchLabel.Left + FSearchLabel.Width + CONTROLS_OFFSET;
   FSearchEdit.Top := 4;
-  FSearchEdit.Width := FSearchPanel.Width - (FSearchLabel.Left + FSearchLabel.Width + 2 * OFFSET);
+  FSearchEdit.Width := FSearchPanel.Width - (FSearchLabel.Left + FSearchLabel.Width + 2 * CONTROLS_OFFSET);
   FSearchEdit.Anchors := [akTop, akLeft, akRight];
-  FSearchEdit.Name := 'ActionListSearchEdit'; // Assign a name for easy reference
-
-  // Set placeholder text
-  FSearchEdit.Text := 'Search...';
+  FSearchEdit.Name := 'ActionListSearchEdit';
+  FSearchEdit.Text := SSearchPlaceholder;
   FSearchEdit.Font.Color := clGray;
-
-  // Assign event handlers
   FSearchEdit.OnEnter := SearchEditEnter;
   FSearchEdit.OnExit := SearchEditExit;
   FSearchEdit.OnChange := SearchEditChange;
 
-  // Load the last saved size from the registry
-  LoadFormSizeFromRegistry(Form);
-
-  // Assign the close event to save the form size
   Form.OnClose := FormClose;
 
-  // Store default sizes
+  // First store default sizes
   FDefaultWidth := Form.Width;
   FDefaultHeight := Form.Height;
-
-  {$IFDEF DEBUG}
-  ShowMessage('Search field added to form: ' + Form.Name);
-  {$ENDIF}
+  // Then load the Size from Registry
+  LoadFormSizeFromRegistry(Form);
 end;
 
 procedure TActionListSearchWizard.SearchEditChange(Sender: TObject);
 var
-  i: Integer;
-  SearchText: string;
-  ListItem: TListItem;
+  I: Integer;
+  lvSearchText: string;
+  lvListItem: TListItem;
+  lvFirstMatch: TListItem;
 begin
-  if not Assigned(ActionListView) then
+  if not Assigned(FActionListView) then
   begin
     ShowMessage('ActionListView not found');
     Exit;
   end;
 
-  SearchText := TEdit(Sender).Text;
-  if (Length(SearchText) < 2) or (SearchText = 'Search...') then
-    Exit; // Only search with at least 2 characters and if it's not the placeholder text
+  lvSearchText := TEdit(Sender).Text;
+  if (Length(lvSearchText) < 2) or (lvSearchText = SSearchPlaceholder) then
+    Exit; // Only search with at least 2 characters
 
-  ActionListView.Items.BeginUpdate;
+  FActionListView.Items.BeginUpdate;
   try
-    for i := 0 to ActionListView.Items.Count - 1 do
+    lvFirstMatch := nil;
+    for I := 0 to FActionListView.Items.Count - 1 do
     begin
-      ListItem := ActionListView.Items[i];
-      if Pos(LowerCase(SearchText), LowerCase(ListItem.Caption)) > 0 then
+      lvListItem := FActionListView.Items[I];
+      if Pos(LowerCase(lvSearchText), LowerCase(lvListItem.Caption)) > 0 then
       begin
-        ListItem.Selected := True;
-        ListItem.MakeVisible(False);
+        lvListItem.Selected := True;
+        if (lvFirstMatch = nil) then
+          lvFirstMatch := lvListItem;
       end
       else
-      begin
-        ListItem.Selected := False;
-      end;
+        lvListItem.Selected := False;
+    end;
+
+    if Assigned(lvFirstMatch) then
+    begin
+      FActionListView.Selected := lvFirstMatch;
+      lvFirstMatch.MakeVisible(False);
     end;
   finally
-    ActionListView.Items.EndUpdate;
-  end;
+    FActionListView.Items.EndUpdate;
+  end;  
+  // Keep the focus on the edit control
+  if TEdit(Sender).CanFocus then
+    TEdit(Sender).SetFocus;
 end;
 
 procedure TActionListSearchWizard.SearchEditEnter(Sender: TObject);
 begin
-  if TEdit(Sender).Text = 'Search...' then
+  if (TEdit(Sender).Text = SSearchPlaceholder) then
   begin
     TEdit(Sender).Text := '';
     TEdit(Sender).Font.Color := clWindowText;
@@ -198,98 +206,76 @@ end;
 
 procedure TActionListSearchWizard.SearchEditExit(Sender: TObject);
 begin
-  if TEdit(Sender).Text = '' then
+  if (TEdit(Sender).Text = '') then
   begin
-    TEdit(Sender).Text := 'Search...';
+    TEdit(Sender).Text := SSearchPlaceholder;
     TEdit(Sender).Font.Color := clGray;
   end;
 end;
 
-procedure TActionListSearchWizard.ApplicationEventsIdle(Sender: TObject; var Done: Boolean);
-var
-  i: Integer;
-  Form: TForm;
-begin
-  for i := 0 to Screen.FormCount - 1 do
-  begin
-    Form := Screen.Forms[i];
-    if Form.ClassName = 'TActionListDesigner' then
-    begin
-      AddSearchField(Form);
-    end;
-  end;
-end;
-
-procedure TActionListSearchWizard.FormClose(Sender: TObject; var Action: TCloseAction);
-begin
-  SaveFormSizeToRegistry(TForm(Sender));
-end;
-
 procedure TActionListSearchWizard.SaveFormSizeToRegistry(Form: TForm);
 var
-  Reg: TRegistry;
-  ScreenRect: TRect;
+  lvRegistry: TRegistry;
+  lvScreenRect: TRect;
 begin
-  ScreenRect := Screen.MonitorFromWindow(Form.Handle).WorkareaRect;
+  lvScreenRect := Screen.MonitorFromWindow(Form.Handle).WorkareaRect;
 
   // Ensure the form is within screen bounds
-  if (Form.Left < ScreenRect.Left) or (Form.Top < ScreenRect.Top) or
-     (Form.Left + Form.Width > ScreenRect.Right) or (Form.Top + Form.Height > ScreenRect.Bottom) then
+  // TODO: refine it
+  if (Form.Left < lvScreenRect.Left) or (Form.Top < lvScreenRect.Top) or
+     (Form.Left + Form.Width > lvScreenRect.Right) or (Form.Top + Form.Height > lvScreenRect.Bottom) then
     Exit;
 
-  Reg := TRegistry.Create;
+  lvRegistry := TRegistry.Create;
   try
-    Reg.RootKey := HKEY_CURRENT_USER;
-    if Reg.OpenKey('Software\MyCompany\ActionListSearchWizard', True) then
+    lvRegistry.RootKey := HKEY_CURRENT_USER;
+    if lvRegistry.OpenKey(REG_PATH, True) then
     begin
       if (Form.Width > FDefaultWidth) and (Form.Height > FDefaultHeight) then
       begin
-        Reg.WriteInteger('Width', Form.Width);
-        Reg.WriteInteger('Height', Form.Height);
+        lvRegistry.WriteInteger(REG_FORM_WIDTH, Form.Width);
+        lvRegistry.WriteInteger(REG_FORM_HEIGHT, Form.Height);
       end;
-      Reg.CloseKey;
+      lvRegistry.CloseKey;
     end;
   finally
-    Reg.Free;
+    lvRegistry.Free;
   end;
 end;
 
 procedure TActionListSearchWizard.LoadFormSizeFromRegistry(Form: TForm);
 var
-  Reg: TRegistry;
-  Width, Height: Integer;
+  lvRegistry: TRegistry;
+  lvWidth, lvHeight: Integer;
 begin
-  Reg := TRegistry.Create;
+  lvRegistry := TRegistry.Create;
   try
-    Reg.RootKey := HKEY_CURRENT_USER;
-    if Reg.OpenKey('Software\MyCompany\ActionListSearchWizard', False) then
+    lvRegistry.RootKey := HKEY_CURRENT_USER;
+    if lvRegistry.OpenKey(REG_PATH, False) then
     begin
-      if Reg.ValueExists('Width') then
+      if lvRegistry.ValueExists(REG_FORM_WIDTH) then
       begin
-        Width := Reg.ReadInteger('Width');
-        if Width >= FDefaultWidth then
-          Form.Width := Width;
+        lvWidth := lvRegistry.ReadInteger(REG_FORM_WIDTH);
+        if lvWidth >= FDefaultWidth then
+          Form.Width := lvWidth;
       end;
 
-      if Reg.ValueExists('Height') then
+      if lvRegistry.ValueExists(REG_FORM_HEIGHT) then
       begin
-        Height := Reg.ReadInteger('Height');
-        if Height >= FDefaultHeight then
-          Form.Height := Height;
+        lvHeight := lvRegistry.ReadInteger(REG_FORM_HEIGHT);
+        if lvHeight >= FDefaultHeight then
+          Form.Height := lvHeight;
       end;
-      Reg.CloseKey;
+      lvRegistry.CloseKey;
     end;
   finally
-    Reg.Free;
+    lvRegistry.Free;
   end;
 end;
 
 procedure TActionListSearchWizard.Execute;
 begin
-  {$IFDEF DEBUG}
-  ShowMessage('Execute called');
-  {$ENDIF}
-  // Application events are already hooked in the constructor
+  //
 end;
 
 function TActionListSearchWizard.GetIDString: string;
