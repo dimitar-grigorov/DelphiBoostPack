@@ -17,7 +17,7 @@
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <Version>7.0</Version>
-    <DCC_Define>DEBUG;_CONSOLE_TESTRUNNER</DCC_Define>
+    <DCC_Define>DEBUG;_CONSOLE_TESTRUNNER;BENCHMARK</DCC_Define>
     <DCC_UnitSearchPath>;$(BDS)\Source\DUnit\src</DCC_UnitSearchPath>
     <DCC_ResourcePath>;$(BDS)\Source\DUnit\src</DCC_ResourcePath>
     <DCC_ObjPath>;$(BDS)\Source\DUnit\src</DCC_ObjPath>
@@ -40,16 +40,20 @@
     <DelphiCompile Include="DelphiBoostPackTests.dpr">
       <MainSource>MainSource</MainSource>
     </DelphiCompile>
+    <DCCReference Include="..\src\Core\Classes\BpHashBobJenkinsUnit.pas" />
     <DCCReference Include="..\src\Core\Classes\BpIntListUnit.pas" />
     <DCCReference Include="..\src\Core\Classes\BpObjectComparerUnit.pas" />
     <DCCReference Include="..\src\Core\Classes\InterfacedCollectionItemUnit.pas" />
     <DCCReference Include="..\src\Core\Interfaces\IBpIntListUnit.pas" />
     <DCCReference Include="..\src\Core\Interfaces\IUniqueIdUnit.pas" />
+    <DCCReference Include="..\src\Core\Units\BpSysUtils.pas" />
+    <DCCReference Include="Core\BpHashBobJenkinsTests.pas" />
     <DCCReference Include="Core\BpIntListBenchmark.pas" />
     <DCCReference Include="Core\BpIntListMemoryTests.pas" />
     <DCCReference Include="Core\BpIntListTests.pas" />
     <DCCReference Include="Core\BpObjectComparerCollectionClasses.pas" />
     <DCCReference Include="Core\BpObjectComparerSimpleClasses.pas" />
     <DCCReference Include="Core\BpObjectComparerSimpleTests.pas" />
+    <DCCReference Include="Core\BpSysUtilsTests.pas" />
   </ItemGroup>
 </Project>
