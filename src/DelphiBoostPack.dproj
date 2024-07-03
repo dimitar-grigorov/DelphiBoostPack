@@ -41,10 +41,12 @@
     <DelphiCompile Include="DelphiBoostPack.dpr">
       <MainSource>MainSource</MainSource>
     </DelphiCompile>
+    <DCCReference Include="Core\Classes\BpHashBobJenkinsUnit.pas" />
     <DCCReference Include="Core\Classes\BpIntListUnit.pas" />
     <DCCReference Include="Core\Classes\BpObjectComparerUnit.pas" />
     <DCCReference Include="Core\Classes\InterfacedCollectionItemUnit.pas" />
     <DCCReference Include="Core\Interfaces\IBpIntListUnit.pas" />
     <DCCReference Include="Core\Interfaces\IUniqueIdUnit.pas" />
+    <DCCReference Include="Core\Units\BpSysUtils.pas" />
   </ItemGroup>
 </Project>

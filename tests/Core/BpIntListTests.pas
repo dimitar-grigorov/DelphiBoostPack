@@ -26,6 +26,10 @@ type
     procedure TestClear;
     //IndexOf
     procedure TestIndexOf;
+    //BinarySearch
+    procedure TestBinarySearchEmptyList;
+    procedure TestBinarySearchSingleElement;
+    procedure TestBinarySearchMultipleElements;
     //Exchange
     procedure TestExchangeValidIndices;
     procedure TestExchangeSameIndex;
@@ -36,6 +40,9 @@ type
     procedure TestInsertAtBeginning;
     procedure TestInsertAtEnd;
     procedure TestInsertWithInvalidIndex;
+    procedure TestInsertRandomPositions;
+    procedure TestInsertIntoEmptyList;
+    procedure TestSortedInsert;
     //Sorted
     procedure TestSortedPropertySetTrue;
     procedure TestSortedPropertySetFalse;
@@ -160,6 +167,49 @@ begin
   CheckEquals(-1, FBpIntList.IndexOf(30), 'IndexOf should return -1 for a non-existent item');
 end;
 
+procedure TBpIntListTests.TestBinarySearchEmptyList;
+var
+  FoundIndex: Integer;
+begin
+  FBpIntList.Sorted := True;
+  CheckFalse(FBpIntList.BinarySearch(10, FoundIndex), 'Search in an empty list should return False.');
+end;
+
+procedure TBpIntListTests.TestBinarySearchSingleElement;
+var
+  FoundIndex: Integer;
+begin
+  FBpIntList.Add(5);
+  FBpIntList.Sorted := True;
+  CheckTrue(FBpIntList.BinarySearch(5, FoundIndex), 'Item should be found.');
+  CheckEquals(0, FoundIndex, 'FoundIndex should be 0.');
+
+  CheckFalse(FBpIntList.BinarySearch(3, FoundIndex), 'Item should not be found.');
+  CheckEquals(0, FoundIndex, 'Insertion index should be 0 for a smaller element.');
+end;
+
+procedure TBpIntListTests.TestBinarySearchMultipleElements;
+var
+  FoundIndex: Integer;
+begin
+  FBpIntList.Add(5);
+  FBpIntList.Add(10);
+  FBpIntList.Add(20);
+  FBpIntList.Sorted := True;
+
+  CheckTrue(FBpIntList.BinarySearch(10, FoundIndex), 'Item should be found.');
+  CheckEquals(1, FoundIndex, 'FoundIndex should be 1.');
+
+  CheckFalse(FBpIntList.BinarySearch(15, FoundIndex), 'Item should not be found.');
+  CheckEquals(2, FoundIndex, 'Insertion index should be 2.');
+
+  CheckTrue(FBpIntList.BinarySearch(5, FoundIndex), 'First element should be found.');
+  CheckEquals(0, FoundIndex, 'FoundIndex should be 0.');
+
+  CheckTrue(FBpIntList.BinarySearch(20, FoundIndex), 'Last element should be found.');
+  CheckEquals(2, FoundIndex, 'FoundIndex should be 2.');
+end;
+
 procedure TBpIntListTests.TestExchangeValidIndices;
 begin
   FBpIntList.Add(1);
@@ -221,6 +271,43 @@ begin
   FBpIntList.Add(10);
   FBpIntList.Insert(1, 20); // Insert at the end
   CheckEquals(20, FBpIntList.Items[1], 'The inserted item should be the last item');
+end;
+
+procedure TBpIntListTests.TestInsertRandomPositions;
+var
+  I, Pos: Integer;
+begin
+  // Populate list with initial data
+  for I := 1 to 100 do
+    FBpIntList.Add(I * 10);
+
+  // Insert at random positions
+  for I := 1 to 20 do
+  begin
+    Pos := Random(FBpIntList.Count + 1);
+    FBpIntList.Insert(Pos, 999);  // Insert a specific value to check later
+  end;
+
+  CheckEquals(120, FBpIntList.Count, 'Count should be 120 after inserts');
+  // Further checks can be added to verify positions if necessary
+end;
+
+procedure TBpIntListTests.TestInsertIntoEmptyList;
+begin
+  FBpIntList.Insert(0, 10);
+  CheckEquals(1, FBpIntList.Count, 'Count should be 1 after insert into empty list');
+  CheckEquals(10, FBpIntList.Items[0], 'The inserted item should be at index 0');
+end;
+
+procedure TBpIntListTests.TestSortedInsert;
+begin
+  FBpIntList.Sorted := True;
+  FBpIntList.Add(30);
+  FBpIntList.Add(10);
+  FBpIntList.Add(20);  // Add should now insert in sorted order
+  CheckEquals(10, FBpIntList.Items[0], 'First item should be 10');
+  CheckEquals(20, FBpIntList.Items[1], 'Second item should be 20');
+  CheckEquals(30, FBpIntList.Items[2], 'Third item should be 30');
 end;
 
 procedure TBpIntListTests.TestInsertWithInvalidIndex;

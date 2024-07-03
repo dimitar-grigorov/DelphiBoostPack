@@ -14,6 +14,9 @@ type
     procedure TearDown; override;
   published
     procedure TestAddPerformance;
+    procedure TestSearchPerformance;
+    procedure TestSearchPerformanceDistributed;
+    procedure TestInsertPerformanceComparison;
   end;
 
 implementation
@@ -108,6 +111,169 @@ begin
   Status(Format('TBpIntList Memory Usage: %d KB', [lvMemoryIntList]));
   Status(Format('TStringList Memory Usage: %d KB', [lvMemoryStrList]));
   Status(Format('Memory Usage Ratio (String/Int List): %.2f', [lvMemoryRatio]));
+end;
+
+procedure TbpIntListBenchmark.TestSearchPerformance;
+var
+  lvStartTick, lvEndTick, lvFrequency, TotalStepsIndexOf, TotalStepsBinarySearch: Int64;
+  I, J, FoundIndex: Integer;
+  ElapsedTimeIndexOf, ElapsedTimeBinarySearch, SingleRunTime: Double;
+const
+  lcSearchValues: array[0..19] of Integer = (1, 50, 250, 500, 750, 1000, 2500, 5000,
+    7500, 10000, 20000, 30000, 40000, 50000, 60000, 70000, 80000, 90000, 95000, 100000);
+  lcRepeatCount = 50; // Number of times to repeat the search to average the timings
+begin
+  for I := 1 to 2000000 do
+    FBpIntList.Add(I);
+
+  QueryPerformanceFrequency(lvFrequency);
+  ElapsedTimeIndexOf := 0;
+  ElapsedTimeBinarySearch := 0;
+  TotalStepsIndexOf := 0;
+  TotalStepsBinarySearch := 0;
+
+  // Testing IndexOf
+  // Set Sorted to be false, to force the linear search
+  FBpIntList.Sorted := True;
+  FBpIntList.Sorted := False;    
+  for J := 1 to lcRepeatCount do
+  begin
+    QueryPerformanceCounter(lvStartTick);
+    for I := Low(lcSearchValues) to High(lcSearchValues) do
+    begin
+      FBpIntList.IndexOf(lcSearchValues[I]);
+      TotalStepsIndexOf := TotalStepsIndexOf + FBpIntList.StepCount;
+    end;
+    QueryPerformanceCounter(lvEndTick);
+    SingleRunTime := (lvEndTick - lvStartTick) * 1000.0 / lvFrequency;
+    ElapsedTimeIndexOf := ElapsedTimeIndexOf + SingleRunTime;
+  end;
+  Status(Format('IndexOf Average Time: %f ms', [ElapsedTimeIndexOf / lcRepeatCount]));
+  Status(Format('IndexOf Average Steps: %f', [TotalStepsIndexOf / (lcRepeatCount * Length(lcSearchValues))]));
+
+  // Testing BinarySearch
+  FBpIntList.Sorted := True;
+  for J := 1 to lcRepeatCount do
+  begin
+    QueryPerformanceCounter(lvStartTick);
+    for I := Low(lcSearchValues) to High(lcSearchValues) do
+    begin
+      FBpIntList.BinarySearch(lcSearchValues[I], FoundIndex);
+      TotalStepsBinarySearch := TotalStepsBinarySearch + FBpIntList.StepCount;
+    end;
+    QueryPerformanceCounter(lvEndTick);
+    SingleRunTime := (lvEndTick - lvStartTick) * 1000.0 / lvFrequency;
+    ElapsedTimeBinarySearch := ElapsedTimeBinarySearch + SingleRunTime;
+  end;
+  Status(Format('BinarySearch Average Time: %f ms', [ElapsedTimeBinarySearch / lcRepeatCount]));
+  Status(Format('BinarySearch Average Steps: %f', [TotalStepsBinarySearch / (lcRepeatCount * Length(lcSearchValues))]));
+end;
+
+procedure TbpIntListBenchmark.TestSearchPerformanceDistributed;
+var
+  lvStartTick, lvEndTick, lvFrequency, TotalStepsIndexOf, TotalStepsBinarySearch: Int64;
+  I, J, FoundIndex: Integer;
+  ElapsedTimeIndexOf, ElapsedTimeBinarySearch, SingleRunTime: Double;
+  SearchValues: array of Integer;
+const
+  lcRepeatCount = 50; // Number of times to repeat the search to average the timings
+  lcNumSearchValues = 50; // Total number of search values
+begin
+  Randomize;
+  SetLength(SearchValues, lcNumSearchValues);
+  FBpIntList.Clear;
+
+  for I := 1 to 2000000 do
+    if Random(10) > 2 then  // 80% chance to add the number, creating some gaps
+      FBpIntList.Add(I);
+
+  for I := 0 to High(SearchValues) do
+  begin
+    if Random(2) = 0 then  // 50% chance to pick from the list
+      SearchValues[I] := FBpIntList.Items[Random(FBpIntList.Count)]
+    else
+      SearchValues[I] := Random(2000000) + 1;
+  end;
+
+  QueryPerformanceFrequency(lvFrequency);
+  ElapsedTimeIndexOf := 0;
+  ElapsedTimeBinarySearch := 0;
+  TotalStepsIndexOf := 0;
+  TotalStepsBinarySearch := 0;
+
+  // Testing IndexOf
+  // Set Sorted to be false, to force the linear search
+  FBpIntList.Sorted := True;
+  FBpIntList.Sorted := False;  
+  for J := 1 to lcRepeatCount do
+  begin
+    QueryPerformanceCounter(lvStartTick);
+    for I := Low(SearchValues) to High(SearchValues) do
+    begin
+      FBpIntList.IndexOf(SearchValues[I]);
+      TotalStepsIndexOf := TotalStepsIndexOf + FBpIntList.StepCount;
+    end;
+    QueryPerformanceCounter(lvEndTick);
+    SingleRunTime := (lvEndTick - lvStartTick) * 1000.0 / lvFrequency;
+    ElapsedTimeIndexOf := ElapsedTimeIndexOf + SingleRunTime;
+  end;
+  Status(Format('IndexOf Average Time: %f ms', [ElapsedTimeIndexOf / lcRepeatCount]));
+  Status(Format('IndexOf Average Steps: %f', [TotalStepsIndexOf / (lcRepeatCount * lcNumSearchValues)]));
+
+  // Testing BinarySearch
+  FBpIntList.Sorted := True;  
+  for J := 1 to lcRepeatCount do
+  begin
+    QueryPerformanceCounter(lvStartTick);
+    for I := Low(SearchValues) to High(SearchValues) do
+    begin
+      FBpIntList.BinarySearch(SearchValues[I], FoundIndex);
+      TotalStepsBinarySearch := TotalStepsBinarySearch + FBpIntList.StepCount;
+    end;
+    QueryPerformanceCounter(lvEndTick);
+    SingleRunTime := (lvEndTick - lvStartTick) * 1000.0 / lvFrequency;
+    ElapsedTimeBinarySearch := ElapsedTimeBinarySearch + SingleRunTime;
+  end;
+  Status(Format('BinarySearch Average Time: %f ms', [ElapsedTimeBinarySearch / lcRepeatCount]));
+  Status(Format('BinarySearch Average Steps: %f', [TotalStepsBinarySearch / (lcRepeatCount * lcNumSearchValues)]));
+end;
+
+procedure TbpIntListBenchmark.TestInsertPerformanceComparison;
+var
+  lvStartTick, lvEndTick, lvFrequency: Int64;
+  I: Integer;
+  lvElapsedTimeSorted, lvElapsedTimeUnsorted, lvElapsedTimeSorting: Double;
+begin
+  QueryPerformanceFrequency(lvFrequency);
+
+  // Test inserting into a sorted list
+  FBpIntList.Clear;
+  FBpIntList.Sorted := True;
+  QueryPerformanceCounter(lvStartTick);
+  for I := 0 to 100000 do
+    FBpIntList.Insert(Random(I + 1), I);  // Insert with sorting maintained during each insertion
+  QueryPerformanceCounter(lvEndTick);
+  lvElapsedTimeSorted := (lvEndTick - lvStartTick) * 1000.0 / lvFrequency;
+
+  // Test inserting into an unsorted list and then sorting
+  FBpIntList.Clear;
+  FBpIntList.Sorted := False;
+  QueryPerformanceCounter(lvStartTick);
+  for I := 0 to 100000 do
+    FBpIntList.Insert(Random(I + 1), I);  // Insert without sorting
+  QueryPerformanceCounter(lvEndTick);
+  lvElapsedTimeUnsorted := (lvEndTick - lvStartTick) * 1000.0 / lvFrequency;
+
+  // Measure the time taken to sort the list after population
+  QueryPerformanceCounter(lvStartTick);
+  FBpIntList.Sort;  // Sort the entire list
+  QueryPerformanceCounter(lvEndTick);
+  lvElapsedTimeSorting := (lvEndTick - lvStartTick) * 1000.0 / lvFrequency;
+
+  // Output the results
+  Status(Format('Insert into Sorted List Time: %f ms', [lvElapsedTimeSorted]));
+  Status(Format('Insert into Unsorted List Time: %f ms', [lvElapsedTimeUnsorted]));
+  Status(Format('Time to Sort After Insertion: %f ms', [lvElapsedTimeSorting]));
 end;
 
 initialization
