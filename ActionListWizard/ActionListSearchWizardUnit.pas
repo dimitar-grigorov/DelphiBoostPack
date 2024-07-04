@@ -1,5 +1,20 @@
 unit ActionListSearchWizardUnit;
 
+{
+  Adds search functionality to the TActionListDesigner form in Delphi IDE.
+  Tested on Delphi 7 and 2007.
+
+  Features:
+  - Adds a search panel below the toolbar.
+  - Filters TListView items based on search input.
+  - Saves and restores form size and position from the registry.
+
+  Implementation:
+  - Uses TApplicationEvents to add the search panel when the form is detected.
+  - Uses TTimer to delay the search operation.
+  - Loads and saves form size and position via the registry.
+}
+
 interface
 
 uses
@@ -14,12 +29,14 @@ type
     lblSearch: TLabel;
     edSearch: TEdit;
     lvActionList: TListView;
+    tmrSearch: TTimer;
   private
     FDefaultWidth: Integer;
     FDefaultHeight: Integer;
     procedure edSearchChange(Sender: TObject);
     procedure edSearchEnter(Sender: TObject);
     procedure edSearchExit(Sender: TObject);
+    procedure tmrSearchOnTimer(Sender: TObject);
     procedure ApplicationEventsIdle(Sender: TObject; var Done: Boolean);
     procedure FormClose(Sender: TObject; var Action: TCloseAction);
     procedure SaveFormSizeToRegistry(aForm: TForm);
@@ -62,10 +79,16 @@ begin
   inherited Create;
   evApplication := TApplicationEvents.Create(nil);
   evApplication.OnIdle := ApplicationEventsIdle;
+
+  tmrSearch := TTimer.Create(nil);
+  tmrSearch.Interval := 50; // 50 ms delay
+  tmrSearch.Enabled := False;
+  tmrSearch.OnTimer := tmrSearchOnTimer;
 end;
 
 destructor TActionListSearchWizard.Destroy;
 begin
+  tmrSearch.Free;
   evApplication.Free;
   inherited Destroy;
 end;
@@ -164,19 +187,27 @@ begin
 end;
 
 procedure TActionListSearchWizard.edSearchChange(Sender: TObject);
+begin
+  tmrSearch.Enabled := False;
+  tmrSearch.Enabled := True;
+end;
+
+procedure TActionListSearchWizard.tmrSearchOnTimer(Sender: TObject);
 var
   I: Integer;
   lvSearchText: string;
   lvListItem: TListItem;
   lvFirstMatch: TListItem;
 begin
+  tmrSearch.Enabled := False; // Disable the timer
+
   if not Assigned(lvActionList) then
   begin
     ShowMessage('ActionListView not found');
     Exit;
   end;
 
-  lvSearchText := TEdit(Sender).Text;
+  lvSearchText := edSearch.Text;
   if (Length(lvSearchText) < 2) or (lvSearchText = SSearchPlaceholder) then
     Exit; // Only search with at least 2 characters
 
@@ -205,25 +236,25 @@ begin
     lvActionList.Items.EndUpdate;
   end;
   // Keep the focus on the edit control
-  if TEdit(Sender).CanFocus then
-    TEdit(Sender).SetFocus;
+  if edSearch.CanFocus then
+    edSearch.SetFocus;
 end;
 
 procedure TActionListSearchWizard.edSearchEnter(Sender: TObject);
 begin
-  if TEdit(Sender).Text = SSearchPlaceholder then
+  if edSearch.Text = SSearchPlaceholder then
   begin
-    TEdit(Sender).Text := '';
-    TEdit(Sender).Font.Color := clWindowText;
+    edSearch.Text := '';
+    edSearch.Font.Color := clWindowText;
   end;
 end;
 
 procedure TActionListSearchWizard.edSearchExit(Sender: TObject);
 begin
-  if TEdit(Sender).Text = '' then
+  if (edSearch.Text = '') then
   begin
-    TEdit(Sender).Text := SSearchPlaceholder;
-    TEdit(Sender).Font.Color := clGray;
+    edSearch.Text := SSearchPlaceholder;
+    edSearch.Font.Color := clGray;
   end;
 end;
 
