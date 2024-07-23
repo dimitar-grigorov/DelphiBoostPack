@@ -47,6 +47,7 @@
     <DCCReference Include="..\src\Core\Interfaces\IBpIntListUnit.pas" />
     <DCCReference Include="..\src\Core\Interfaces\IUniqueIdUnit.pas" />
     <DCCReference Include="..\src\Core\Units\BpSysUtils.pas" />
+    <DCCReference Include="Benchmarks\BpStringOperationsBenchmark.pas" />
     <DCCReference Include="Core\BpHashBobJenkinsTests.pas" />
     <DCCReference Include="Core\BpIntListBenchmark.pas" />
     <DCCReference Include="Core\BpIntListMemoryTests.pas" />
