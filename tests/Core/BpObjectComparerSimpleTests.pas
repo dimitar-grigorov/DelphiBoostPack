@@ -66,11 +66,11 @@ begin
     Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(2, Length(Diffs), 'There should be two differences');
 
-    CheckEquals('CharProp', Diffs[0].PropPath, 'First difference should be in CharProp');
+    CheckEquals('CharProp', Diffs[0].OldPropPath, 'First difference should be in CharProp');
     CheckEquals('A', VarToStr(Diffs[0].OldValue), 'Old value of CharProp should be A');
     CheckEquals('B', VarToStr(Diffs[0].NewValue), 'New value of CharProp should be B');
 
-    CheckEquals('FloatProp', Diffs[1].PropPath, 'Second difference should be in FloatProp');
+    CheckEquals('FloatProp', Diffs[1].OldPropPath, 'Second difference should be in FloatProp');
     CheckTrue(VarIsFloat(Diffs[1].OldValue) and VarIsFloat(Diffs[1].NewValue), 'Old and New values of FloatProp should be floats');
     CheckEquals(1.1, Diffs[1].OldValue, 0.001, 'Old value of FloatProp should be 1.1');
     CheckEquals(1.2, Diffs[1].NewValue, 0.001, 'New value of FloatProp should be 1.2');
@@ -180,7 +180,7 @@ begin
 
     Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(1, Length(Diffs), 'One difference expected');
-    CheckEquals('MyCollection[1].Name', Diffs[0].PropPath, 'Property path should match');
+    CheckEquals('MyCollection[1].Name', Diffs[0].OldPropPath, 'Property path should match');
     CheckEquals('Item1', Diffs[0].OldValue, 'Old value should match');
     CheckEquals('Item2', Diffs[0].NewValue, 'New value should match');
   finally
@@ -208,7 +208,7 @@ begin
 
     Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(1, Length(Diffs), 'One difference expected');
-    CheckEquals('MyCollection[1].CharProp', Diffs[0].PropPath, 'Property path should match');
+    CheckEquals('MyCollection[1].CharProp', Diffs[0].OldPropPath, 'Property path should match');
     CheckEquals('A', Diffs[0].OldValue, 'Old value should match');
     CheckEquals('B', Diffs[0].NewValue, 'New value should match');
   finally
@@ -236,7 +236,7 @@ begin
 
     Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(1, Length(Diffs), 'One difference expected');
-    CheckEquals('MyCollection[1].FloatProp', Diffs[0].PropPath, 'Property path should match');
+    CheckEquals('MyCollection[1].FloatProp', Diffs[0].OldPropPath, 'Property path should match');
     CheckEquals(1.0, VarAsType(Diffs[0].OldValue, varDouble), 0.001, 'Old value should match');
     CheckEquals(2.0, VarAsType(Diffs[0].NewValue, varDouble), 0.001, 'New value should match');
   finally
@@ -264,7 +264,7 @@ begin
 
     Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(1, Length(Diffs), 'One difference expected');
-    CheckEquals('MyCollection[1].EnumProp', Diffs[0].PropPath, 'Property path should match');
+    CheckEquals('MyCollection[1].EnumProp', Diffs[0].OldPropPath, 'Property path should match');
 
     // Compare the string representations of the enum values
     CheckEquals('meValueOne', Diffs[0].OldValue, 'Old value should match');
@@ -301,19 +301,19 @@ begin
     Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(4, Length(Diffs), 'Four differences expected');
 
-    CheckEquals('MyCollection[1].CharProp', Diffs[0].PropPath);
+    CheckEquals('MyCollection[1].CharProp', Diffs[0].OldPropPath);
     CheckEquals('A', Diffs[0].OldValue);
     CheckEquals('B', Diffs[0].NewValue);
 
-    CheckEquals('MyCollection[1].EnumProp', Diffs[1].PropPath);
+    CheckEquals('MyCollection[1].EnumProp', Diffs[1].OldPropPath);
     CheckEquals('meValueOne', Diffs[1].OldValue);
     CheckEquals('meValueTwo', Diffs[1].NewValue);
 
-    CheckEquals('MyCollection[1].FloatProp', Diffs[2].PropPath);
+    CheckEquals('MyCollection[1].FloatProp', Diffs[2].OldPropPath);
     CheckEquals(1.0, VarAsType(Diffs[2].OldValue, varDouble), 0.001);
     CheckEquals(2.0, VarAsType(Diffs[2].NewValue, varDouble), 0.001);
 
-    CheckEquals('MyCollection[1].Name', Diffs[3].PropPath);
+    CheckEquals('MyCollection[1].Name', Diffs[3].OldPropPath);
     CheckEquals('Item1', Diffs[3].OldValue);
     CheckEquals('Item2', Diffs[3].NewValue);
   finally
