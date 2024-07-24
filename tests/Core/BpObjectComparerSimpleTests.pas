@@ -106,11 +106,11 @@ end;
 
 procedure TestTBpObjectComparer.TestCompareWithSameCollectionData;
 var
-  Obj1, Obj2: TTestClassWithCollection;
+  Obj1, Obj2: TTestClassWithCollectionUnique;
   Diffs: TPropDifferences;
 begin
-  Obj1 := TTestClassWithCollection.Create;
-  Obj2 := TTestClassWithCollection.Create;
+  Obj1 := TTestClassWithCollectionUnique.Create;
+  Obj2 := TTestClassWithCollectionUnique.Create;
   try
     Obj1.MyCollection.Add.ID := 2;
     Obj2.MyCollection.Add.ID := 2;
@@ -125,11 +125,11 @@ end;
 
 procedure TestTBpObjectComparer.TestCompareWithDifferentCollectionData;
 var
-  Obj1, Obj2: TTestClassWithCollection;
+  Obj1, Obj2: TTestClassWithCollectionUnique;
   Diffs: TPropDifferences;
 begin
-  Obj1 := TTestClassWithCollection.Create;
-  Obj2 := TTestClassWithCollection.Create;
+  Obj1 := TTestClassWithCollectionUnique.Create;
+  Obj2 := TTestClassWithCollectionUnique.Create;
   try
     Obj1.MyCollection.Add.ID := 1;
     Obj2.MyCollection.Add.ID := 2; // Different ID
@@ -144,11 +144,11 @@ end;
 
 procedure TestTBpObjectComparer.TestCompareWithEmptyAndPopulatedCollection;
 var
-  Obj1, Obj2: TTestClassWithCollection;
+  Obj1, Obj2: TTestClassWithCollectionUnique;
   Diffs: TPropDifferences;
 begin
-  Obj1 := TTestClassWithCollection.Create;
-  Obj2 := TTestClassWithCollection.Create;
+  Obj1 := TTestClassWithCollectionUnique.Create;
+  Obj2 := TTestClassWithCollectionUnique.Create;
   try
     // Obj1 has no items added to MyCollection
     Obj2.MyCollection.Add.ID := 1; // Obj2 has one item
@@ -163,12 +163,12 @@ end;
 
 procedure TestTBpObjectComparer.TestCompareCollectionsWithDifferentNames;
 var
-  Obj1, Obj2: TTestClassWithCollection;
-  Item1, Item2: TSimpleTestItem;
+  Obj1, Obj2: TTestClassWithCollectionUnique;
+  Item1, Item2: TSimpleTestItemUnique;
   Diffs: TPropDifferences;
 begin
-  Obj1 := TTestClassWithCollection.Create;
-  Obj2 := TTestClassWithCollection.Create;
+  Obj1 := TTestClassWithCollectionUnique.Create;
+  Obj2 := TTestClassWithCollectionUnique.Create;
   try
     Item1 := Obj1.MyCollection.Add;
     Item1.ID := 5;
@@ -191,12 +191,12 @@ end;
 
 procedure TestTBpObjectComparer.TestCompareCollectionsWithDifferentCharProps;
 var
-  Obj1, Obj2: TTestClassWithCollection;
-  Item1, Item2: TSimpleTestItem;
+  Obj1, Obj2: TTestClassWithCollectionUnique;
+  Item1, Item2: TSimpleTestItemUnique;
   Diffs: TPropDifferences;
 begin
-  Obj1 := TTestClassWithCollection.Create;
-  Obj2 := TTestClassWithCollection.Create;
+  Obj1 := TTestClassWithCollectionUnique.Create;
+  Obj2 := TTestClassWithCollectionUnique.Create;
   try
     Item1 := Obj1.MyCollection.Add;
     Item1.ID := 5;
@@ -219,12 +219,12 @@ end;
 
 procedure TestTBpObjectComparer.TestCompareCollectionsWithDifferentFloatProps;
 var
-  Obj1, Obj2: TTestClassWithCollection;
-  Item1, Item2: TSimpleTestItem;
+  Obj1, Obj2: TTestClassWithCollectionUnique;
+  Item1, Item2: TSimpleTestItemUnique;
   Diffs: TPropDifferences;
 begin
-  Obj1 := TTestClassWithCollection.Create;
-  Obj2 := TTestClassWithCollection.Create;
+  Obj1 := TTestClassWithCollectionUnique.Create;
+  Obj2 := TTestClassWithCollectionUnique.Create;
   try
     Item1 := Obj1.MyCollection.Add;
     Item1.ID := 5;
@@ -247,12 +247,12 @@ end;
 
 procedure TestTBpObjectComparer.TestCompareCollectionsWithDifferentEnumProps;
 var
-  Obj1, Obj2: TTestClassWithCollection;
-  Item1, Item2: TSimpleTestItem;
+  Obj1, Obj2: TTestClassWithCollectionUnique;
+  Item1, Item2: TSimpleTestItemUnique;
   Diffs: TPropDifferences;
 begin
-  Obj1 := TTestClassWithCollection.Create;
-  Obj2 := TTestClassWithCollection.Create;
+  Obj1 := TTestClassWithCollectionUnique.Create;
+  Obj2 := TTestClassWithCollectionUnique.Create;
   try
     Item1 := Obj1.MyCollection.Add;
     Item1.ID := 5;
@@ -277,12 +277,12 @@ end;
 
 procedure TestTBpObjectComparer.TestCompareCollectionsWithMultipleDifferences;
 var
-  Obj1, Obj2: TTestClassWithCollection;
-  Item1, Item2: TSimpleTestItem;
+  Obj1, Obj2: TTestClassWithCollectionUnique;
+  Item1, Item2: TSimpleTestItemUnique;
   Diffs: TPropDifferences;
 begin
-  Obj1 := TTestClassWithCollection.Create;
-  Obj2 := TTestClassWithCollection.Create;
+  Obj1 := TTestClassWithCollectionUnique.Create;
+  Obj2 := TTestClassWithCollectionUnique.Create;
   try
     Item1 := Obj1.MyCollection.Add;
     Item1.ID := 5;
@@ -324,11 +324,11 @@ end;
 
 procedure TestTBpObjectComparer.TestCompareCollectionsWithItemsInDifferentOrder;
 var
-  Obj1, Obj2: TTestClassWithCollection;
+  Obj1, Obj2: TTestClassWithCollectionUnique;
   Diffs: TPropDifferences;
 begin
-  Obj1 := TTestClassWithCollection.Create;
-  Obj2 := TTestClassWithCollection.Create;
+  Obj1 := TTestClassWithCollectionUnique.Create;
+  Obj2 := TTestClassWithCollectionUnique.Create;
   try
     with Obj1.MyCollection.Add do
     begin

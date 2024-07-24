@@ -8,7 +8,7 @@ uses
 type
   TMyEnumCol = (meValueOne, meValueTwo);
 
-  TSimpleTestItem = class(TInterfacedCollectionItem, IUniqueId)
+  TSimpleTestItemUnique = class(TInterfacedCollectionItem, IUniqueId)
   private
     FID: Integer;
     FName: string;
@@ -25,25 +25,25 @@ type
     property EnumProp: TMyEnumCol read FEnumProp write FEnumProp;
   end;
 
-  TSimpleTestCollection = class(TCollection)
+  TSimpleTestCollectionUnique = class(TCollection)
   private
-    function GetItem(Index: Integer): TSimpleTestItem;
-    procedure SetItem(Index: Integer; const Value: TSimpleTestItem);
+    function GetItem(Index: Integer): TSimpleTestItemUnique;
+    procedure SetItem(Index: Integer; const Value: TSimpleTestItemUnique);
   public
     constructor Create;
-    function Add: TSimpleTestItem;
-    property Items[Index: Integer]: TSimpleTestItem read GetItem write SetItem; default;
+    function Add: TSimpleTestItemUnique;
+    property Items[Index: Integer]: TSimpleTestItemUnique read GetItem write SetItem; default;
   end;
 
   // Sample class with TSimpleTestCollection as a published property
-  TTestClassWithCollection = class(TPersistent)
+  TTestClassWithCollectionUnique = class(TPersistent)
   private
-    FMyCollection: TSimpleTestCollection;
+    FMyCollection: TSimpleTestCollectionUnique;
   public
     constructor Create;
     destructor Destroy; override;
   published
-    property MyCollection: TSimpleTestCollection read FMyCollection write FMyCollection;
+    property MyCollection: TSimpleTestCollectionUnique read FMyCollection write FMyCollection;
   end;
 
 implementation
@@ -51,42 +51,42 @@ implementation
 uses
   SysUtils;
 
-constructor TSimpleTestCollection.Create;
+constructor TSimpleTestCollectionUnique.Create;
 begin
-  inherited Create(TSimpleTestItem);
+  inherited Create(TSimpleTestItemUnique);
 end;
 
-function TSimpleTestCollection.Add: TSimpleTestItem;
+function TSimpleTestCollectionUnique.Add: TSimpleTestItemUnique;
 begin
-  Result := TSimpleTestItem(inherited Add);
+  Result := TSimpleTestItemUnique(inherited Add);
 end;
 
-function TSimpleTestCollection.GetItem(Index: Integer): TSimpleTestItem;
+function TSimpleTestCollectionUnique.GetItem(Index: Integer): TSimpleTestItemUnique;
 begin
-  Result := TSimpleTestItem(inherited GetItem(Index));
+  Result := TSimpleTestItemUnique(inherited GetItem(Index));
 end;
 
-procedure TSimpleTestCollection.SetItem(Index: Integer; const Value: TSimpleTestItem);
+procedure TSimpleTestCollectionUnique.SetItem(Index: Integer; const Value: TSimpleTestItemUnique);
 begin
   Items[Index].Assign(Value);
 end;
 
 { TSimpleTestItem }
 
-function TSimpleTestItem.GetUniqueId: string;
+function TSimpleTestItemUnique.GetUniqueId: string;
 begin
  Result := IntToStr(Self.ID)
 end;
 
 { TTestClassWithCollection }
 
-constructor TTestClassWithCollection.Create;
+constructor TTestClassWithCollectionUnique.Create;
 begin
   inherited Create;
-  FMyCollection := TSimpleTestCollection.Create;
+  FMyCollection := TSimpleTestCollectionUnique.Create;
 end;
 
-destructor TTestClassWithCollection.Destroy;
+destructor TTestClassWithCollectionUnique.Destroy;
 begin
   FMyCollection.Free;
   inherited Destroy;
