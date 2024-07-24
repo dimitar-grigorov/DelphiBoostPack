@@ -52,7 +52,7 @@ type
 implementation
 
 uses
-  TypInfo, StrUtils, IUniqueIdUnit;
+  TypInfo, StrUtils, IUniqueIdUnit, Math;
 
 constructor TPropDifference.Create(const aOldPropPath, aNewPropPath: string; const aOldValue,
   aNewValue: Variant);
@@ -163,6 +163,7 @@ var
   lvItem1, lvItem2: TPersistent;
   lvUniqueIdIntf: IUniqueId;
   lvUniqueId: string;
+  lvProcessedItems: TStringList;
 const
   lcColItemFmt = '%s[%d]';
 
@@ -190,48 +191,65 @@ const
   end;
 
 begin
-  // Check for count difference but do not exit
+  // Compare collection item counts
   if (aOldColl.Count <> aNewColl.Count) then
-    AppendDifference(aDiffs, TPropDifference.Create(aOldPropPath + '.Count', aOldPropPath + '.Count', aOldColl.Count, aNewColl.Count) );
+    AppendDifference(aDiffs, TPropDifference.Create(aOldPropPath + '.Count', aOldColl.Count, aNewColl.Count));
 
-  // Compare items from the old collection to the new collection
-  for I := 0 to aOldColl.Count - 1 do
-  begin
-    lvItem1 := aOldColl.Items[I] as TPersistent;
-    if Supports(lvItem1, IUniqueId, lvUniqueIdIntf) then
+  // Initialize a list to track processed items in the new collection
+  lvProcessedItems := TStringList.Create;
+  try
+    // Compare items from the old collection to the new collection
+    for I := 0 to aOldColl.Count - 1 do
     begin
-      lvUniqueId := lvUniqueIdIntf.GetUniqueId;
-      lvItem2 := _FindItemByUniqueId(aNewColl, lvUniqueId, lvFoundItemIdx);
-      if Assigned(lvItem2) then
+      lvItem1 := aOldColl.Items[I] as TPersistent;
+      // IUniqueId
+      if Supports(lvItem1, IUniqueId, lvUniqueIdIntf) then
       begin
-        AppendDifferences(aDiffs, InternalCompareProperties(lvItem1, lvItem2,
-          Format(lcColItemFmt, [aOldPropPath, I]), Format(lcColItemFmt, [aOldPropPath, lvFoundItemIdx])));
+        lvUniqueId := lvUniqueIdIntf.GetUniqueId;
+        lvItem2 := _FindItemByUniqueId(aNewColl, lvUniqueId, lvFoundItemIdx);
+        if Assigned(lvItem2) then
+        begin
+          AppendDifferences(aDiffs, InternalCompareProperties(lvItem1, lvItem2,
+            Format(lcColItemFmt, [aOldPropPath, I]), Format(lcColItemFmt, [aNewPropPath, lvFoundItemIdx])));
+          lvProcessedItems.Add(IntToStr(lvFoundItemIdx));
+        end
+        else
+        begin
+          AppendDifference(aDiffs, TPropDifference.Create(Format(lcColItemFmt, [aOldPropPath, I]),
+            'Exists in old', 'Missing in new'));
+        end;
       end
-      else
+      else  // Index based comparison
       begin
-        AppendDifference(aDiffs, TPropDifference.Create(Format(lcColItemFmt, [aOldPropPath, I]),
-          'Exists in old', 'Missing in new'));
+        if (I < aNewColl.Count) then
+        begin
+          lvItem2 := aNewColl.Items[I] as TPersistent;
+          AppendDifferences(aDiffs, InternalCompareProperties(lvItem1, lvItem2,
+            Format(lcColItemFmt, [aOldPropPath, I]), Format(lcColItemFmt, [aNewPropPath, I])));
+          lvProcessedItems.Add(IntToStr(I));
+        end
+        else
+        begin
+          AppendDifference(aDiffs, TPropDifference.Create(Format(lcColItemFmt, [aOldPropPath, I]),
+            'Exists in old', 'Missing in new'));
+        end;
       end;
     end;
-  end;
 
-  // Check for items in the new collection that are not in the old collection
-  for I := 0 to aNewColl.Count - 1 do
-  begin
-    lvItem2 := aNewColl.Items[I] as TPersistent;
-    if Supports(lvItem2, IUniqueId, lvUniqueIdIntf) then
+    // Check for items in the new collection that are not in the old collection
+    for I := 0 to aNewColl.Count - 1 do
     begin
-      lvUniqueId := lvUniqueIdIntf.GetUniqueId;
-      lvItem1 := _FindItemByUniqueId(aOldColl, lvUniqueId, lvFoundItemIdx);
-
-      if not Assigned(lvItem1) then
+      if lvProcessedItems.IndexOf(IntToStr(I)) = -1 then
       begin
-        AppendDifference(aDiffs, TPropDifference.Create(Format(lcColItemFmt, [aOldPropPath, I]),
+        AppendDifference(aDiffs, TPropDifference.Create(Format(lcColItemFmt, [aNewPropPath, I]),
           'Missing in old', 'Exists in new'));
       end;
     end;
+  finally
+    lvProcessedItems.Free;
   end;
 end;
+
 
 class function TBpObjectComparer.CompareObjects(aOld, aNew: TPersistent): TPropDifferences;
 begin
