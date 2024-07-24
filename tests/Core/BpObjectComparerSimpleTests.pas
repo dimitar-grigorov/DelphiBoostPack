@@ -112,8 +112,8 @@ begin
   Obj1 := TTestClassWithCollection.Create;
   Obj2 := TTestClassWithCollection.Create;
   try
-    Obj1.MyCollection.Add.ID := 1;
-    Obj2.MyCollection.Add.ID := 1;
+    Obj1.MyCollection.Add.ID := 2;
+    Obj2.MyCollection.Add.ID := 2;
 
     Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(0, Length(Diffs), 'Collections are identical, no differences should be found');
@@ -171,16 +171,16 @@ begin
   Obj2 := TTestClassWithCollection.Create;
   try
     Item1 := Obj1.MyCollection.Add;
-    Item1.ID := 1;
+    Item1.ID := 5;
     Item1.Name := 'Item1';
 
     Item2 := Obj2.MyCollection.Add;
-    Item2.ID := 1;
+    Item2.ID := 5;
     Item2.Name := 'Item2';
 
     Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(1, Length(Diffs), 'One difference expected');
-    CheckEquals('MyCollection[1].Name', Diffs[0].OldPropPath, 'Property path should match');
+    CheckEquals('MyCollection[0].Name', Diffs[0].OldPropPath, 'Property path should match');
     CheckEquals('Item1', Diffs[0].OldValue, 'Old value should match');
     CheckEquals('Item2', Diffs[0].NewValue, 'New value should match');
   finally
@@ -199,16 +199,16 @@ begin
   Obj2 := TTestClassWithCollection.Create;
   try
     Item1 := Obj1.MyCollection.Add;
-    Item1.ID := 1;
+    Item1.ID := 5;
     Item1.CharProp := 'A';
 
     Item2 := Obj2.MyCollection.Add;
-    Item2.ID := 1;
+    Item2.ID := 5;
     Item2.CharProp := 'B';
 
     Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(1, Length(Diffs), 'One difference expected');
-    CheckEquals('MyCollection[1].CharProp', Diffs[0].OldPropPath, 'Property path should match');
+    CheckEquals('MyCollection[0].CharProp', Diffs[0].OldPropPath, 'Property path should match');
     CheckEquals('A', Diffs[0].OldValue, 'Old value should match');
     CheckEquals('B', Diffs[0].NewValue, 'New value should match');
   finally
@@ -227,16 +227,16 @@ begin
   Obj2 := TTestClassWithCollection.Create;
   try
     Item1 := Obj1.MyCollection.Add;
-    Item1.ID := 1;
+    Item1.ID := 5;
     Item1.FloatProp := 1.0;
 
     Item2 := Obj2.MyCollection.Add;
-    Item2.ID := 1;
+    Item2.ID := 5;
     Item2.FloatProp := 2.0;
 
     Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(1, Length(Diffs), 'One difference expected');
-    CheckEquals('MyCollection[1].FloatProp', Diffs[0].OldPropPath, 'Property path should match');
+    CheckEquals('MyCollection[0].FloatProp', Diffs[0].OldPropPath, 'Property path should match');
     CheckEquals(1.0, VarAsType(Diffs[0].OldValue, varDouble), 0.001, 'Old value should match');
     CheckEquals(2.0, VarAsType(Diffs[0].NewValue, varDouble), 0.001, 'New value should match');
   finally
@@ -255,16 +255,16 @@ begin
   Obj2 := TTestClassWithCollection.Create;
   try
     Item1 := Obj1.MyCollection.Add;
-    Item1.ID := 1;
+    Item1.ID := 5;
     Item1.EnumProp := meValueOne;
 
     Item2 := Obj2.MyCollection.Add;
-    Item2.ID := 1;
+    Item2.ID := 5;
     Item2.EnumProp := meValueTwo;
 
     Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(1, Length(Diffs), 'One difference expected');
-    CheckEquals('MyCollection[1].EnumProp', Diffs[0].OldPropPath, 'Property path should match');
+    CheckEquals('MyCollection[0].EnumProp', Diffs[0].OldPropPath, 'Property path should match');
 
     // Compare the string representations of the enum values
     CheckEquals('meValueOne', Diffs[0].OldValue, 'Old value should match');
@@ -285,14 +285,14 @@ begin
   Obj2 := TTestClassWithCollection.Create;
   try
     Item1 := Obj1.MyCollection.Add;
-    Item1.ID := 1;
+    Item1.ID := 5;
     Item1.Name := 'Item1';
     Item1.CharProp := 'A';
     Item1.FloatProp := 1.0;
     Item1.EnumProp := meValueOne;
 
     Item2 := Obj2.MyCollection.Add;
-    Item2.ID := 1;
+    Item2.ID := 5;
     Item2.Name := 'Item2';
     Item2.CharProp := 'B';
     Item2.FloatProp := 2.0;
@@ -301,19 +301,19 @@ begin
     Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(4, Length(Diffs), 'Four differences expected');
 
-    CheckEquals('MyCollection[1].CharProp', Diffs[0].OldPropPath);
+    CheckEquals('MyCollection[0].CharProp', Diffs[0].OldPropPath);
     CheckEquals('A', Diffs[0].OldValue);
     CheckEquals('B', Diffs[0].NewValue);
 
-    CheckEquals('MyCollection[1].EnumProp', Diffs[1].OldPropPath);
+    CheckEquals('MyCollection[0].EnumProp', Diffs[1].OldPropPath);
     CheckEquals('meValueOne', Diffs[1].OldValue);
     CheckEquals('meValueTwo', Diffs[1].NewValue);
 
-    CheckEquals('MyCollection[1].FloatProp', Diffs[2].OldPropPath);
+    CheckEquals('MyCollection[0].FloatProp', Diffs[2].OldPropPath);
     CheckEquals(1.0, VarAsType(Diffs[2].OldValue, varDouble), 0.001);
     CheckEquals(2.0, VarAsType(Diffs[2].NewValue, varDouble), 0.001);
 
-    CheckEquals('MyCollection[1].Name', Diffs[3].OldPropPath);
+    CheckEquals('MyCollection[0].Name', Diffs[3].OldPropPath);
     CheckEquals('Item1', Diffs[3].OldValue);
     CheckEquals('Item2', Diffs[3].NewValue);
   finally
@@ -332,23 +332,23 @@ begin
   try
     with Obj1.MyCollection.Add do
     begin
-      ID := 1;
+      ID := 77;
       Name := 'Item1';
     end;
     with Obj1.MyCollection.Add do
     begin
-      ID := 2;
+      ID := 33;
       Name := 'Item2';
     end;
 
     with Obj2.MyCollection.Add do
     begin
-      ID := 2; // Reverse order
+      ID := 33; // Reverse order
       Name := 'Item2';
     end;
     with Obj2.MyCollection.Add do
     begin
-      ID := 1;
+      ID := 77;
       Name := 'Item1';
     end;
 
