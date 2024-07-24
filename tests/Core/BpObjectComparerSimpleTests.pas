@@ -22,6 +22,10 @@ type
     procedure TestCompareCollectionsWithDifferentEnumProps;
     procedure TestCompareCollectionsWithMultipleDifferences;
     procedure TestCompareCollectionsWithItemsInDifferentOrder;
+    //Index based collection tests
+    procedure TestCompareCollectionsWithSameIndexNoUniqueId;
+    //procedure TestCompareCollectionsWithDifferentLengthsNoUniqueId;
+    //procedure TestCompareEmptyAndPopulatedCollectionNoUniqueId;
   end;
 
 implementation
@@ -354,6 +358,53 @@ begin
 
     Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(0, Length(Diffs), 'No differences should be found if order is not considered');
+  finally
+    Obj1.Free;
+    Obj2.Free;
+  end;
+end;
+
+procedure TestTBpObjectComparer.TestCompareCollectionsWithSameIndexNoUniqueId;
+var
+  Obj1, Obj2: TTestClassWithCollection;
+  Diffs: TPropDifferences;
+  Item1, Item2: TSimpleTestItem;
+begin
+  Obj1 := TTestClassWithCollection.Create;
+  Obj2 := TTestClassWithCollection.Create;
+  try
+    Item1 := Obj1.MyCollection.Add;
+    Item1.ID := 1;
+    Item1.Name := 'Item1';
+    Item1.CharProp := 'A';
+    Item1.FloatProp := 1.1;
+    Item1.EnumProp := meValueOne;
+
+    Item2 := Obj2.MyCollection.Add;
+    Item2.ID := 1;
+    Item2.Name := 'Item2';
+    Item2.CharProp := 'B';
+    Item2.FloatProp := 2.2;
+    Item2.EnumProp := meValueTwo;
+
+    Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
+    CheckEquals(4, Length(Diffs), 'Four differences expected');
+
+    CheckEquals('MyCollection[0].CharProp', Diffs[0].OldPropPath, 'Property path should match');
+    CheckEquals('A', Diffs[0].OldValue, 'Old value should match');
+    CheckEquals('B', Diffs[0].NewValue, 'New value should match');
+
+    CheckEquals('MyCollection[0].EnumProp', Diffs[1].OldPropPath, 'Property path should match');
+    CheckEquals('meValueOne', Diffs[1].OldValue, 'Old value should match');
+    CheckEquals('meValueTwo', Diffs[1].NewValue, 'New value should match');
+
+    CheckEquals('MyCollection[0].FloatProp', Diffs[2].OldPropPath, 'Property path should match');
+    CheckEquals(1.1, Diffs[2].OldValue, 0.001, 'Old value should match');
+    CheckEquals(2.2, Diffs[2].NewValue, 0.001, 'New value should match');
+
+    CheckEquals('MyCollection[0].Name', Diffs[3].OldPropPath, 'Property path should match');
+    CheckEquals('Item1', Diffs[3].OldValue, 'Old value should match');
+    CheckEquals('Item2', Diffs[3].NewValue, 'New value should match');
   finally
     Obj1.Free;
     Obj2.Free;
