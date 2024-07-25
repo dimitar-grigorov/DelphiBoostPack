@@ -39,7 +39,9 @@ uses
 {$R *.RES}
 
 begin
+  {$IF CompilerVersion >= 18.0}
   System.ReportMemoryLeaksOnShutdown := True;
+  {$IFEND}
   Application.Initialize;
   if IsConsole then
     TextTestRunner.RunRegisteredTests

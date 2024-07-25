@@ -7,7 +7,7 @@ uses
 
 type
   TbpIntListBenchmark = class(TTestCase)
-  strict private
+  private
     FBpIntList: TBpIntList;
   public
     procedure SetUp; override;
