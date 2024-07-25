@@ -2,15 +2,24 @@ unit BpHashBobJenkinsUnit;
 
 interface
 
+{$IF CompilerVersion >= 18}
+  {$DEFINE Delphi_2007_UP}
+{$IFEND}
+
 uses
   SysUtils;
 
 type
+  {$IFNDEF Delphi_2007_UP}
+  TBytes = array of Byte;
+  {$ENDIF}
+
   TbpHashBobJenkins = class
   private
     FHash: Integer;
     function GetDigest: TBytes;
-    class function HashLittle(const Data; Len, InitVal: Integer): Integer; static;
+    class function HashLittle(const Data; Len, InitVal: Integer): Integer;
+      {$IFDEF Delphi_2007_UP} static; {$ENDIF}
   public
     constructor Create;
     procedure Reset(AInitialValue: Integer = 0);
@@ -20,10 +29,14 @@ type
     function HashAsBytes: TBytes;
     function HashAsInteger: Integer;
     function HashAsString: string;
-    class function GetHashBytes(const AData: string): TBytes; static;
-    class function GetHashString(const AString: string): string; static;
-    class function GetHashValue(const AData: string): Integer; overload; static; inline;
-    class function GetHashValue(const AData; ALength: Integer; AInitialValue: Integer = 0): Integer; overload; static; inline;
+    class function GetHashBytes(const AData: string): TBytes;
+      {$IFDEF Delphi_2007_UP} static; {$ENDIF}
+    class function GetHashString(const AString: string): string;
+      {$IFDEF Delphi_2007_UP} static; {$ENDIF}
+    class function GetHashValue(const AData: string): Integer; overload;
+      {$IFDEF Delphi_2007_UP} static; inline; {$ENDIF}
+    class function GetHashValue(const AData; ALength: Integer; AInitialValue: Integer = 0): Integer; overload;
+      {$IFDEF Delphi_2007_UP} static; inline; {$ENDIF}
   end;
 
 implementation
