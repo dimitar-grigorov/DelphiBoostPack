@@ -20,7 +20,9 @@ implementation
 procedure TBpIntListMemoryTests.SetUp;
 begin
   inherited;
+  {$IF CompilerVersion >= 18.0}
   System.ReportMemoryLeaksOnShutdown := True;
+  {$IFEND}
 end;
 
 procedure TBpIntListMemoryTests.TestMemoryLeak;
