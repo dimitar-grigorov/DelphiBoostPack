@@ -302,12 +302,14 @@ var
   lvResult: string;
   lvChar: Char;
   lvInBrackets: Boolean;
+  I: Integer;
 begin
   lvResult := '';
   lvInBrackets := False;
 
-  for lvChar in aProp do
+  for I := 1 to Length(aProp) do
   begin
+    lvChar := aProp[I];
     if lvChar = '[' then
       lvInBrackets := True
     else if lvChar = ']' then
@@ -315,8 +317,10 @@ begin
     else if not lvInBrackets then
       lvResult := lvResult + lvChar;
   end;
+
   Result := lvResult;
 end;
+
 
 end.
 
