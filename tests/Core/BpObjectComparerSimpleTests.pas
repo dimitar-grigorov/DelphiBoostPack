@@ -26,6 +26,14 @@ type
     procedure TestCompareCollectionsWithSameIndexNoUniqueId;
     //procedure TestCompareCollectionsWithDifferentLengthsNoUniqueId;
     //procedure TestCompareEmptyAndPopulatedCollectionNoUniqueId;
+
+    //StripIndexFromProperty Tests
+    procedure TestStripIndexFromProperty_NoBrackets;
+    procedure TestStripIndexFromProperty_WithBrackets;
+    procedure TestStripIndexFromProperty_EmptyString;
+    procedure TestStripIndexFromProperty_NestedBrackets;
+    procedure TestStripIndexFromProperty_OnlyBrackets;
+    procedure TestStripIndexFromProperty_BracketsAtEdges;    
   end;
 
 implementation
@@ -409,6 +417,54 @@ begin
     Obj1.Free;
     Obj2.Free;
   end;
+end;
+
+procedure TestTBpObjectComparer.TestStripIndexFromProperty_NoBrackets;
+var
+  lvResult: string;
+begin
+  lvResult := TBpObjectComparer.StripIndexFromProperty('SomeProperty');
+  CheckEquals('SomeProperty', lvResult);
+end;
+
+procedure TestTBpObjectComparer.TestStripIndexFromProperty_WithBrackets;
+var
+  lvResult: string;
+begin
+  lvResult := TBpObjectComparer.StripIndexFromProperty('SomeProperty[Index]');
+  CheckEquals('SomeProperty', lvResult);
+end;
+
+procedure TestTBpObjectComparer.TestStripIndexFromProperty_EmptyString;
+var
+  lvResult: string;
+begin
+  lvResult := TBpObjectComparer.StripIndexFromProperty('');
+  CheckEquals('', lvResult);
+end;
+
+procedure TestTBpObjectComparer.TestStripIndexFromProperty_NestedBrackets;
+var
+  lvResult: string;
+begin
+  lvResult := TBpObjectComparer.StripIndexFromProperty('SomeProperty[Outer[Inner]]');
+  CheckEquals('SomeProperty', lvResult);
+end;
+
+procedure TestTBpObjectComparer.TestStripIndexFromProperty_OnlyBrackets;
+var
+  lvResult: string;
+begin
+  lvResult := TBpObjectComparer.StripIndexFromProperty('[Index]');
+  CheckEquals('', lvResult);
+end;
+
+procedure TestTBpObjectComparer.TestStripIndexFromProperty_BracketsAtEdges;
+var
+  lvResult: string;
+begin
+  lvResult := TBpObjectComparer.StripIndexFromProperty('[Start]Property[End]');
+  CheckEquals('Property', lvResult);
 end;
 
 initialization
