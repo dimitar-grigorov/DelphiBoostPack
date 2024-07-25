@@ -61,7 +61,8 @@ procedure TbpHashBobJenkins.Update(const AData: TBytes; ALength: Cardinal);
 begin
   if ALength = 0 then
     ALength := Length(AData);
-  Update(AData, ALength);
+  // Update(AData, ALength);
+  Update(Pointer(AData)^, ALength);
 end;
 
 procedure TbpHashBobJenkins.Update(const Input: string);
