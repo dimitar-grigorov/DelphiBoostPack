@@ -9,7 +9,7 @@ type
   // Test methods for class TBpIntList
 
   TBpIntListTests = class(TTestCase)
-  strict private
+  private
     FBpIntList: TBpIntList;
   public
     procedure SetUp; override;
