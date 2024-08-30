@@ -34,7 +34,9 @@ uses
   BpHashBobJenkinsUnit in '..\src\Core\Classes\BpHashBobJenkinsUnit.pas',
   BpSysUtilsTests in 'Core\BpSysUtilsTests.pas',
   BpSysUtils in '..\src\Core\Units\BpSysUtils.pas',
-  BpStringOperationsBenchmark in 'Benchmarks\BpStringOperationsBenchmark.pas';
+  BpStringOperationsBenchmark in 'Benchmarks\BpStringOperationsBenchmark.pas',
+  BpBaseBenchmarkTestCase in 'Benchmarks\BpBaseBenchmarkTestCase.pas',
+  BpTypesOperationsBenchmark in 'Benchmarks\BpTypesOperationsBenchmark.pas';
 
 {$R *.RES}
 

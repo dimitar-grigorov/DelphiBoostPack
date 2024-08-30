@@ -3,20 +3,16 @@ unit BpStringOperationsBenchmark;
 interface
 
 uses
-  TestFramework, SysUtils, Classes, Windows;
+  TestFramework, SysUtils, Classes, Windows, BpBaseBenchmarkTestCase;
 
 type
-  TBpStringOperationsBenchmark = class(TTestCase)
+  TBpStringOperationsBenchmark = class(TBpBaseBenchmarkTestCase)
   private
     function FunctionWithStringParam(s: string): string;
     function FunctionWithConstStringParam(const s: string): string;
     function ReverseStringWithTStringList(const s: string): string;
     function ReverseStringWithArray(const s: string): string;
     function ReverseStringWithConcatenation(const s: string): string;
-    procedure LogStatus(const Msg: string);
-    procedure LogStatusFmt(const Msg: string; const Args: array of const);
-  public
-    procedure TearDown; override;
   published
     procedure TestFunctionWithStringParam;
     procedure TestFunctionWithConstStringParam;
@@ -30,15 +26,6 @@ implementation
 const
   STRING_PARAM_NUM_ITERATIONS = 5000000;
   REVERSE_STRING_NUM_ITERATIONS = 300000;
-
-var
-  gvStringOperationsMessages: TStringList;
-
-procedure TBpStringOperationsBenchmark.TearDown;
-begin
-  inherited;
-  Status(gvStringOperationsMessages.Text);
-end;
 
 function TBpStringOperationsBenchmark.FunctionWithStringParam(s: string): string;
 begin
@@ -86,77 +73,64 @@ begin
     Result := Result + s[i];
 end;
 
-procedure TBpStringOperationsBenchmark.LogStatus(const Msg: string);
-begin
-  gvStringOperationsMessages.Add(Msg);
-end;
-
-procedure TBpStringOperationsBenchmark.LogStatusFmt(const Msg: string; const Args: array of const);
-begin
-  LogStatus(Format(Msg, Args));
-end;
-
 procedure TBpStringOperationsBenchmark.TestFunctionWithStringParam;
 var
-  StartTime: Cardinal;
   i: Integer;
 begin
-  StartTime := GetTickCount;
+  StartBenchmark;
   for i := 1 to STRING_PARAM_NUM_ITERATIONS do
     FunctionWithStringParam('Test string');
-  LogStatusFmt('TestFunctionWithStringParam - Elapsed time: %d ms', [GetTickCount - StartTime]);
+  StopBenchmark;
+
+  LogStatusFmt('TestFunctionWithStringParam - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
 
 procedure TBpStringOperationsBenchmark.TestFunctionWithConstStringParam;
 var
-  StartTime: Cardinal;
   i: Integer;
 begin
-  StartTime := GetTickCount;
+  StartBenchmark;
   for i := 1 to STRING_PARAM_NUM_ITERATIONS do
     FunctionWithConstStringParam('Test string');
-  LogStatusFmt('TestFunctionWithConstStringParam - Elapsed time: %d ms', [GetTickCount - StartTime]);
+  StopBenchmark;
+  LogStatusFmt('TestFunctionWithConstStringParam - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
 
 procedure TBpStringOperationsBenchmark.TestReverseStringWithTStringList;
 var
-  StartTime: Cardinal;
   i: Integer;
 begin
-  StartTime := GetTickCount;
+  StartBenchmark;
   for i := 1 to REVERSE_STRING_NUM_ITERATIONS do
     ReverseStringWithTStringList('Test string');
-  LogStatusFmt('TestReverseStringWithTStringList - Elapsed time: %d ms', [GetTickCount - StartTime]);
+  StopBenchmark;
+  LogStatusFmt('TestReverseStringWithTStringList - Elapsed time: %.3fms', [GetElapsedTime]);
 end;
 
 procedure TBpStringOperationsBenchmark.TestReverseStringWithArray;
 var
-  StartTime: Cardinal;
   i: Integer;
 begin
-  StartTime := GetTickCount;
+  StartBenchmark;
   for i := 1 to REVERSE_STRING_NUM_ITERATIONS do
     ReverseStringWithArray('Test string');
-  LogStatusFmt('TestReverseStringWithArray - Elapsed time: %d ms', [GetTickCount - StartTime]);
+  StopBenchmark;
+  LogStatusFmt('TestReverseStringWithArray - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
 
 procedure TBpStringOperationsBenchmark.TestReverseStringWithConcatenation;
 var
-  StartTime: Cardinal;
   i: Integer;
 begin
-  StartTime := GetTickCount;
+  StartBenchmark;
   for i := 1 to REVERSE_STRING_NUM_ITERATIONS do
     ReverseStringWithConcatenation('Test string');
-  LogStatusFmt('TestReverseStringWithConcatenation - Elapsed time: %d ms', [GetTickCount - StartTime]);
+  StopBenchmark;
+  LogStatusFmt('TestReverseStringWithConcatenation - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
 
 initialization
-  gvStringOperationsMessages := TStringList.Create;
   RegisterTest(TBpStringOperationsBenchmark.Suite);
-
-finalization
-  gvStringOperationsMessages.Free;
 
 end.
 
