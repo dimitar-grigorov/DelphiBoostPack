@@ -208,7 +208,10 @@ var
 begin
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
+  begin
     lvResult := FunctionWithIntegerParam(i);
+    if lvResult < 0 then lvResult := -lvResult; 
+  end;
   StopBenchmark;
   LogStatusFmt('TestFunctionWithIntegerParam - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
@@ -220,7 +223,10 @@ var
 begin
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
+  begin
     lvResult := FunctionWithConstIntegerParam(i);
+    if lvResult < 0 then lvResult := -lvResult; 
+  end;
   StopBenchmark;
   LogStatusFmt('TestFunctionWithConstIntegerParam - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
@@ -232,7 +238,10 @@ var
 begin
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
+  begin
     lvResult := FunctionWithInt64Param(i);
+    if lvResult < 0 then lvResult := -lvResult; 
+  end;
   StopBenchmark;
   LogStatusFmt('TestFunctionWithInt64Param - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
@@ -244,7 +253,10 @@ var
 begin
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
+  begin
     lvResult := FunctionWithConstInt64Param(i);
+    if lvResult < 0 then lvResult := -lvResult; 
+  end;
   StopBenchmark;
   LogStatusFmt('TestFunctionWithConstInt64Param - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
@@ -256,7 +268,10 @@ var
 begin
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
+  begin
     lvResult := FunctionWithCurrencyParam(i);
+    if lvResult < 0 then lvResult := -lvResult; 
+  end;
   StopBenchmark;
   LogStatusFmt('TestFunctionWithCurrencyParam - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
@@ -268,7 +283,10 @@ var
 begin
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
+  begin
     lvResult := FunctionWithConstCurrencyParam(i);
+    if lvResult < 0 then lvResult := -lvResult; 
+  end;
   StopBenchmark;
   LogStatusFmt('TestFunctionWithConstCurrencyParam - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
@@ -280,7 +298,10 @@ var
 begin
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
+  begin
     lvResult := FunctionWithSingleParam(i);
+    if lvResult < 0 then lvResult := -lvResult; 
+  end;
   StopBenchmark;
   LogStatusFmt('TestFunctionWithSingleParam - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
@@ -292,7 +313,10 @@ var
 begin
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
+  begin
     lvResult := FunctionWithConstSingleParam(i);
+    if lvResult < 0 then lvResult := -lvResult;
+  end;
   StopBenchmark;
   LogStatusFmt('TestFunctionWithConstSingleParam - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
@@ -304,7 +328,10 @@ var
 begin
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
+  begin
     lvResult := FunctionWithExtendedParam(i);
+    if lvResult < 0 then lvResult := -lvResult; 
+  end;
   StopBenchmark;
   LogStatusFmt('TestFunctionWithExtendedParam - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
@@ -316,7 +343,10 @@ var
 begin
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
+  begin
     lvResult := FunctionWithConstExtendedParam(i);
+    if lvResult < 0 then lvResult := -lvResult; 
+  end;
   StopBenchmark;
   LogStatusFmt('TestFunctionWithConstExtendedParam - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
@@ -330,7 +360,10 @@ begin
   try
     StartBenchmark;
     for i := 1 to NUM_ITERATIONS do
+    begin
       lvResult := FunctionWithObjectParam(lvResult);
+      if lvResult = nil then lvResult := TObject.Create; 
+    end;
     StopBenchmark;
     LogStatusFmt('TestFunctionWithObjectParam - Elapsed time: %.3f ms', [GetElapsedTime]);
   finally
@@ -347,7 +380,10 @@ begin
   try
     StartBenchmark;
     for i := 1 to NUM_ITERATIONS do
+    begin
       lvResult := FunctionWithConstObjectParam(lvResult);
+      if lvResult = nil then lvResult := TObject.Create; 
+    end;
     StopBenchmark;
     LogStatusFmt('TestFunctionWithConstObjectParam - Elapsed time: %.3f ms', [GetElapsedTime]);
   finally
@@ -365,7 +401,10 @@ begin
 
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
+  begin
     lvResult := FunctionWithPointerParam(lvPointer);
+    if lvResult = nil then lvResult := lvPointer; 
+  end;
   StopBenchmark;
   LogStatusFmt('TestFunctionWithPointerParam - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
@@ -380,7 +419,10 @@ begin
 
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
+  begin
     lvResult := FunctionWithConstPointerParam(lvPointer);
+    if lvResult = nil then lvResult := lvPointer; 
+  end;
   StopBenchmark;
   LogStatusFmt('TestFunctionWithConstPointerParam - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
@@ -395,7 +437,10 @@ begin
 
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
+  begin
     lvResult := FunctionWithVariantParam(lvVariant);
+    if VarIsNull(lvResult) then lvResult := lvVariant; 
+  end;
   StopBenchmark;
   LogStatusFmt('TestFunctionWithVariantParam - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
@@ -410,7 +455,10 @@ begin
 
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
+  begin
     lvResult := FunctionWithConstVariantParam(lvVariant);
+    if VarIsNull(lvResult) then lvResult := lvVariant; 
+  end;
   StopBenchmark;
   LogStatusFmt('TestFunctionWithConstVariantParam - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
@@ -418,14 +466,16 @@ end;
 procedure TBpTypesOperationsBenchmark.TestFunctionWithAnsiStringParam;
 var
   i: Integer;
-  lvString: AnsiString;
-  lvResult: AnsiString;
+  lvString, lvResult: AnsiString;
 begin
   lvString := 'Test';
 
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
+  begin
     lvResult := FunctionWithAnsiStringParam(lvString);
+    if lvResult = '' then lvResult := lvString; 
+  end;
   StopBenchmark;
   LogStatusFmt('TestFunctionWithAnsiStringParam - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
@@ -440,7 +490,10 @@ begin
 
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
+  begin
     lvResult := FunctionWithConstAnsiStringParam(lvString);
+    if lvResult = '' then lvResult := lvString; 
+  end;
   StopBenchmark;
   LogStatusFmt('TestFunctionWithConstAnsiStringParam - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
@@ -455,7 +508,10 @@ begin
 
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
+  begin
     lvResult := FunctionWithWideStringParam(lvString);
+    if lvResult = '' then lvResult := lvString; 
+  end;
   StopBenchmark;
   LogStatusFmt('TestFunctionWithWideStringParam - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
@@ -470,7 +526,10 @@ begin
 
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
+  begin
     lvResult := FunctionWithConstWideStringParam(lvString);
+    if lvResult = '' then lvResult := lvString; 
+  end;
   StopBenchmark;
   LogStatusFmt('TestFunctionWithConstWideStringParam - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
@@ -486,7 +545,10 @@ begin
 
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
+  begin
     lvResult := FunctionWithStaticArrayParam(lvArray);
+    if lvResult = -1 then lvResult := 0; 
+  end;
   StopBenchmark;
   LogStatusFmt('TestFunctionWithStaticArrayParam - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
@@ -502,7 +564,10 @@ begin
 
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
+  begin
     lvResult := FunctionWithConstStaticArrayParam(lvArray);
+    if lvResult = -1 then lvResult := 0; 
+  end;
   StopBenchmark;
   LogStatusFmt('TestFunctionWithConstStaticArrayParam - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
@@ -519,7 +584,10 @@ begin
 
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
+  begin
     lvResult := FunctionWithRecordParam(lvRecord);
+    if lvResult.Field1 < 0 then lvResult.Field1 := -lvResult.Field1; 
+  end;
   StopBenchmark;
   LogStatusFmt('TestFunctionWithRecordParam - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
@@ -536,10 +604,14 @@ begin
 
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
+  begin
     lvResult := FunctionWithConstRecordParam(lvRecord);
+    if lvResult.Field1 < 0 then lvResult.Field1 := -lvResult.Field1; 
+  end;
   StopBenchmark;
   LogStatusFmt('TestFunctionWithConstRecordParam - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
+
 
 initialization
   RegisterTest(TBpTypesOperationsBenchmark.Suite);
