@@ -41,12 +41,30 @@
     <DelphiCompile Include="DelphiBoostPack.dpr">
       <MainSource>MainSource</MainSource>
     </DelphiCompile>
+    <DCCReference Include="Core\Classes\BpDictionary.pas" />
+    <DCCReference Include="Core\Classes\BpHashBobJenkins.pas" />
+    <DCCReference Include="Core\Classes\BpHashBobJenkinsU.pas" />
+    <DCCReference Include="Core\Classes\BpHashBobJenkinsUn.pas" />
+    <DCCReference Include="Core\Classes\BpHashBobJenkinsUni.pas" />
     <DCCReference Include="Core\Classes\BpHashBobJenkinsUnit.pas" />
+    <DCCReference Include="Core\Classes\BpIntList.pas" />
+    <DCCReference Include="Core\Classes\BpIntListU.pas" />
+    <DCCReference Include="Core\Classes\BpIntListUn.pas" />
+    <DCCReference Include="Core\Classes\BpIntListUni.pas" />
     <DCCReference Include="Core\Classes\BpIntListUnit.pas" />
+    <DCCReference Include="Core\Classes\BpObjectComparer.pas" />
+    <DCCReference Include="Core\Classes\BpObjectComparerU.pas" />
+    <DCCReference Include="Core\Classes\BpObjectComparerUn.pas" />
+    <DCCReference Include="Core\Classes\BpObjectComparerUni.pas" />
     <DCCReference Include="Core\Classes\BpObjectComparerUnit.pas" />
+    <DCCReference Include="Core\Classes\InterfacedCollectionItem.pas" />
+    <DCCReference Include="Core\Classes\InterfacedCollectionItemU.pas" />
+    <DCCReference Include="Core\Classes\InterfacedCollectionItemUn.pas" />
+    <DCCReference Include="Core\Classes\InterfacedCollectionItemUni.pas" />
     <DCCReference Include="Core\Classes\InterfacedCollectionItemUnit.pas" />
-    <DCCReference Include="Core\Interfaces\IBpIntListUnit.pas" />
-    <DCCReference Include="Core\Interfaces\IUniqueIdUnit.pas" />
+    <DCCReference Include="Core\Interfaces\BpIntListIntf.pas" />
+    <DCCReference Include="Core\Interfaces\UniqueIdIntf.pas" />
     <DCCReference Include="Core\Units\BpSysUtils.pas" />
+    <DCCReference Include="Core\Units\StopWatch.pas" />
   </ItemGroup>
 </Project>
