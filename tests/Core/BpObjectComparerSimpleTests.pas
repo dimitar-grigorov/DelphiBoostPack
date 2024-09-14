@@ -5,7 +5,7 @@ unit BpObjectComparerSimpleTests;
 interface
 
 uses
-  TestFramework, BpObjectComparerUnit, BpObjectComparerSimpleClasses, Variants;
+  TestFramework, BpObjectComparer, BpObjectComparerSimpleClasses, Variants;
 
 type
   TestTBpObjectComparer = class(TTestCase)
