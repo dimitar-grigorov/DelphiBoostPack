@@ -1,4 +1,4 @@
-unit IBpIntListUnit;
+unit BpIntListIntf;
 
 interface
 

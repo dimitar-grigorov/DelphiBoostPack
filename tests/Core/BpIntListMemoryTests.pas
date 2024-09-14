@@ -1,9 +1,11 @@
 unit BpIntListMemoryTests;
 
+{$TYPEINFO ON}
+
 interface
 
 uses
-  TestFramework, IBpIntListUnit, BpIntListUnit, SysUtils, Classes;
+  TestFramework, BpIntListIntf, BpIntListUnit, SysUtils, Classes;
 
 type
   TBpIntListMemoryTests = class(TTestCase)

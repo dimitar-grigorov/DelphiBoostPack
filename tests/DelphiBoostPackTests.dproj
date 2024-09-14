@@ -44,8 +44,8 @@
     <DCCReference Include="..\src\Core\Classes\BpIntListUnit.pas" />
     <DCCReference Include="..\src\Core\Classes\BpObjectComparerUnit.pas" />
     <DCCReference Include="..\src\Core\Classes\InterfacedCollectionItemUnit.pas" />
-    <DCCReference Include="..\src\Core\Interfaces\IBpIntListUnit.pas" />
-    <DCCReference Include="..\src\Core\Interfaces\IUniqueIdUnit.pas" />
+    <DCCReference Include="..\src\Core\Interfaces\BpIntListIntf.pas" />
+    <DCCReference Include="..\src\Core\Interfaces\UniqueIdIntf.pas" />
     <DCCReference Include="..\src\Core\Units\BpSysUtils.pas" />
     <DCCReference Include="Benchmarks\BpBaseBenchmarkTestCase.pas" />
     <DCCReference Include="Benchmarks\BpStringOperationsBenchmark.pas" />

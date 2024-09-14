@@ -1,5 +1,7 @@
 unit BpIntListTests;
 
+{$TYPEINFO ON}
+
 interface
 
 uses
@@ -94,6 +96,9 @@ type
   end;
 
 implementation
+
+uses
+  Windows;
 
 procedure TBpIntListTests.SetUp;
 begin
