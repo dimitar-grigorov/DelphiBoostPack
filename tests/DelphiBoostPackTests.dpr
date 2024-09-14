@@ -20,7 +20,7 @@ uses
   GUITestRunner,
   TextTestRunner,
   BpIntListTests in 'Core\BpIntListTests.pas',
-  BpIntListUnit in '..\src\Core\Classes\BpIntListUnit.pas',
+  BpIntList in '..\src\Core\Classes\BpIntList.pas',
   BpIntListIntf in '..\src\Core\Interfaces\BpIntListIntf.pas',
   BpIntListBenchmark in 'Core\BpIntListBenchmark.pas',
   BpIntListMemoryTests in 'Core\BpIntListMemoryTests.pas',

@@ -1,6 +1,6 @@
 {.$DEFINE BENCHMARK}
 
-unit BpIntListUnit;
+unit BpIntList;
 
 interface
 
