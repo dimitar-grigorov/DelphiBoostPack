@@ -5,13 +5,15 @@ program DelphiBoostPack;
 uses
   SysUtils,
   Classes,
-  BpIntListUnit in 'Core\Classes\BpIntListUnit.pas',
-  IBpIntListUnit in 'Core\Interfaces\IBpIntListUnit.pas',
-  BpObjectComparerUnit in 'Core\Classes\BpObjectComparerUnit.pas',
-  IUniqueIdUnit in 'Core\Interfaces\IUniqueIdUnit.pas',
-  InterfacedCollectionItemUnit in 'Core\Classes\InterfacedCollectionItemUnit.pas',
-  BpHashBobJenkinsUnit in 'Core\Classes\BpHashBobJenkinsUnit.pas',
-  BpSysUtils in 'Core\Units\BpSysUtils.pas';
+  BpIntList in 'Core\Classes\BpIntList.pas',
+  BpIntListIntf in 'Core\Interfaces\BpIntListIntf.pas',
+  BpObjectComparer in 'Core\Classes\BpObjectComparer.pas',
+  UniqueIdIntf in 'Core\Interfaces\UniqueIdIntf.pas',
+  InterfacedCollectionItem in 'Core\Classes\InterfacedCollectionItem.pas',
+  BpHashBobJenkins in 'Core\Classes\BpHashBobJenkins.pas',
+  BpSysUtils in 'Core\Units\BpSysUtils.pas',
+  StopWatch in 'Core\Units\StopWatch.pas';
+  //BpDictionary in 'Core\Classes\BpDictionary.pas';
 
 begin
   System.ReportMemoryLeaksOnShutdown := True;
