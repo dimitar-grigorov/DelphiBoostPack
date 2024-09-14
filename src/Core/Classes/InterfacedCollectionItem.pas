@@ -1,4 +1,4 @@
-unit InterfacedCollectionItemUnit;
+unit InterfacedCollectionItem;
 
 interface
 

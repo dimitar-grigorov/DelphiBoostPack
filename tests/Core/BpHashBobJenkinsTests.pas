@@ -5,7 +5,7 @@ unit BpHashBobJenkinsTests;
 interface
 
 uses
-  TestFramework, SysUtils, Classes, BpHashBobJenkinsUnit;
+  TestFramework, SysUtils, Classes, BpHashBobJenkins;
 
 type
   TBpHashBobJenkinsTests = class(TTestCase)

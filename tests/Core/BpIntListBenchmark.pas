@@ -5,7 +5,7 @@ unit BpIntListBenchmark;
 interface
 
 uses
-  TestFramework, Classes, BpIntListUnit, SysUtils, BpIntListIntf;
+  TestFramework, Classes, BpIntList, SysUtils, BpIntListIntf;
 
 type
   TbpIntListBenchmark = class(TTestCase)

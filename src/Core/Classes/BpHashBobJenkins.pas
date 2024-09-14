@@ -1,4 +1,4 @@
-unit BpHashBobJenkinsUnit;
+unit BpHashBobJenkins;
 
 interface
 
