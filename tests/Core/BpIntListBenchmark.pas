@@ -1,9 +1,11 @@
 unit BpIntListBenchmark;
 
+{$TYPEINFO ON}
+
 interface
 
 uses
-  TestFramework, Classes, BpIntListUnit, SysUtils, IBpIntListUnit;
+  TestFramework, Classes, BpIntListUnit, SysUtils, BpIntListIntf;
 
 type
   TbpIntListBenchmark = class(TTestCase)

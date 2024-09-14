@@ -1,5 +1,7 @@
 unit BpObjectComparerSimpleTests;
 
+{$TYPEINFO ON}
+
 interface
 
 uses

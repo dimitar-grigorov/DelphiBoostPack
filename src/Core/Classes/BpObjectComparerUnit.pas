@@ -59,7 +59,7 @@ type
 implementation
 
 uses
-  TypInfo, StrUtils, IUniqueIdUnit, Math;
+  TypInfo, StrUtils, UniqueIdIntf, Math;
 
 constructor TPropDifference.Create(const aOldPropPath, aNewPropPath: string; const aOldValue,
   aNewValue: Variant; const aIdx: string);

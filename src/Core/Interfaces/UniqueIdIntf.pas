@@ -1,4 +1,4 @@
-unit IUniqueIdUnit;
+unit UniqueIdIntf;
 
 interface
 

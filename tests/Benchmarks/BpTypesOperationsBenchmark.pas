@@ -1,5 +1,7 @@
 unit BpTypesOperationsBenchmark;
 
+{$TYPEINFO ON}
+
 interface
 
 uses
@@ -204,14 +206,10 @@ end;
 procedure TBpTypesOperationsBenchmark.TestFunctionWithIntegerParam;
 var
   i: Integer;
-  lvResult: Integer;
 begin
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
-  begin
-    lvResult := FunctionWithIntegerParam(i);
-    if lvResult < 0 then lvResult := -lvResult; 
-  end;
+    FunctionWithIntegerParam(i);
   StopBenchmark;
   LogStatusFmt('TestFunctionWithIntegerParam - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
@@ -219,14 +217,10 @@ end;
 procedure TBpTypesOperationsBenchmark.TestFunctionWithConstIntegerParam;
 var
   i: Integer;
-  lvResult: Integer;
 begin
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
-  begin
-    lvResult := FunctionWithConstIntegerParam(i);
-    if lvResult < 0 then lvResult := -lvResult; 
-  end;
+    FunctionWithConstIntegerParam(i);
   StopBenchmark;
   LogStatusFmt('TestFunctionWithConstIntegerParam - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
@@ -234,14 +228,10 @@ end;
 procedure TBpTypesOperationsBenchmark.TestFunctionWithInt64Param;
 var
   i: Integer;
-  lvResult: Int64;
 begin
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
-  begin
-    lvResult := FunctionWithInt64Param(i);
-    if lvResult < 0 then lvResult := -lvResult; 
-  end;
+    FunctionWithInt64Param(i);
   StopBenchmark;
   LogStatusFmt('TestFunctionWithInt64Param - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
@@ -249,14 +239,10 @@ end;
 procedure TBpTypesOperationsBenchmark.TestFunctionWithConstInt64Param;
 var
   i: Integer;
-  lvResult: Int64;
 begin
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
-  begin
-    lvResult := FunctionWithConstInt64Param(i);
-    if lvResult < 0 then lvResult := -lvResult; 
-  end;
+    FunctionWithConstInt64Param(i);
   StopBenchmark;
   LogStatusFmt('TestFunctionWithConstInt64Param - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
@@ -264,14 +250,10 @@ end;
 procedure TBpTypesOperationsBenchmark.TestFunctionWithCurrencyParam;
 var
   i: Integer;
-  lvResult: Currency;
 begin
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
-  begin
-    lvResult := FunctionWithCurrencyParam(i);
-    if lvResult < 0 then lvResult := -lvResult; 
-  end;
+    FunctionWithCurrencyParam(i);
   StopBenchmark;
   LogStatusFmt('TestFunctionWithCurrencyParam - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
@@ -520,16 +502,12 @@ procedure TBpTypesOperationsBenchmark.TestFunctionWithConstWideStringParam;
 var
   i: Integer;
   lvString: WideString;
-  lvResult: WideString;
 begin
   lvString := 'Test';
 
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
-  begin
-    lvResult := FunctionWithConstWideStringParam(lvString);
-    if lvResult = '' then lvResult := lvString; 
-  end;
+    FunctionWithConstWideStringParam(lvString);
   StopBenchmark;
   LogStatusFmt('TestFunctionWithConstWideStringParam - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
@@ -538,17 +516,13 @@ procedure TBpTypesOperationsBenchmark.TestFunctionWithStaticArrayParam;
 var
   i: Integer;
   lvArray: array[0..99] of Integer;
-  lvResult: Integer;
 begin
   for i := 0 to 99 do
     lvArray[i] := i;
 
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
-  begin
-    lvResult := FunctionWithStaticArrayParam(lvArray);
-    if lvResult = -1 then lvResult := 0; 
-  end;
+    FunctionWithStaticArrayParam(lvArray);
   StopBenchmark;
   LogStatusFmt('TestFunctionWithStaticArrayParam - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
@@ -557,17 +531,13 @@ procedure TBpTypesOperationsBenchmark.TestFunctionWithConstStaticArrayParam;
 var
   i: Integer;
   lvArray: array[0..99] of Integer;
-  lvResult: Integer;
 begin
   for i := 0 to 99 do
     lvArray[i] := i;
 
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
-  begin
-    lvResult := FunctionWithConstStaticArrayParam(lvArray);
-    if lvResult = -1 then lvResult := 0; 
-  end;
+    FunctionWithConstStaticArrayParam(lvArray);
   StopBenchmark;
   LogStatusFmt('TestFunctionWithConstStaticArrayParam - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
