@@ -1,4 +1,4 @@
-unit BpObjectComparerUnit;
+unit BpObjectComparer;
 
 interface
 

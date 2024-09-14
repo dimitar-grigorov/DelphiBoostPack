@@ -41,6 +41,13 @@
       <MainSource>MainSource</MainSource>
     </DelphiCompile>
     <DCCReference Include="..\src\Core\Classes\BpHashBobJenkinsUnit.pas" />
+    <DCCReference Include="..\src\Core\Classes\BpIntList.pas">
+      <ModuleName>BpIntListU</ModuleName>
+    </DCCReference>
+    <DCCReference Include="..\src\Core\Classes\BpIntList.pas" />
+    <DCCReference Include="..\src\Core\Classes\BpIntListU.pas" />
+    <DCCReference Include="..\src\Core\Classes\BpIntListUn.pas" />
+    <DCCReference Include="..\src\Core\Classes\BpIntListUni.pas" />
     <DCCReference Include="..\src\Core\Classes\BpIntListUnit.pas" />
     <DCCReference Include="..\src\Core\Classes\BpObjectComparerUnit.pas" />
     <DCCReference Include="..\src\Core\Classes\InterfacedCollectionItemUnit.pas" />
