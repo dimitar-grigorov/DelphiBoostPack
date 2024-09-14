@@ -19,7 +19,7 @@ To maintain consistency and code readability within the DelphiBoostPack, we adhe
 -   **Local Constants**: Prefix local constants with `lc`, e.g., `lcMaxSize`, `lcFilePath`.
 -   **Global Constants**: Global constants must start with `gc`, e.g., `gcAppName`, `gcVersion`.
 -   **Class Prefix**: Most classes within the repository must have the prefix `Tbp` (from Boost Pack), indicating their belonging to the DelphiBoostPack collection, e.g., `TbpCustomList`, `TbpDatabaseConnector`.
--   **Unit Naming**: All unit names must end with the word "Unit" to clearly indicate their content and purpose. It is recommended that one unit contains only one class to maintain clarity and ease of maintenance. For instance, the class `TbpIntegerList` should be located in the unit named `bpIntegerListUnit.pas`.
+-   **Unit Naming**: It is recommended that one unit contains only one class to maintain clarity and ease of maintenance. For instance, the class `TbpIntegerList` should be located in the unit named `bpIntegerList.pas`.
 
 By following these guidelines, we ensure that the codebase remains organized, intuitive, and accessible to contributors and users alike.
 

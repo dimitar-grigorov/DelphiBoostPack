@@ -1,5 +1,7 @@
 unit BpSysUtilsTests;
 
+{$TYPEINFO ON}
+
 interface
 
 uses

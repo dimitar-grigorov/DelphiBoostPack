@@ -1,5 +1,7 @@
 unit BpStringOperationsBenchmark;
 
+{$TYPEINFO ON}
+
 interface
 
 uses

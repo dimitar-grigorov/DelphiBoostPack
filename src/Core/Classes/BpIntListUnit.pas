@@ -5,7 +5,7 @@ unit BpIntListUnit;
 interface
 
 uses
-  Classes, SysUtils, IBpIntListUnit;
+  Classes, SysUtils, BpIntListIntf;
 
 type
   TbpIntListDefined = set of (idDelimiter, idLineBreak, idStrictDelimiter);

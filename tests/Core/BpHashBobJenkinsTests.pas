@@ -1,5 +1,7 @@
 unit BpHashBobJenkinsTests;
 
+{$TYPEINFO ON}
+
 interface
 
 uses
