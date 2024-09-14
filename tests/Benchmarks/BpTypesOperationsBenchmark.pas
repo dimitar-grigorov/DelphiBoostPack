@@ -261,14 +261,10 @@ end;
 procedure TBpTypesOperationsBenchmark.TestFunctionWithConstCurrencyParam;
 var
   i: Integer;
-  lvResult: Currency;
 begin
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
-  begin
-    lvResult := FunctionWithConstCurrencyParam(i);
-    if lvResult < 0 then lvResult := -lvResult; 
-  end;
+    FunctionWithConstCurrencyParam(i);
   StopBenchmark;
   LogStatusFmt('TestFunctionWithConstCurrencyParam - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
@@ -276,14 +272,10 @@ end;
 procedure TBpTypesOperationsBenchmark.TestFunctionWithSingleParam;
 var
   i: Integer;
-  lvResult: Single;
 begin
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
-  begin
-    lvResult := FunctionWithSingleParam(i);
-    if lvResult < 0 then lvResult := -lvResult; 
-  end;
+    FunctionWithSingleParam(i);
   StopBenchmark;
   LogStatusFmt('TestFunctionWithSingleParam - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
@@ -291,14 +283,10 @@ end;
 procedure TBpTypesOperationsBenchmark.TestFunctionWithConstSingleParam;
 var
   i: Integer;
-  lvResult: Single;
 begin
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
-  begin
-    lvResult := FunctionWithConstSingleParam(i);
-    if lvResult < 0 then lvResult := -lvResult;
-  end;
+    FunctionWithConstSingleParam(i);
   StopBenchmark;
   LogStatusFmt('TestFunctionWithConstSingleParam - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
@@ -306,14 +294,10 @@ end;
 procedure TBpTypesOperationsBenchmark.TestFunctionWithExtendedParam;
 var
   i: Integer;
-  lvResult: Extended;
 begin
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
-  begin
-    lvResult := FunctionWithExtendedParam(i);
-    if lvResult < 0 then lvResult := -lvResult; 
-  end;
+    FunctionWithExtendedParam(i);
   StopBenchmark;
   LogStatusFmt('TestFunctionWithExtendedParam - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
@@ -321,14 +305,10 @@ end;
 procedure TBpTypesOperationsBenchmark.TestFunctionWithConstExtendedParam;
 var
   i: Integer;
-  lvResult: Extended;
 begin
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
-  begin
-    lvResult := FunctionWithConstExtendedParam(i);
-    if lvResult < 0 then lvResult := -lvResult; 
-  end;
+    FunctionWithConstExtendedParam(i);
   StopBenchmark;
   LogStatusFmt('TestFunctionWithConstExtendedParam - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
@@ -377,16 +357,12 @@ procedure TBpTypesOperationsBenchmark.TestFunctionWithPointerParam;
 var
   i: Integer;
   lvPointer: Pointer;
-  lvResult: Pointer;
 begin
   lvPointer := @i;
 
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
-  begin
-    lvResult := FunctionWithPointerParam(lvPointer);
-    if lvResult = nil then lvResult := lvPointer; 
-  end;
+    FunctionWithPointerParam(lvPointer);
   StopBenchmark;
   LogStatusFmt('TestFunctionWithPointerParam - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
@@ -395,16 +371,12 @@ procedure TBpTypesOperationsBenchmark.TestFunctionWithConstPointerParam;
 var
   i: Integer;
   lvPointer: Pointer;
-  lvResult: Pointer;
 begin
   lvPointer := @i;
 
   StartBenchmark;
   for i := 1 to NUM_ITERATIONS do
-  begin
-    lvResult := FunctionWithConstPointerParam(lvPointer);
-    if lvResult = nil then lvResult := lvPointer; 
-  end;
+    FunctionWithConstPointerParam(lvPointer);
   StopBenchmark;
   LogStatusFmt('TestFunctionWithConstPointerParam - Elapsed time: %.3f ms', [GetElapsedTime]);
 end;
