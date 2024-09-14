@@ -5,7 +5,7 @@ unit BpIntListTests;
 interface
 
 uses
-  TestFramework, Classes, BpIntListUnit, SysUtils;
+  TestFramework, Classes, BpIntList, SysUtils;
 
 type
   // Test methods for class TBpIntList
