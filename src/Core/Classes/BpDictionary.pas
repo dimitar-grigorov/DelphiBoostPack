@@ -255,6 +255,12 @@ type
   PInt64Rec = ^Int64Rec;
   PPShortString = ^PShortString;
 
+  {$ifndef DELPHI5OROLDER}
+  PIInterface = ^IInterface;
+  TInterfaceDynArray = array of IInterface;
+  PInterfaceDynArray = ^TInterfaceDynArray;
+  {$endif}  
+
 // 815 -------------------------------------------------------------------------
 
   /// implements a stack-based storage of some (UTF-8 or binary) text
@@ -386,6 +392,18 @@ var MoveFast: procedure(const Source; var Dest; Count: PtrInt);
 /// fill some values with i,i+1,i+2...i+Count-1
 procedure FillIncreasing(Values: PIntegerArray; StartValue: integer; Count: PtrUInt);
 
+// 4783 ------------------------------------------------------------------------
+
+/// convert a cardinal into a 32-bit variable-length integer buffer
+function ToVarUInt32(Value: cardinal; Dest: PByte): PByte;
+
+// 4791 ------------------------------------------------------------------------
+
+/// return the number of bytes necessary to store some data with a its
+// 32-bit variable-length integer legnth
+function ToVarUInt32LengthWithData(Value: PtrUInt): PtrUInt;
+  {$ifdef HASINLINE}inline;{$endif}
+
 // 4930 ------------------------------------------------------------------------
 type
   /// specify ordinal (tkInteger and tkEnumeration) storage size and sign
@@ -395,7 +413,7 @@ type
 
   /// specify floating point (ftFloat) storage size and precision
   // - here ftDouble is renamed ftDoub to avoid confusion with TSQLDBFieldType
-  TFloatType = (ftSingle,ftDoub,ftExtended,ftComp,ftCurr);    
+  TFloatType = (ftSingle,ftDoub,ftExtended,ftComp,ftCurr);
 
 // 4991 ------------------------------------------------------------------------
 
@@ -408,7 +426,19 @@ type
     tkVariant, tkArray, tkRecord, tkInterface, tkInt64, tkDynArray
     {$ifdef UNICODE}, tkUString, tkClassRef, tkPointer, tkProcedure{$endif});
 
-// 5038 -----------------------------------------------------------------------
+const
+  /// maps record or object in TTypeKind RTTI enumerate
+  tkRecordTypes = [tkRecord];
+  /// maps record or object in TTypeKind RTTI enumerate
+  tkRecordKinds = tkRecord;    
+
+// 5021 ------------------------------------------------------------------------
+
+type
+  PTypeKind = ^TTypeKind;
+  TTypeKinds = set of TTypeKind;
+
+// 5038 ------------------------------------------------------------------------
 
   /// function prototype to be used for TDynArray Sort and Find method
   // - common functions exist for base types: see e.g. SortDynArrayBoolean,
@@ -1631,6 +1661,72 @@ type
 // is reported as very slow: see https://en.wikipedia.org/wiki/RdRand#Performance
 procedure FillRandom(Dest: PCardinalArray; CardinalCount: integer; ForceGsl: boolean=false);
 
+// 7414 ------------------------------------------------------------------------
+
+/// save a record content into a RawByteString
+// - will handle packed records, with binaries (byte, word, integer...) and
+// string types properties (but not with internal raw pointers, of course)
+// - will use a proprietary binary format, with some variable-length encoding
+// of the string length - note that if you change the type definition, any
+// previously-serialized content will fail, maybe triggering unexpected GPF: you
+// may use TypeInfoToHash() if you share this binary data accross executables
+// - warning: will encode generic string fields as AnsiString (one byte per char)
+// prior to Delphi 2009, and as UnicodeString (two bytes per char) since Delphi
+// 2009: if you want to use this function between UNICODE and NOT UNICODE
+// versions of Delphi, you should use some explicit types like RawUTF8,
+// WinAnsiString, SynUnicode or even RawUnicode/WideString
+function RecordSave(const Rec; TypeInfo: pointer): RawByteString; overload;
+
+/// save a record content into a TBytes dynamic array
+// - could be used as an alternative to RawByteString's RecordSave()
+function RecordSaveBytes(const Rec; TypeInfo: pointer): TBytes;
+
+/// save a record content into a destination memory buffer
+// - Dest must be at least RecordSaveLength() bytes long
+// - will return the Rec size, in bytes, into Len reference variable
+// - will handle packed records, with binaries (byte, word, integer...) and
+// string types properties (but not with internal raw pointers, of course)
+// - will use a proprietary binary format, with some variable-length encoding
+// of the string length - note that if you change the type definition, any
+// previously-serialized content will fail, maybe triggering unexpected GPF: you
+// may use TypeInfoToHash() if you share this binary data accross executables
+// - warning: will encode generic string fields as AnsiString (one byte per char)
+// prior to Delphi 2009, and as UnicodeString (two bytes per char) since Delphi
+// 2009: if you want to use this function between UNICODE and NOT UNICODE
+// versions of Delphi, you should use some explicit types like RawUTF8,
+// WinAnsiString, SynUnicode or even RawUnicode/WideString
+function RecordSave(const Rec; Dest: PAnsiChar; TypeInfo: pointer;
+  out Len: integer): PAnsiChar; overload;
+
+/// save a record content into a destination memory buffer
+// - Dest must be at least RecordSaveLength() bytes long
+// - will handle packed records, with binaries (byte, word, integer...) and
+// string types properties (but not with internal raw pointers, of course)
+// - will use a proprietary binary format, with some variable-length encoding
+// of the string length - note that if you change the type definition, any
+// previously-serialized content will fail, maybe triggering unexpected GPF: you
+// may use TypeInfoToHash() if you share this binary data accross executables
+// - warning: will encode generic string fields as AnsiString (one byte per char)
+// prior to Delphi 2009, and as UnicodeString (two bytes per char) since Delphi
+// 2009: if you want to use this function between UNICODE and NOT UNICODE
+// versions of Delphi, you should use some explicit types like RawUTF8,
+// WinAnsiString, SynUnicode or even RawUnicode/WideString
+function RecordSave(const Rec; Dest: PAnsiChar; TypeInfo: pointer): PAnsiChar; overload;
+  {$ifdef HASINLINE}inline;{$endif}
+
+/// save a record content into a destination memory buffer
+// - caller should make Dest.Done once finished with Dest.buf/Dest.len buffer
+procedure RecordSave(const Rec; var Dest: TSynTempBuffer; TypeInfo: pointer); overload;
+
+// 7473 ------------------------------------------------------------------------
+
+/// compute the number of bytes needed to save a record content
+// using the RecordSave() function
+// - will return 0 in case of an invalid (not handled) record type (e.g. if
+// it contains an unknown variant)
+// - optional Len parameter will contain the Rec memory buffer length, in bytes
+function RecordSaveLength(const Rec; TypeInfo: pointer; Len: PInteger=nil): integer;
+
 // 7541 ------------------------------------------------------------------------
 
 /// clear a record content
@@ -2033,6 +2129,54 @@ type
     property OnCanDeleteDeprecated: TSynDictionaryCanDeleteEvent read fOnCanDelete write fOnCanDelete;
   end;
 
+// 11030 -----------------------------------------------------------------------
+
+  {$M+}
+  /// generic parent class of all custom Exception types of this unit
+  // - all our classes inheriting from ESynException are serializable,
+  // so you could use ObjectToJSONDebug(anyESynException) to retrieve some
+  // extended information
+  ESynException = class(Exception)
+  protected
+    fRaisedAt: pointer;
+  public
+    /// constructor which will use FormatUTF8() instead of Format()
+    // - expect % as delimiter, so is less error prone than %s %d %g
+    // - will handle vtPointer/vtClass/vtObject/vtVariant kind of arguments,
+    // appending class name for any class or object, the hexa value for a
+    // pointer, or the JSON representation of any supplied TDocVariant
+    constructor CreateUTF8(const Format: RawUTF8; const Args: array of const);
+    /// constructor appending some FormatUTF8() content to the GetLastError
+    // - message will contain GetLastError value followed by the formatted text
+    // - expect % as delimiter, so is less error prone than %s %d %g
+    // - will handle vtPointer/vtClass/vtObject/vtVariant kind of arguments,
+    // appending class name for any class or object, the hexa value for a
+    // pointer, or the JSON representation of any supplied TDocVariant
+    constructor CreateLastOSError(const Format: RawUTF8; const Args: array of const;
+      const Trailer: RawUtf8 = 'OSError');
+    {$ifndef NOEXCEPTIONINTERCEPT}
+    /// can be used to customize how the exception is logged
+    // - this default implementation will call the DefaultSynLogExceptionToStr()
+    // function or the TSynLogExceptionToStrCustom global callback, if defined
+    // - override this method to provide a custom logging content
+    // - should return TRUE if Context.EAddr and Stack trace is not to be
+    // written (i.e. as for any TSynLogExceptionToStr callback)
+//TODO: FIX    function CustomLog(WR: TTextWriter; const Context: TSynLogExceptionContext): boolean; virtual;
+    {$endif}
+    /// the code location when this exception was triggered
+    // - populated by SynLog unit, during interception - so may be nil
+    // - you can use TSynMapFile.FindLocation(ESynException) class function to
+    // guess the corresponding source code line
+    // - will be serialized as "Address": hexadecimal and source code location
+    // (using TSynMapFile .map/.mab information) in TJSONSerializer.WriteObject
+    // when woStorePointer option is defined - e.g. with ObjectToJSONDebug()
+    property RaisedAt: pointer read fRaisedAt write fRaisedAt;
+  published
+    property Message;
+  end;
+  {$M-}
+  ESynExceptionClass = class of ESynException;
+
 // 12169 -----------------------------------------------------------------------
 
 var
@@ -2044,6 +2188,50 @@ var
   crc32c: THasher;
 
 
+// 13859 -----------------------------------------------------------------------
+
+const
+  /// unsigned 64bit integer variant type
+  // - currently called varUInt64 in Delphi (not defined in older versions),
+  // and varQWord in FPC
+  varWord64 = 21;
+
+// 13878 -----------------------------------------------------------------------
+
+/// same as Dest := TVarData(Source) for simple values
+// - will return TRUE for all simple values after varByRef unreference, and
+// copying the unreferenced Source value into Dest raw storage
+// - will return FALSE for not varByRef values, or complex values (e.g. string)
+function SetVariantUnRefSimpleValue(const Source: variant; var Dest: TVarData): boolean;
+  {$ifdef HASINLINE}inline;{$endif}
+
+// 14070 -----------------------------------------------------------------------
+
+/// compute the number of bytes needed to save a Variant content
+// using the VariantSave() function
+// - will return 0 in case of an invalid (not handled) Variant type
+function VariantSaveLength(const Value: variant): integer;
+
+/// save a Variant content into a destination memory buffer
+// - Dest must be at least VariantSaveLength() bytes long
+// - will handle standard Variant types and custom types (serialized as JSON)
+// - will return nil in case of an invalid (not handled) Variant type
+// - will use a proprietary binary format, with some variable-length encoding
+// of the string length
+// - warning: will encode generic string fields as within the variant type
+// itself: using this function between UNICODE and NOT UNICODE
+// versions of Delphi, will propably fail - you have been warned!
+function VariantSave(const Value: variant; Dest: PAnsiChar): PAnsiChar; overload;
+
+/// save a Variant content into a binary buffer
+// - will handle standard Variant types and custom types (serialized as JSON)
+// - will return '' in case of an invalid (not handled) Variant type
+// - just a wrapper around VariantSaveLength()+VariantSave()
+// - warning: will encode generic string fields as within the variant type
+// itself: using this function between UNICODE and NOT UNICODE
+// versions of Delphi, will propably fail - you have been warned!
+function VariantSave(const Value: variant): RawByteString; overload;
+
 // 16947  
 implementation
 
@@ -2052,7 +2240,20 @@ implementation
 //------------------------------------------------------------------------------
 
 
-// 17023 -----------------------------------------------------------------------
+// 17007 -----------------------------------------------------------------------
+
+procedure MoveSmall(Source, Dest: Pointer; Count: PtrUInt);
+var c: AnsiChar; // better FPC inlining
+begin
+  inc(PtrUInt(Source),Count);
+  inc(PtrUInt(Dest),Count);
+  PtrInt(Count) := -PtrInt(Count);
+  repeat
+    c := PAnsiChar(Source)[Count];
+    PAnsiChar(Dest)[Count] := c;
+    inc(Count);
+  until Count=0;
+end;
 
 { TSynTempBuffer }
 
@@ -2368,7 +2569,30 @@ type
     );
   end;
 
-  
+// 20704 -----------------------------------------------------------------------
+
+{$ifdef HASDIRECTTYPEINFO}
+type
+  Deref = PTypeInfo;
+{$else}
+function Deref(Info: PTypeInfoStored): PTypeInfo; // for Delphi and newer FPC
+{$ifdef HASINLINE} inline;
+begin
+  result := pointer(Info);
+  if Info<>nil then
+    result := Info^;
+end;
+{$else}
+asm // Delphi is so bad at compiling above code...
+        or      eax, eax
+        jz      @z
+        mov     eax, [eax]
+        ret
+@z:     db      $f3 // rep ret
+end;
+{$endif HASINLINE}
+{$endif HASDIRECTTYPEINFO}
+
 // 21269 -----------------------------------------------------------------------
 
 {$ifdef HASCODEPAGE}
@@ -2401,6 +2625,116 @@ end;
 {$endif HASCODEPAGE}
 
 
+// 21376 -----------------------------------------------------------------------
+
+function GetTypeInfo(aTypeInfo: pointer; aExpectedKind: TTypeKind): PTypeInfo; overload;
+{$ifdef HASINLINE} inline;
+begin
+  result := aTypeInfo;
+  if result<>nil then
+    if result^.Kind=aExpectedKind then
+      {$ifdef HASALIGNTYPEDATA}
+      result := FPCTypeInfoOverName(result)
+      {$else}
+      inc(PByte(result),result^.NameLen)
+      {$endif}
+    else
+      result := nil;
+end;
+{$else}
+asm
+        test    eax, eax
+        jz      @n
+        movzx   ecx, byte ptr[eax + TTypeInfo.NameLen]
+        cmp     dl, [eax]
+        jne     @n
+        add     eax, ecx
+        ret
+@n:     xor     eax, eax
+end;
+{$endif HASINLINE}
+
+function GetTypeInfo(aTypeInfo: pointer; const aExpectedKind: TTypeKinds): PTypeInfo; overload;
+{$ifdef HASINLINE} inline;
+begin
+  result := aTypeInfo;
+  if result<>nil then
+    if result^.Kind in aExpectedKind then
+      {$ifdef HASALIGNTYPEDATA}
+      result := FPCTypeInfoOverName(result)
+      {$else}
+      inc(PByte(result),result^.NameLen)
+      {$endif}
+    else
+      result := nil;
+end;
+{$else}
+asm // eax=aTypeInfo edx=aExpectedKind
+        test    eax, eax
+        jz      @n
+        movzx   ecx, byte ptr[eax]
+        bt      edx, ecx
+        movzx   ecx, byte ptr[eax + TTypeInfo.NameLen]
+        jnb     @n
+        add     eax, ecx
+        ret
+@n:     xor     eax, eax
+end;
+{$endif HASINLINE}
+
+function GetTypeInfo(aTypeInfo: pointer): PTypeInfo; overload;
+{$ifdef HASINLINE} inline;
+begin
+  {$ifdef HASALIGNTYPEDATA}
+  result := FPCTypeInfoOverName(aTypeInfo);
+  {$else}
+  result := @PAnsiChar(aTypeInfo)[PTypeInfo(aTypeInfo)^.NameLen];
+  {$endif}
+end;
+{$else}
+asm
+        movzx   ecx, byte ptr[eax + TTypeInfo.NameLen]
+        add     eax, ecx
+end;
+{$endif HASINLINE}
+
+// 21470 -----------------------------------------------------------------------
+
+function TypeInfoToShortString(aTypeInfo: pointer): PShortString;
+begin
+  if aTypeInfo<>nil then
+    result := @PTypeInfo(aTypeInfo)^.NameLen else
+    result := nil;
+end;
+
+// 21971 -----------------------------------------------------------------------
+
+{ note: those low-level VariantTo*() functions are expected to be there
+        even if NOVARIANTS conditional is defined (used e.g. by SynDB.TQuery) }
+
+function SetVariantUnRefSimpleValue(const Source: variant; var Dest: TVarData): boolean;
+var typ: cardinal;
+begin
+  result := false;
+  typ := TVarData(Source).VType;
+  if typ and varByRef=0 then
+    exit;
+  typ := typ and not varByRef;
+  case typ of
+  varVariant:
+    if integer(PVarData(TVarData(Source).VPointer)^.VType) in
+        [varEmpty..varDate,varBoolean,varShortInt..varWord64] then begin
+      Dest := PVarData(TVarData(Source).VPointer)^;
+      result := true;
+    end;
+  varEmpty..varDate,varBoolean,varShortInt..varWord64: begin
+    Dest.VType := typ;
+    Dest.VInt64 :=  PInt64(TVarData(Source).VAny)^;
+    result := true;
+  end;
+  end;
+end;
+
 // 24875 -----------------------------------------------------------------------
 
 function StrLenPas(S: pointer): PtrInt;
@@ -2427,6 +2761,47 @@ _0: dec(result,PtrUInt(S)); // return length
   end;
 end;
 
+// 26398 -----------------------------------------------------------------------
+
+function ToVarUInt32(Value: PtrUInt; Dest: PByte): PByte;
+{$ifdef FPC} nostackframe; assembler; {$endif}
+asm
+        cmp     eax, $7f
+        jbe     @0
+        cmp     eax, $00004000
+        jb      @1
+        cmp     eax, $00200000
+        jb      @2
+        cmp     eax, $10000000
+        jb      @3
+        mov     ecx, eax
+        shr     eax, 7
+        and     cl, $7f
+        or      cl, $80
+        mov     [edx], cl
+        inc     edx
+@3:     mov     ecx, eax
+        shr     eax, 7
+        and     cl, $7f
+        or      cl, $80
+        mov     [edx], cl
+        inc     edx
+@2:     mov     ecx, eax
+        shr     eax, 7
+        and     cl, $7f
+        or      cl, $80
+        mov     [edx], cl
+        inc     edx
+@1:     mov     ecx, eax
+        shr     eax, 7
+        and     cl, $7f
+        or      cl, $80
+        mov     [edx], cl
+        inc     edx
+@0:     mov     [edx], al
+        lea     eax, [edx + 1]
+end;
+
 // 31866 -----------------------------------------------------------------------
 
 procedure FillIncreasing(Values: PIntegerArray; StartValue: integer; Count: PtrUInt);
@@ -2442,6 +2817,20 @@ begin
       end;
 end;
 
+// 41477 -----------------------------------------------------------------------
+
+function ToVarUInt32LengthWithData(Value: PtrUInt): PtrUInt;
+begin
+  if Value<=$7f then
+    result := Value+1 else
+  if Value<$80 shl 7 then
+    result := Value+2 else
+  if Value<$80 shl 14 then
+    result := Value+3 else
+  if Value<$80 shl 21 then
+    result := Value+4 else
+    result := Value+5;
+end;
 
 // 42060 -----------------------------------------------------------------------
 
@@ -2522,6 +2911,349 @@ asm
 end;
 //{$endif FPC}
 
+// 42152 -----------------------------------------------------------------------
+
+function ArrayItemType(var info: PTypeInfo; out len: integer): PTypeInfo;
+  {$ifdef HASINLINE}inline;{$endif}
+begin
+  {$ifdef HASALIGNTYPEDATA} // inlined info := GetTypeInfo(info)
+  info := FPCTypeInfoOverName(info);
+  {$else}
+  info := @PAnsiChar(info)[info^.NameLen];
+  {$endif}
+  result := nil;
+  if (info=nil) or (info^.dimCount<>1) then begin
+    len := 0;
+    info := nil; // supports single dimension static array only
+  end else begin
+    len := info^.arraySize{$ifdef VER2_6}*info^.elCount{$endif};
+    {$ifdef HASDIRECTTYPEINFO} // inlined result := DeRef(info^.arrayType)
+    result := info^.arrayType;
+    {$else}
+    if info^.arrayType=nil then
+      exit;
+    result := info^.arrayType^;
+    {$endif}
+    {$ifdef FPC}
+    if (result<>nil) and not(result^.Kind in tkManagedTypes) then
+      result := nil; // as with Delphi
+    {$endif}
+  end;
+end;
+
+// 42243 -----------------------------------------------------------------------
+
+function ManagedTypeSaveLength(data: PAnsiChar; info: PTypeInfo;
+  out len: integer): integer;
+// returns 0 on error, or saved bytes + len=data^ length
+var DynArray: TDynArray;
+    itemtype: PTypeInfo;
+    itemsize,size,i: integer;
+    P: PPtrUInt absolute data;
+begin // info is expected to come from a DeRef() if retrieved from RTTI
+  case info^.Kind of // should match tkManagedTypes
+  tkLString{$ifdef FPC},tkLStringOld{$endif}: begin
+    len := SizeOf(pointer);
+    if P^=0 then
+      result := 1 else
+      result := ToVarUInt32LengthWithData(PStrLen(P^-_STRLEN)^);
+  end;
+  tkWString: begin // PStrRec doesn't match on Widestring for FPC
+    len := SizeOf(pointer);
+    result := ToVarUInt32LengthWithData(length(PWideString(P)^)*2);
+  end;
+  {$ifdef HASVARUSTRING}
+  tkUString: begin
+    len := SizeOf(pointer);
+    if P^=0 then
+      result := 1 else
+      result := ToVarUInt32LengthWithData(PStrLen(P^-_STRLEN)^*2);
+  end;
+  {$endif}
+  tkRecord{$ifdef FPC},tkObject{$endif}:
+    result := RecordSaveLength(data^,info,@len);
+  tkArray: begin
+    itemtype := ArrayItemType(info,len);
+    result := 0;
+    if info<>nil then
+      if itemtype=nil then
+        result := len else
+        for i := 1 to info^.elCount do begin
+          size := ManagedTypeSaveLength(data,itemtype,itemsize);
+          if size=0 then begin
+            result := 0;
+            exit;
+          end;
+          inc(result,size);
+          inc(data,itemsize);
+        end;
+  end;
+  {$ifndef NOVARIANTS}
+  tkVariant: begin
+    len := SizeOf(variant);
+    result := VariantSaveLength(PVariant(data)^);
+  end;
+  {$endif}
+  tkDynArray: begin
+    DynArray.Init(info,data^);
+    len := SizeOf(pointer);
+    result := DynArray.SaveToLength;
+  end;
+  tkInterface: begin
+    len := SizeOf(Int64); // consume 64-bit even on CPU32
+    result := SizeOf(PtrUInt);
+  end;
+  else
+    result := 0; // invalid/unhandled record content
+  end;
+end;
+
+function ManagedTypeSave(data, dest: PAnsiChar; info: PTypeInfo;
+  out len: integer): PAnsiChar;
+// returns nil on error, or final dest + len=data^ length
+var DynArray: TDynArray;
+    itemtype: PTypeInfo;
+    itemsize,i: integer;
+    P: PPtrUInt absolute data;
+begin // info is expected to come from a DeRef() if retrieved from RTTI
+  case info^.Kind of
+  tkLString {$ifdef HASVARUSTRING},tkUString{$endif} {$ifdef FPC},tkLStringOld{$endif}: begin
+    if P^=0 then begin
+      dest^ := #0;
+      result := dest+1;
+    end else begin
+      itemsize := PStrLen(P^-_STRLEN)^;
+      {$ifdef HASVARUSTRING} // UnicodeString length in WideChars
+      if info^.Kind=tkUString then
+        itemsize := itemsize*2;
+      {$endif}
+      result := pointer(ToVarUInt32(itemsize,pointer(dest)));
+      MoveFast(pointer(P^)^,result^,itemsize);
+      inc(result,itemsize);
+    end;
+    len := SizeOf(PtrUInt); // size of tkLString/tkUString in record
+  end;
+  tkWString: begin
+    itemsize := length(PWideString(P)^)*2; // PStrRec doesn't match on FPC
+    result := pointer(ToVarUInt32(itemsize,pointer(dest)));
+    MoveFast(pointer(P^)^,result^,itemsize);
+    inc(result,itemsize);
+    len := SizeOf(PtrUInt);
+  end;
+  tkRecord{$ifdef FPC},tkObject{$endif}:
+    result := RecordSave(data^,dest,info,len);
+  tkArray: begin
+    itemtype := ArrayItemType(info,len);
+    if info=nil then
+      result := nil else
+      if itemtype=nil then begin
+        MoveSmall(data,dest,len);
+        result := dest+len;
+      end else begin
+        for i := 1 to info^.elCount do begin
+          dest := ManagedTypeSave(data,dest,itemtype,itemsize);
+          if dest=nil then
+            break; // invalid/unhandled content
+          inc(data,itemsize)
+        end;
+        result := dest;
+      end;
+  end;
+  {$ifndef NOVARIANTS}
+  tkVariant: begin
+    result := VariantSave(PVariant(data)^,dest);
+    len := SizeOf(Variant); // size of tkVariant in record
+  end;
+  {$endif}
+  tkDynArray: begin
+    DynArray.Init(info,data^);
+    result := DynArray.SaveTo(dest);
+    len := SizeOf(PtrUInt); // size of tkDynArray in record
+  end;
+  {$ifndef DELPHI5OROLDER}
+  tkInterface: begin
+    PIInterface(dest)^ := PIInterface(data)^; // with proper refcount
+    result := dest+SizeOf(Int64); // consume 64-bit even on CPU32
+    len := SizeOf(PtrUInt);
+  end;
+  {$endif}
+  else
+    result := nil; // invalid/unhandled record content
+  end;
+end;
+
+// 42465 -----------------------------------------------------------------------
+
+function GetManagedFields(info: PTypeInfo; out firstfield: PFieldInfo): integer;
+{$ifdef HASINLINE}inline;{$endif}
+{$ifdef FPC_NEWRTTI}
+var
+  recInitData: PFPCRecInitData; // low-level type redirected from SynFPCTypInfo
+  aPointer:pointer;
+begin
+  if Assigned(info^.RecInitInfo) then
+    recInitData := PFPCRecInitData(AlignTypeDataClean(PTypeInfo(info^.RecInitInfo+2+PByte(info^.RecInitInfo+1)^)))
+  else begin
+    aPointer:=@info^.RecInitInfo;
+    {$ifdef FPC_PROVIDE_ATTR_TABLE}
+    dec(PByte(aPointer),SizeOf(Pointer));
+    {$ifdef FPC_REQUIRES_PROPER_ALIGNMENT}
+    {$ifdef CPUARM}
+    dec(PByte(aPointer),SizeOf(Pointer));
+    {$endif CPUARM}
+    {$endif}
+    {$endif}
+    recInitData := PFPCRecInitData(aPointer);
+  end;
+  firstfield := PFieldInfo(PtrUInt(@recInitData^.ManagedFieldCount));
+  inc(PByte(firstfield),SizeOf(recInitData^.ManagedFieldCount));
+  firstfield := AlignPTypeInfo(firstfield);
+  result := recInitData^.ManagedFieldCount;
+{$else}
+begin
+  firstfield := @info^.ManagedFields[0];
+  result := info^.ManagedCount;
+{$endif FPC_NEWRTTI}
+end;
+
+// 42547 -----------------------------------------------------------------------
+
+function RecordSaveLength(const Rec; TypeInfo: pointer; Len: PInteger): integer;
+var info,fieldinfo: PTypeInfo;
+    F, recsize,saved: integer;
+    field: PFieldInfo;
+    R: PAnsiChar;
+begin
+  R := @Rec;
+  info := GetTypeInfo(TypeInfo,tkRecordKinds);
+  if (R=nil) or (info=nil) then begin
+    result := 0; // should have been checked before
+    exit;
+  end;
+  result := info^.recSize;
+  if Len<>nil then
+    Len^ := result;
+  for F := 1 to GetManagedFields(info,field) do begin
+    fieldinfo := DeRef(field^.TypeInfo);
+    {$ifdef FPC_OLDRTTI} // old FPC did include RTTI for unmanaged fields! :)
+    if not (fieldinfo^.Kind in tkManagedTypes) then begin
+      inc(field);
+      continue; // as with Delphi
+    end;
+    {$endif};
+    saved := ManagedTypeSaveLength(R+field^.Offset,fieldinfo,recsize);
+    if saved=0 then begin
+      result := 0; // invalid type
+      exit;
+    end;
+    inc(result,saved-recsize); // extract recsize from info^.recSize
+    inc(field);
+  end;
+end;
+
+function RecordSave(const Rec; Dest: PAnsiChar; TypeInfo: pointer;
+  out Len: integer): PAnsiChar;
+var info,fieldinfo: PTypeInfo;
+    F, offset: integer;
+    field: PFieldInfo;
+    R: PAnsiChar;
+begin
+  R := @Rec;
+  info := GetTypeInfo(TypeInfo,tkRecordKinds);
+  if (R=nil) or (info=nil) then begin
+    result := nil; // should have been checked before
+    exit;
+  end;
+  Len := info^.recSize;
+  offset := 0;
+  for F := 1 to GetManagedFields(info,field) do begin
+    {$ifdef HASDIRECTTYPEINFO} // inlined DeRef()
+    fieldinfo := field^.TypeInfo;
+    {$else}
+    {$ifdef CPUINTEL}
+    fieldinfo := PPointer(field^.TypeInfo)^;
+    {$else}
+    fieldinfo := DeRef(field^.TypeInfo);
+    {$endif}
+    {$endif}
+    {$ifdef FPC_OLDRTTI} // old FPC did include RTTI for unmanaged fields! :)
+    if not (fieldinfo^.Kind in tkManagedTypes) then begin
+      inc(field);
+      continue; // as with Delphi
+    end;
+    {$endif};
+    offset := integer(field^.Offset)-offset;
+    if offset>0 then begin
+      MoveFast(R^,Dest^,offset);
+      inc(R,offset);
+      inc(Dest,offset);
+    end;
+    Dest := ManagedTypeSave(R,Dest,fieldinfo,offset);
+    if Dest=nil then begin
+      result := nil; // invalid/unhandled record content
+      exit;
+    end;
+    inc(R,offset);
+    inc(offset,field.Offset);
+    inc(field);
+  end;
+  offset := integer(info^.recSize)-offset;
+  if offset<0 then
+    raise ESynException.Create('RecordSave offset<0') else
+  if offset<>0 then begin
+    MoveFast(R^,Dest^,offset);
+    result := Dest+offset;
+  end else
+    result := Dest;
+end;
+
+function RecordSave(const Rec; Dest: PAnsiChar; TypeInfo: pointer): PAnsiChar;
+var dummylen: integer;
+begin
+  result := RecordSave(Rec,Dest,TypeInfo,dummylen);
+end;
+
+function RecordSave(const Rec; TypeInfo: pointer): RawByteString;
+var destlen,dummylen: integer;
+    dest: PAnsiChar;
+begin
+  destlen := RecordSaveLength(Rec,TypeInfo);
+  SetString(result,nil,destlen);
+  if destlen<>0 then begin
+    dest := RecordSave(Rec,pointer(result),TypeInfo,dummylen);
+    if (dest=nil) or (dest-pointer(result)<>destlen) then // paranoid check
+      raise ESynException.CreateUTF8('RecordSave % len=%<>%',
+        [TypeInfoToShortString(TypeInfo)^,dest-pointer(result),destlen]);
+  end;
+end;
+
+function RecordSaveBytes(const Rec; TypeInfo: pointer): TBytes;
+var destlen,dummylen: integer;
+    dest: PAnsiChar;
+begin
+  destlen := RecordSaveLength(Rec,TypeInfo);
+  result := nil; // don't reallocate TBytes data from a previous call
+  SetLength(result,destlen);
+  if destlen<>0 then begin
+    dest := RecordSave(Rec,pointer(result),TypeInfo,dummylen);
+    if (dest=nil) or (dest-pointer(result)<>destlen) then // paranoid check
+      raise ESynException.CreateUTF8('RecordSave % len=%<>%',
+        [TypeInfoToShortString(TypeInfo)^,dest-pointer(result),destlen]);
+  end;
+end;
+
+procedure RecordSave(const Rec; var Dest: TSynTempBuffer; TypeInfo: pointer);
+var dummylen: integer;
+    P: PAnsiChar;
+begin
+  Dest.Init(RecordSaveLength(Rec,TypeInfo));
+  P := RecordSave(Rec,Dest.buf,TypeInfo,dummylen);
+  if (P=nil) or (P-Dest.buf<>Dest.len) then begin // paranoid check
+    Dest.Done;
+    raise ESynException.CreateUTF8('RecordSave TSynTempBuffer %',[TypeInfoToShortString(TypeInfo)^]);
+  end;
+end;
+
 // 43887 -----------------------------------------------------------------------
 
 function ManagedTypeSaveRTTIHash(info: PTypeInfo; var crc: cardinal): integer;
@@ -2547,7 +3279,8 @@ begin // info is expected to come from a DeRef() if retrieved from RTTI
     result := SizeOf(variant);
   {$endif}
   tkRecord{$ifdef FPC},tkObject{$endif}: // first search from custom RTTI text
-    if not GlobalJSONCustomParsers.RecordRTTITextHash(info,crc,result) then begin
+  //TODO: FIX!!!  if not GlobalJSONCustomParsers.RecordRTTITextHash(info,crc,result) then
+  begin
       itemtype := GetTypeInfo(info,tkRecordKinds);
       if itemtype<>nil then begin
         unmanagedsize := itemtype^.recsize;
@@ -2578,6 +3311,54 @@ begin // info is expected to come from a DeRef() if retrieved from RTTI
     crc := dynarray.SaveToTypeInfoHash(crc);
     result := SizeOf(pointer);
   end;
+  end;
+end;
+
+// 45685 -----------------------------------------------------------------------
+
+function VariantSaveLength(const Value: variant): integer;
+var tmp: TVarData;
+    v: TVarData absolute Value;
+begin // match VariantSave() storage
+  if v.VType and varByRef<>0 then
+    if v.VType=varVariant or varByRef then begin
+      result := VariantSaveLength(PVariant(v.VPointer)^);
+      exit;
+    end else
+    if SetVariantUnRefSimpleValue(Value,tmp) then begin
+      result := VariantSaveLength(variant(tmp));
+      exit;
+    end;
+  case v.VType of
+  varEmpty, varNull:
+    result := SizeOf(tmp.VType);
+  varShortInt, varByte:
+    result := SizeOf(tmp.VByte)+SizeOf(tmp.VType);
+  varSmallint, varWord, varBoolean:
+    result := SizeOf(tmp.VSmallint)+SizeOf(tmp.VType);
+  varSingle, varLongWord, varInteger:
+    result := SizeOf(tmp.VInteger)+SizeOf(tmp.VType);
+  varInt64, varWord64, varDouble, varDate, varCurrency:
+    result := SizeOf(tmp.VInt64)+SizeOf(tmp.VType);
+  varString, varOleStr:
+    if PtrUInt(v.VAny)=0 then
+      result := 1+SizeOf(tmp.VType) else
+      result := ToVarUInt32LengthWithData(
+        PStrLen(PtrUInt(v.VAny)-_STRLEN)^)+SizeOf(tmp.VType);
+  {$ifdef HASVARUSTRING}
+  varUString:
+    if PtrUInt(v.VAny)=0 then // stored length is in bytes, not (wide)chars
+      result := 1+SizeOf(tmp.VType) else
+      result := ToVarUInt32LengthWithData(
+        PStrLen(PtrUInt(v.VAny)-_STRLEN)^*2)+SizeOf(tmp.VType);
+  {$endif}
+  else
+    try // complex types will be stored as JSON
+// TODO: FIX result := ToVarUInt32LengthWithData(VariantSaveJSONLength(Value))+SizeOf(tmp.VType);
+    except
+      on Exception do
+        result := 0; // notify invalid/unhandled variant content
+    end;
   end;
 end;
 
