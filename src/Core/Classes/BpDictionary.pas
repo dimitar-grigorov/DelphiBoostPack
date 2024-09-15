@@ -71,7 +71,24 @@ type
   /// points to an unsigned Int64
   PQWord = ^QWord;
 
-//------------------------------------------------------------------------------
+// 276 -------------------------------------------------------------------------
+
+type
+  /// RawUnicode is an Unicode String stored in an AnsiString
+  // - faster than WideString, which are allocated in Global heap (for COM)
+  // - an AnsiChar(#0) is added at the end, for having a true WideChar(#0) at ending
+  // - length(RawUnicode) returns memory bytes count: use (length(RawUnicode) shr 1)
+  // for WideChar count (that's why the definition of this type since Delphi 2009
+  // is AnsiString(1200) and not UnicodeString)
+  // - pointer(RawUnicode) is compatible with Win32 'Wide' API call
+  // - mimic Delphi 2009 UnicodeString, without the WideString or Ansi conversion overhead
+  // - all conversion to/from AnsiString or RawUTF8 must be explicit: the
+  // compiler is not able to make valid implicit conversion on CP_UTF16
+  {$ifdef HASCODEPAGE}
+  RawUnicode = type AnsiString(CP_UTF16); // Codepage for an UnicodeString
+  {$else}
+  RawUnicode = type AnsiString;
+  {$endif}
 
   /// RawUTF8 is an UTF-8 String stored in an AnsiString
   // - use this type instead of System.UTF8String, which behavior changed
@@ -117,7 +134,7 @@ type
   // - could be any JSON content: number, string, object or array
   // - e.g. interface-based service will use it for efficient and AJAX-ready
   // transmission of TSQLTableJSON result
-//  RawJSON = type RawUTF8;
+  RawJSON = type RawUTF8;
 
   /// SynUnicode is the fastest available Unicode native string type, depending
   //  on the compiler used
@@ -135,7 +152,13 @@ type
   SynUnicode = WideString;
   {$endif HASVARUSTRING}  
 
-//------------------------------------------------------------------------------
+type
+  PRawUnicode = ^RawUnicode;
+  PRawJSON = ^RawJSON;
+  PRawUTF8 = ^RawUTF8;
+  PWinAnsiString = ^WinAnsiString;
+  PWinAnsiChar = type PAnsiChar;
+  PSynUnicode = ^SynUnicode;
 
   /// a simple wrapper to UTF-8 encoded zero-terminated PAnsiChar
   // - PAnsiChar is used only for Win-Ansi encoded text
@@ -144,7 +167,32 @@ type
   PUTF8Char = type PAnsiChar;
   PPUTF8Char = ^PUTF8Char;
 
-// 396 -------------------------------------------------------------------------
+  /// a Row/Col array of PUTF8Char, for containing sqlite3_get_table() result
+  TPUtf8CharArray = array[0..MaxInt div SizeOf(PUTF8Char)-1] of PUTF8Char;
+  PPUtf8CharArray = ^TPUtf8CharArray;
+
+  /// a dynamic array of PUTF8Char pointers
+  TPUTF8CharDynArray = array of PUTF8Char;
+
+  /// a dynamic array of UTF-8 encoded strings
+  TRawUTF8DynArray = array of RawUTF8;
+  PRawUTF8DynArray = ^TRawUTF8DynArray;
+  TRawUTF8DynArrayDynArray = array of TRawUTF8DynArray;
+
+  /// a dynamic array of TVarRec, i.e. could match an "array of const" parameter
+  TTVarRecDynArray = array of TVarRec;
+
+  {$ifndef NOVARIANTS}
+  /// a TVarData values array
+  // - is not called TVarDataArray to avoid confusion with the corresponding
+  // type already defined in Variants.pas, and used for custom late-binding
+  TVarDataStaticArray = array[0..MaxInt div SizeOf(TVarData)-1] of TVarData;
+  PVarDataStaticArray = ^TVarDataStaticArray;
+  TVariantArray = array[0..MaxInt div SizeOf(Variant)-1] of Variant;
+  PVariantArray = ^TVariantArray;
+  TVariantDynArray = array of variant;
+  PPVariant = ^PVariant;
+  {$endif}
 
   PIntegerDynArray = ^TIntegerDynArray;
   TIntegerDynArray = array of integer;
@@ -397,12 +445,84 @@ procedure FillIncreasing(Values: PIntegerArray; StartValue: integer; Count: PtrU
 /// convert a cardinal into a 32-bit variable-length integer buffer
 function ToVarUInt32(Value: cardinal; Dest: PByte): PByte;
 
+/// return the number of bytes necessary to store a 32-bit variable-length integer
+// - i.e. the ToVarUInt32() buffer size
+function ToVarUInt32Length(Value: PtrUInt): PtrUInt;
+  {$ifdef HASINLINE}inline;{$endif}
+
 // 4791 ------------------------------------------------------------------------
 
 /// return the number of bytes necessary to store some data with a its
 // 32-bit variable-length integer legnth
 function ToVarUInt32LengthWithData(Value: PtrUInt): PtrUInt;
   {$ifdef HASINLINE}inline;{$endif}
+
+// 4802 ------------------------------------------------------------------------
+
+/// convert a 32-bit variable-length integer buffer into a cardinal
+// - fast inlined process for any number < 128
+// - use overloaded FromVarUInt32() or FromVarUInt32Safe() with a SourceMax
+// pointer to avoid any potential buffer overflow
+function FromVarUInt32(var Source: PByte): cardinal; overload;
+  {$ifdef HASINLINE}inline;{$endif}
+
+/// safely convert a 32-bit variable-length integer buffer into a cardinal
+// - slower but safer process checking out of boundaries memory access in Source
+// - SourceMax is expected to be not nil, and to point to the first byte
+// just after the Source memory buffer
+// - returns nil on error, or point to next input data on successful decoding
+function FromVarUInt32Safe(Source, SourceMax: PByte; out Value: cardinal): PByte;
+
+/// convert a 32-bit variable-length integer buffer into a cardinal
+// - will call FromVarUInt32() if SourceMax=nil, or FromVarUInt32Safe() if set
+// - returns false on error, true if Value has been set properly
+function FromVarUInt32(var Source: PByte; SourceMax: PByte; out Value: cardinal): boolean; overload;
+  {$ifdef HASINLINE}inline;{$endif}
+
+// 4827 ------------------------------------------------------------------------
+
+/// convert a 32-bit variable-length integer buffer into a cardinal
+// - used e.g. when inlining FromVarUInt32()
+// - this version must be called if Source^ has already been checked to be > $7f
+// ! result := Source^;
+// ! inc(Source);
+// ! if result>$7f then
+// !   result := (result and $7F) or FromVarUInt32Up128(Source);
+function FromVarUInt32Up128(var Source: PByte): cardinal;
+
+// 4883 ------------------------------------------------------------------------
+
+/// retrieve a variable-length UTF-8 encoded text buffer in a newly allocation RawUTF8
+function FromVarString(var Source: PByte): RawUTF8; overload;
+
+/// safe retrieve a variable-length UTF-8 encoded text buffer in a newly allocation RawUTF8
+// - supplied SourceMax value will avoid any potential buffer overflow
+function FromVarString(var Source: PByte; SourceMax: PByte): RawUTF8; overload;
+
+/// retrieve a variable-length text buffer
+// - this overloaded function will set the supplied code page to the AnsiString
+procedure FromVarString(var Source: PByte; var Value: RawByteString;
+  CodePage: integer); overload;
+
+/// retrieve a variable-length text buffer
+// - this overloaded function will set the supplied code page to the AnsiString
+// and will also check for the SourceMax end of buffer
+// - returns TRUE on success, or FALSE on any buffer overload detection
+function FromVarString(var Source: PByte; SourceMax: PByte;
+  var Value: RawByteString; CodePage: integer): boolean; overload;
+
+/// retrieve a variable-length UTF-8 encoded text buffer in a temporary buffer
+// - caller should call Value.Done after use of the Value.buf memory
+// - this overloaded function would include a trailing #0, so Value.buf could
+// be parsed as a valid PUTF8Char buffer (e.g. containing JSON)
+procedure FromVarString(var Source: PByte; var Value: TSynTempBuffer); overload;
+
+/// retrieve a variable-length UTF-8 encoded text buffer in a temporary buffer
+// - caller should call Value.Done after use of the Value.buf memory
+// - this overloaded function will also check for the SourceMax end of buffer,
+// returning TRUE on success, or FALSE on any buffer overload detection
+function FromVarString(var Source: PByte; SourceMax: PByte;
+  var Value: TSynTempBuffer): boolean; overload;
 
 // 4930 ------------------------------------------------------------------------
 type
@@ -522,6 +642,85 @@ const
   /// cross-compiler negative offset to TDynArrayRec.refCnt field
   // - to be used inlined e.g. as PDACnt(PtrUInt(Values)-_DAREFCNT)^
   _DAREFCNT = Sizeof(TDACnt)+_DALEN;
+
+// 5129 ------------------------------------------------------------------------
+
+type
+  /// possible options for a TDocVariant JSON/BSON document storage
+  // - dvoIsArray and dvoIsObject will store the "Kind: TDocVariantKind" state -
+  // you should never have to define these two options directly
+  // - dvoNameCaseSensitive will be used for every name lookup - here
+  // case-insensitivity is restricted to a-z A-Z 0-9 and _ characters
+  // - dvoCheckForDuplicatedNames will be used for method
+  // TDocVariantData.AddValue(), but not when setting properties at
+  // variant level: for consistency, "aVariant.AB := aValue" will replace
+  // any previous value for the name "AB"
+  // - dvoReturnNullForUnknownProperty will be used when retrieving any value
+  // from its name (for dvObject kind of instance), or index (for dvArray or
+  // dvObject kind of instance)
+  // - by default, internal values will be copied by-value from one variant
+  // instance to another, to ensure proper safety - but it may be too slow:
+  // if you set dvoValueCopiedByReference, the internal
+  // TDocVariantData.VValue/VName instances will be copied by-reference,
+  // to avoid memory allocations, BUT it may break internal process if you change
+  // some values in place (since VValue/VName and VCount won't match) - as such,
+  // if you set this option, ensure that you use the content as read-only
+  // - any registered custom types may have an extended JSON syntax (e.g.
+  // TBSONVariant does for MongoDB types), and will be searched during JSON
+  // parsing, unless dvoJSONParseDoNotTryCustomVariants is set (slightly faster)
+  // - by default, it will only handle direct JSON [array] of {object}: but if
+  // you define dvoJSONObjectParseWithinString, it will also try to un-escape
+  // a JSON string first, i.e. handle "[array]" or "{object}" content (may be
+  // used e.g. when JSON has been retrieved from a database TEXT column) - is
+  // used for instance by VariantLoadJSON()
+  // - JSON serialization will follow the standard layout, unless
+  // dvoSerializeAsExtendedJson is set so that the property names would not
+  // be escaped with double quotes, writing '{name:"John",age:123}' instead of
+  // '{"name":"John","age":123}': this extended json layout is compatible with
+  // http://docs.mongodb.org/manual/reference/mongodb-extended-json and with
+  // TDocVariant JSON unserialization, also our SynCrossPlatformJSON unit, but
+  // NOT recognized by most JSON clients, like AJAX/JavaScript or C#/Java
+  // - by default, only integer/Int64/currency number values are allowed, unless
+  // dvoAllowDoubleValue is set and 32-bit floating-point conversion is tried,
+  // with potential loss of precision during the conversion
+  // - dvoInternNames and dvoInternValues will use shared TRawUTF8Interning
+  // instances to maintain a list of RawUTF8 names/values for all TDocVariant,
+  // so that redundant text content will be allocated only once on heap
+  TDocVariantOption =
+    (dvoIsArray, dvoIsObject,
+     dvoNameCaseSensitive, dvoCheckForDuplicatedNames,
+     dvoReturnNullForUnknownProperty,
+     dvoValueCopiedByReference, dvoJSONParseDoNotTryCustomVariants,
+     dvoJSONObjectParseWithinString, dvoSerializeAsExtendedJson,
+     dvoAllowDoubleValue, dvoInternNames, dvoInternValues);
+
+  /// set of options for a TDocVariant storage
+  // - you can use JSON_OPTIONS[true] if you want to create a fast by-reference
+  // local document as with _ObjFast/_ArrFast/_JsonFast - i.e.
+  // [dvoReturnNullForUnknownProperty,dvoValueCopiedByReference]
+  // - when specifying the options, you should not include dvoIsArray nor
+  // dvoIsObject directly in the set, but explicitly define TDocVariantDataKind
+  TDocVariantOptions = set of TDocVariantOption;
+
+  /// pointer to a set of options for a TDocVariant storage
+  // - you may use e.g. @JSON_OPTIONS[true], @JSON_OPTIONS[false],
+  // @JSON_OPTIONS_FAST_STRICTJSON or @JSON_OPTIONS_FAST_EXTENDED
+  PDocVariantOptions = ^TDocVariantOptions;
+
+const
+  /// some convenient TDocVariant options, as JSON_OPTIONS[CopiedByReference]
+  // - JSON_OPTIONS[false] is e.g. _Json() and _JsonFmt() functions default
+  // - JSON_OPTIONS[true] are used e.g. by _JsonFast() and _JsonFastFmt() functions
+  // - warning: exclude dvoAllowDoubleValue so won't parse any float, just currency
+  JSON_OPTIONS: array[Boolean] of TDocVariantOptions = (
+    [dvoReturnNullForUnknownProperty],
+    [dvoReturnNullForUnknownProperty,dvoValueCopiedByReference]);  
+
+// 5274 ------------------------------------------------------------------------
+
+const
+  /// TDynArrayKind alias for a pointer field hashing / comparison
+  djPointer = {$ifdef CPU64}djInt64{$else}djCardinal{$endif};
 
 // 5299 ------------------------------------------------------------------------
 
@@ -1649,6 +1848,16 @@ type
     property Safe: PSynLocker read fSafe;
   end;
 
+// 7210 ------------------------------------------------------------------------
+
+/// retrieve the type name from its low-level RTTI
+function TypeInfoToName(aTypeInfo: pointer): RawUTF8; overload;
+  {$ifdef HASINLINE}inline;{$endif}
+
+/// retrieve the type name from its low-level RTTI
+procedure TypeInfoToName(aTypeInfo: pointer; var result: RawUTF8;
+  const default: RawUTF8=''); overload;
+
 // 7343 ------------------------------------------------------------------------
 
 /// fill some memory buffer with random values
@@ -1727,11 +1936,167 @@ procedure RecordSave(const Rec; var Dest: TSynTempBuffer; TypeInfo: pointer); ov
 // - optional Len parameter will contain the Rec memory buffer length, in bytes
 function RecordSaveLength(const Rec; TypeInfo: pointer; Len: PInteger=nil): integer;
 
+// 7489 ------------------------------------------------------------------------
+
+/// fill a record content from a memory buffer as saved by RecordSave()
+// - return nil if the Source buffer is incorrect
+// - in case of success, return the memory buffer pointer just after the
+// read content, and set the Rec size, in bytes, into Len reference variable
+// - will use a proprietary binary format, with some variable-length encoding
+// of the string length - note that if you change the type definition, any
+// previously-serialized content will fail, maybe triggering unexpected GPF: you
+// may use TypeInfoToHash() if you share this binary data accross executables
+// - you can optionally provide in SourceMax the first byte after the input
+// memory buffer, which will be used to avoid any unexpected buffer overflow -
+// would be mandatory when decoding the content from any external process
+// (e.g. a maybe-forged client) - only with slightly performance penalty
+function RecordLoad(var Rec; Source: PAnsiChar; TypeInfo: pointer;
+  Len: PInteger=nil; SourceMax: PAnsiChar=nil): PAnsiChar; overload;
+
+/// fill a record content from a memory buffer as saved by RecordSave()
+// - will use the Source length to detect and avoid any buffer overlow
+// - returns false if the Source buffer was incorrect, true on success
+function RecordLoad(var Res; const Source: RawByteString; TypeInfo: pointer): boolean; overload;
+
 // 7541 ------------------------------------------------------------------------
 
 /// clear a record content
 // - this unit includes a fast optimized asm version for x86 on Delphi
 procedure RecordClear(var Dest; TypeInfo: pointer); {$ifdef FPC}inline;{$endif}
+
+// 8029 ------------------------------------------------------------------------
+
+type
+  /// the kind of variables handled by TJSONCustomParser
+  // - the last item should be ptCustom, for non simple types
+  TJSONCustomParserRTTIType = (
+    ptArray, ptBoolean, ptByte, ptCardinal, ptCurrency, ptDouble, ptExtended,
+    ptInt64, ptInteger, ptQWord, ptRawByteString, ptRawJSON, ptRawUTF8, ptRecord,
+    ptSingle, ptString, ptSynUnicode, ptDateTime, ptDateTimeMS, ptGUID,
+    ptID, ptTimeLog, {$ifdef HASVARUSTRING} ptUnicodeString, {$endif}
+    {$ifndef NOVARIANTS} ptVariant, {$endif} ptWideString, ptWord, ptCustom);
+
+  /// how TJSONCustomParser would serialize/unserialize JSON content
+  TJSONCustomParserSerializationOption = (
+    soReadIgnoreUnknownFields, soWriteHumanReadable,
+    soCustomVariantCopiedByReference, soWriteIgnoreDefault);
+
+  /// how TJSONCustomParser would serialize/unserialize JSON content
+  // - by default, during reading any unexpected field will stop and fail the
+  // process - if soReadIgnoreUnknownFields is defined, such properties will
+  // be ignored (can be very handy when parsing JSON from a remote service)
+  // - by default, JSON content will be written in its compact standard form,
+  // ready to be parsed by any client - you can specify soWriteHumanReadable
+  // so that some line feeds and indentation will make the content more readable
+  // - by default, internal TDocVariant variants will be copied by-value from
+  // one instance to another, to ensure proper safety - but it may be too slow:
+  // if you set soCustomVariantCopiedByReference, any internal
+  // TDocVariantData.VValue/VName instances will be copied by-reference,
+  // to avoid memory allocations, BUT it may break internal process if you change
+  // some values in place (since VValue/VName and VCount won't match) - as such,
+  // if you set this option, ensure that you use the content as read-only
+  // - by default, all fields are persistented, unless soWriteIgnoreDefault is
+  // defined and void values (e.g. "" or 0) won't be written
+  // - you may use TTextWriter.RegisterCustomJSONSerializerSetOptions() class
+  // method to customize the serialization for a given type
+  TJSONCustomParserSerializationOptions = set of TJSONCustomParserSerializationOption;
+
+  TJSONCustomParserRTTI = class;
+
+  /// an array of RTTI properties information
+  // - we use dynamic arrays, since all the information is static and we
+  // do not need to remove any RTTI information
+  TJSONCustomParserRTTIs = array of TJSONCustomParserRTTI;
+
+  /// used to store additional RTTI in TJSONCustomParser internal structures
+  TJSONCustomParserRTTI = class
+  protected
+    fPropertyName: RawUTF8;
+    fFullPropertyName: RawUTF8;
+    fPropertyType: TJSONCustomParserRTTIType;
+    fCustomTypeName: RawUTF8;
+    fNestedProperty: TJSONCustomParserRTTIs;
+    fDataSize: integer;
+    fNestedDataSize: integer;
+    procedure ComputeDataSizeAfterAdd; virtual;
+    procedure ComputeNestedDataSize;
+    procedure ComputeFullPropertyName;
+    procedure FinalizeNestedRecord(var Data: PByte);
+    procedure FinalizeNestedArray(var Data: PtrUInt);
+    procedure AllocateNestedArray(var Data: PtrUInt; NewLength: integer);
+    procedure ReAllocateNestedArray(var Data: PtrUInt; NewLength: integer);
+    function IfDefaultSkipped(var Value: PByte): boolean;
+// TODO: FIX  procedure WriteOneSimpleValue(aWriter: TTextWriter; var Value: PByte;
+//      Options: TJSONCustomParserSerializationOptions);
+  public
+    /// initialize the instance
+    constructor Create(const aPropertyName: RawUTF8;
+      aPropertyType: TJSONCustomParserRTTIType);
+    /// initialize an instance from the RTTI type information
+    // - will return an instance of this class of any inherited class
+    class function CreateFromRTTI(const PropertyName: RawUTF8;
+      Info: pointer; ItemSize: integer): TJSONCustomParserRTTI;
+    /// create an instance from a specified type name
+    // - will return an instance of this class of any inherited class
+    class function CreateFromTypeName(const aPropertyName,
+      aCustomRecordTypeName: RawUTF8): TJSONCustomParserRTTI;
+    /// recognize a simple type from a supplied type name
+    // - will return ptCustom for any unknown type
+    // - see also TypeInfoToRttiType() function
+    class function TypeNameToSimpleRTTIType(
+      const TypeName: RawUTF8): TJSONCustomParserRTTIType; overload;
+    /// recognize a simple type from a supplied type name
+    // - will return ptCustom for any unknown type
+    // - see also TypeInfoToRttiType() function
+    class function TypeNameToSimpleRTTIType(
+      TypeName: PShortString): TJSONCustomParserRTTIType; overload;
+    /// recognize a simple type from a supplied type name
+    // - will return ptCustom for any unknown type
+    // - see also TypeInfoToRttiType() function
+    class function TypeNameToSimpleRTTIType(TypeName: PUTF8Char; TypeNameLen: PtrInt;
+      ItemTypeName: PRawUTF8): TJSONCustomParserRTTIType; overload;
+    /// recognize a simple type from a supplied type information
+    // - to be called if TypeNameToSimpleRTTIType() did fail, i.e. return ptCustom
+    // - will return ptCustom for any complex type (e.g. a record)
+    // - see also TypeInfoToRttiType() function
+    class function TypeInfoToSimpleRTTIType(Info: pointer): TJSONCustomParserRTTIType;
+    /// recognize a ktBinary simple type from a supplied type name
+    // - as registered by TTextWriter.RegisterCustomJSONSerializerFromTextBinaryType
+    class function TypeNameToSimpleBinary(const aTypeName: RawUTF8;
+      out aDataSize, aFieldSize: integer): boolean;
+    /// unserialize some JSON content into its binary internal representation
+    // - on error, returns false and P should point to the faulty text input
+//    function ReadOneLevel(var P: PUTF8Char; var Data: PByte;
+//      Options: TJSONCustomParserSerializationOptions{$ifndef NOVARIANTS};
+//      CustomVariantOptions: PDocVariantOptions{$endif}): boolean; virtual;
+    /// serialize a binary internal representation into JSON content
+    // - this method won't append a trailing ',' character
+//    procedure WriteOneLevel(aWriter: TTextWriter; var P: PByte;
+//     Options: TJSONCustomParserSerializationOptions); virtual;
+    /// the associated type name, e.g. for a record
+    property CustomTypeName: RawUTF8 read fCustomTypeName;
+    /// the property name
+    // - may be void for the Root element
+    // - e.g. 'SubProp'
+    property PropertyName: RawUTF8 read fPropertyName;
+    /// the property name, including all parent elements
+    // - may be void for the Root element
+    // - e.g. 'MainProp.SubProp'
+    property FullPropertyName: RawUTF8 read fFullPropertyName;
+    /// the property type
+    // - support only a limited set of simple types, or ptRecord for a nested
+    // record, or ptArray for a nested array
+    property PropertyType: TJSONCustomParserRTTIType read fPropertyType;
+    /// the nested array of properties (if any)
+    // - assigned only if PropertyType is [ptRecord,ptArray]
+    // - is either the record type of each ptArray item:
+    // ! SubProp: array of record ...
+    // - or one NestedProperty[0] entry with PropertyName='' and PropertyType
+    // not in [ptRecord,ptArray]:
+    // ! SubPropNumber: array of integer;
+    // ! SubPropText: array of RawUTF8;
+    property NestedProperty: TJSONCustomParserRTTIs read fNestedProperty;
+  end;
 
 // 9856 ------------------------------------------------------------------------
 
@@ -2177,6 +2542,30 @@ type
   {$M-}
   ESynExceptionClass = class of ESynException;
 
+// 11706
+
+// our custom efficient 32-bit hash/checksum function
+// - a Fletcher-like checksum algorithm, not a hash function: has less colisions
+// than Adler32 for short strings, but more than xxhash32 or crc32/crc32c
+// - written in simple plain pascal, with no L1 CPU cache pollution, but we
+// also provide optimized x86/x64 assembly versions, since the algorithm is used
+// heavily e.g. for TDynArray binary serialization, TSQLRestStorageInMemory
+// binary persistence, or CompressSynLZ/StreamSynLZ/FileSynLZ
+// - some numbers on Linux x86_64:
+// $ 2500 hash32 in 707us i.e. 3536067/s or 7.3 GB/s
+// $ 2500 xxhash32 in 1.34ms i.e. 1861504/s or 3.8 GB/s
+// $ 2500 crc32c in 943us i.e. 2651113/s or 5.5 GB/s  (SSE4.2 disabled)
+// $ 2500 crc32c in 387us i.e. 6459948/s or 13.4 GB/s (SSE4.2 enabled)
+function Hash32(Data: PCardinalArray; Len: integer): cardinal; overload;
+
+// our custom efficient 32-bit hash/checksum function
+// - a Fletcher-like checksum algorithm, not a hash function: has less colisions
+// than Adler32 for short strings, but more than xxhash32 or crc32/crc32c
+// - overloaded function using RawByteString for binary content hashing,
+// whatever the codepage is
+function Hash32(const Text: RawByteString): cardinal; overload;
+  {$ifdef HASINLINE}inline;{$endif}
+
 // 12169 -----------------------------------------------------------------------
 
 var
@@ -2187,6 +2576,36 @@ var
   // - you should use this function instead of crc32cfast() or crc32csse42()
   crc32c: THasher;
 
+// 12422 -----------------------------------------------------------------------
+
+type
+  /// a type alias, which will be serialized as ISO-8601 with milliseconds
+  // - i.e. 'YYYY-MM-DD hh:mm:ss.sss' or 'YYYYMMDD hhmmss.sss' format
+  TDateTimeMS = type TDateTime;
+
+  /// a dynamic array of TDateTimeMS values
+  TDateTimeMSDynArray = array of TDateTimeMS;
+  PDateTimeMSDynArray = ^TDateTimeMSDynArray;
+
+// 12563 -----------------------------------------------------------------------
+
+  /// fast bit-encoded date and time value
+  // - faster than Iso-8601 text and TDateTime, e.g. can be used as published
+  // property field in mORMot's TSQLRecord (see also TModTime and TCreateTime)
+  // - use internally for computation an abstract "year" of 16 months of 32 days
+  // of 32 hours of 64 minutes of 64 seconds - same as Iso8601ToTimeLog()
+  // - use TimeLogFromDateTime/TimeLogToDateTime/TimeLogNow functions, or
+  // type-cast any TTimeLog value with the TTimeLogBits memory structure for
+  // direct access to its bit-oriented content (or via PTimeLogBits pointer)
+  // - since TTimeLog type is bit-oriented, you can't just add or substract two
+  // TTimeLog values when doing date/time computation: use a TDateTime temporary
+  // conversion in such case:
+  // ! aTimestamp := TimeLogFromDateTime(IncDay(TimeLogToDateTime(aTimestamp)));
+  TTimeLog = type Int64;
+
+  /// dynamic array of TTimeLog
+  // - used by TDynArray JSON serialization to handle textual serialization
+  TTimeLogDynArray = array of TTimeLog;
 
 // 13859 -----------------------------------------------------------------------
 
@@ -2231,6 +2650,51 @@ function VariantSave(const Value: variant; Dest: PAnsiChar): PAnsiChar; overload
 // itself: using this function between UNICODE and NOT UNICODE
 // versions of Delphi, will propably fail - you have been warned!
 function VariantSave(const Value: variant): RawByteString; overload;
+
+/// retrieve a variant value from our optimized binary serialization format
+// - follow the data layout as used by RecordLoad() or VariantSave() function
+// - return nil if the Source buffer is incorrect
+// - in case of success, return the memory buffer pointer just after the
+// read content
+// - how custom type variants are created can be defined via CustomVariantOptions
+function VariantLoad(var Value: variant; Source: PAnsiChar;
+  CustomVariantOptions: PDocVariantOptions; SourceMax: PAnsiChar=nil): PAnsiChar; overload;
+
+/// retrieve a variant value from our optimized binary serialization format
+// - follow the data layout as used by RecordLoad() or VariantSave() function
+// - return varEmpty if the Source buffer is incorrect
+// - just a wrapper around VariantLoad()
+// - how custom type variants are created can be defined via CustomVariantOptions
+function VariantLoad(const Bin: RawByteString;
+  CustomVariantOptions: PDocVariantOptions): variant; overload;
+
+// 15471 -----------------------------------------------------------------------
+
+/// direct access to a TDocVariantData from a given variant instance
+// - return a pointer to the TDocVariantData corresponding to the variant
+// instance, which may be of kind varByRef (e.g. when retrieved by late binding)
+// - will return a read-only fake TDocVariantData with Kind=dvUndefined if the
+// supplied variant is not a TDocVariant instance, so could be safely used
+// in a with block (use "with" moderation, of course):
+// ! with _Safe(aDocVariant)^ do
+// !   for ndx := 0 to Count-1 do // here Count=0 for the "fake" result
+// !     writeln(Names[ndx]);
+// or excluding the "with" statement, as more readable code:
+// ! var dv: PDocVariantData;
+// !     ndx: PtrInt;
+// ! begin
+// !   dv := _Safe(aDocVariant);
+// !   for ndx := 0 to dv.Count-1 do // here Count=0 for the "fake" result
+// !     writeln(dv.Names[ndx]);
+function _Safe(const DocVariant: variant): PDocVariantData; overload;
+  {$ifdef FPC}inline;{$endif} // Delphi has problems inlining this :(
+
+/// direct access to a TDocVariantData from a given variant instance
+// - return a pointer to the TDocVariantData corresponding to the variant
+// instance, which may be of kind varByRef (e.g. when retrieved by late binding)
+// - will check the supplied document kind, i.e. either dvObject or dvArray and
+// raise a EDocVariant exception if it does not match
+function _Safe(const DocVariant: variant; ExpectedKind: TDocVariantKind): PDocVariantData; overload;
 
 // 16947  
 implementation
@@ -2698,13 +3162,29 @@ asm
 end;
 {$endif HASINLINE}
 
-// 21470 -----------------------------------------------------------------------
+// 21461 -----------------------------------------------------------------------
+
+procedure TypeInfoToName(aTypeInfo: pointer; var result: RawUTF8;
+  const default: RawUTF8);
+begin
+  if aTypeInfo<>nil then
+    FastSetString(result,PAnsiChar(@PTypeInfo(aTypeInfo)^.NameLen)+1,
+      PTypeInfo(aTypeInfo)^.NameLen) else
+    result := default;
+end;
 
 function TypeInfoToShortString(aTypeInfo: pointer): PShortString;
 begin
   if aTypeInfo<>nil then
     result := @PTypeInfo(aTypeInfo)^.NameLen else
     result := nil;
+end;
+
+// 21492 -----------------------------------------------------------------------
+
+function TypeInfoToName(aTypeInfo: pointer): RawUTF8;
+begin
+  TypeInfoToName(aTypeInfo,Result,'');
 end;
 
 // 21971 -----------------------------------------------------------------------
@@ -2817,7 +3297,176 @@ begin
       end;
 end;
 
-// 41477 -----------------------------------------------------------------------
+// 35619
+
+function Hash32(const Text: RawByteString): cardinal;
+begin
+  result := Hash32(pointer(Text),length(Text));
+end;
+
+function Hash32(Data: PCardinalArray; Len: integer): cardinal;
+{$ifdef CPUX64} {$ifdef FPC}nostackframe; assembler;
+asm {$else} asm .noframe {$endif} // rcx/rdi=Data edx/esi=Len
+        xor     eax, eax
+        xor     r9d, r9d
+        test    Data, Data
+        jz      @z
+        {$ifdef win64}
+        mov     r8, rdx
+        shr     r8, 4
+        {$else}
+        mov     edx, esi
+        shr     esi, 4
+        {$endif}
+        jz      @by4
+        {$ifdef FPC} align 16 {$else} .align 16 {$endif}
+@by16:  add     eax, dword ptr[Data]
+        add     r9d, eax
+        add     eax, dword ptr[Data+4]
+        add     r9d, eax
+        add     eax, dword ptr[Data+8]
+        add     r9d, eax
+        add     eax, dword ptr[Data+12]
+        add     r9d, eax
+        add     Data, 16
+        {$ifdef win64}
+        dec     r8d
+        {$else}
+        dec     esi
+        {$endif}
+        jnz     @by16
+@by4:   mov     dh, dl
+        and     dl, 15
+        jz      @0
+        shr     dl, 2
+        jz      @rem
+@4:     add     eax, dword ptr[Data]
+        add     r9d, eax
+        add     Data, 4
+        dec     dl
+        jnz     @4
+@rem:   and     dh, 3
+        jz      @0
+        dec     dh
+        jz      @1
+        dec     dh
+        jz      @2
+        mov     ecx, dword ptr[Data]
+        and     ecx, $ffffff
+        jmp     @e
+@2:     movzx   ecx, word ptr[Data]
+        jmp     @e
+@1:     movzx   ecx, byte ptr[Data]
+@e:     add     eax, ecx
+@0:     add     r9d, eax
+        shl     r9d, 16
+        xor     eax, r9d
+@z:
+end;
+{$else}
+{$ifdef PUREPASCAL}
+var s1,s2: cardinal;
+    i: integer;
+begin
+  if Data<>nil then begin
+    s1 := 0;
+    s2 := 0;
+    for i := 1 to Len shr 4 do begin // 16 bytes (128-bit) loop - aligned read
+      inc(s1,Data[0]);
+      inc(s2,s1);
+      inc(s1,Data[1]);
+      inc(s2,s1);
+      inc(s1,Data[2]);
+      inc(s2,s1);
+      inc(s1,Data[3]);
+      inc(s2,s1);
+      Data := @Data[4];
+    end;
+    for i := 1 to (Len shr 2)and 3 do begin // 4 bytes (DWORD) by loop
+      inc(s1,Data[0]);
+      inc(s2,s1);
+      Data := @Data[1];
+    end;
+    case Len and 3 of // remaining 0..3 bytes
+    1: inc(s1,PByte(Data)^);
+    2: inc(s1,PWord(Data)^);
+    3: inc(s1,PWord(Data)^ or (PByteArray(Data)^[2] shl 16));
+    end;
+    inc(s2,s1);
+    result := s1 xor (s2 shl 16);
+  end else
+    result := 0;
+end;
+{$else} {$ifdef FPC} nostackframe; assembler; {$endif}
+asm  // eax=Data edx=Len
+        push    esi
+        push    edi
+        mov     cl, dl
+        mov     ch, dl
+        xor     esi, esi
+        xor     edi, edi
+        test    eax, eax
+        jz      @z
+        shr     edx, 4
+        jz      @by4
+        nop  
+@by16:  add     esi, dword ptr[eax]
+        add     edi, esi
+        add     esi, dword ptr[eax+4]
+        add     edi, esi
+        add     esi, dword ptr[eax+8]
+        add     edi, esi
+        add     esi, dword ptr[eax+12]
+        add     edi, esi
+        add     eax, 16
+        dec     edx
+        jnz     @by16
+@by4:   and     cl, 15
+        jz      @0
+        shr     cl, 2
+        jz      @rem
+@4:     add     esi, dword ptr[eax]
+        add     edi, esi
+        add     eax, 4
+        dec     cl
+        jnz     @4
+@rem:   and     ch, 3
+        jz      @0
+        dec     ch
+        jz      @1
+        dec     ch
+        jz      @2
+        mov     eax, dword ptr[eax]
+        and     eax, $ffffff
+        jmp     @e
+@2:     movzx   eax, word ptr[eax]
+        jmp     @e
+@1:     movzx   eax, byte ptr[eax]
+@e:     add     esi, eax
+@0:     add     edi, esi
+        mov     eax, esi
+        shl     edi, 16
+        xor     eax, edi
+@z:     pop     edi
+        pop     esi
+end;
+{$endif PUREPASCAL}
+{$endif CPUX64}
+
+// 41464 -----------------------------------------------------------------------
+
+function ToVarUInt32Length(Value: PtrUInt): PtrUInt;
+begin
+  if Value<=$7f then
+    result := 1 else
+  if Value<$80 shl 7 then
+    result := 2 else
+  if Value<$80 shl 14 then
+    result := 3 else
+  if Value <$80 shl 21 then
+    result := 4 else
+    result := 5;
+end;
 
 function ToVarUInt32LengthWithData(Value: PtrUInt): PtrUInt;
 begin
@@ -2830,6 +3479,208 @@ begin
   if Value<$80 shl 21 then
     result := Value+4 else
     result := Value+5;
+end;
+
+{$ifdef HASINLINE}
+function FromVarUInt32(var Source: PByte): cardinal;
+begin
+  result := Source^;
+  inc(Source);
+  if result>$7f then
+    result := (result and $7F) or FromVarUInt32Up128(Source);
+end;
+
+function FromVarUInt32Big(var Source: PByte): cardinal;
+{$else}
+function FromVarUInt32Big(var Source: PByte): cardinal;
+asm
+     jmp    FromVarUInt32
+end;
+
+function FromVarUInt32(var Source: PByte): cardinal;
+{$endif}
+var c: cardinal;
+    p: PByte;
+begin
+  p := Source;
+  result := p^;
+  inc(p);
+  if result>$7f then begin // Values between 128 and 16256
+    c := p^;
+    c := c shl 7;
+    result := result and $7F or c;
+    inc(p);
+    if c>$7f shl 7 then begin // Values between 16257 and 2080768
+      c := p^;
+      c := c shl 14;
+      inc(p);
+      result := result and $3FFF or c;
+      if c>$7f shl 14 then begin // Values between 2080769 and 266338304
+        c := p^;
+        c := c shl 21;
+        inc(p);
+        result := result and $1FFFFF or c;
+        if c>$7f shl 21 then begin
+          c := p^;
+          c := c shl 28;
+          inc(p);
+          result := result and $FFFFFFF or c;
+        end;
+      end;
+    end;
+  end;
+  Source := p;
+end;
+
+function FromVarUInt32Up128(var Source: PByte): cardinal;
+var c: cardinal;
+    p: PByte;
+begin // Values above 128
+  p := Source;
+  result := p^ shl 7;
+  inc(p);
+  if result>$7f shl 7 then begin // Values above 16257
+    c := p^;
+    c := c shl 14;
+    inc(p);
+    result := result and $3FFF or c;
+    if c>$7f shl 14 then begin
+      c := p^;
+      c := c shl 21;
+      inc(p);
+      result := result and $1FFFFF or c;
+      if c>$7f shl 21 then begin
+        c := p^;
+        c := c shl 28;
+        inc(p);
+        result := result and $FFFFFFF or c;
+      end;
+    end;
+  end;
+  Source := p;
+end;
+
+function FromVarUInt32(var Source: PByte; SourceMax: PByte; out Value: cardinal): boolean;
+begin
+  if SourceMax=nil then begin
+    Value := FromVarUInt32(Source);
+    result := true;
+  end else begin
+    Source := FromVarUInt32Safe(Source,SourceMax,Value);
+    result := Source<>nil;
+  end;
+end;
+
+function FromVarUInt32Safe(Source, SourceMax: PByte; out Value: cardinal): PByte;
+var c: cardinal;
+begin
+  result := nil; // error
+  if PAnsiChar(Source)>=PAnsiChar(SourceMax) then exit;
+  c := Source^;
+  inc(Source);
+  Value := c;
+  if c>$7f then begin // Values between 128 and 16256
+    if PAnsiChar(Source)>=PAnsiChar(SourceMax) then exit;
+    c := Source^;
+    c := c shl 7;
+    Value := Value and $7F or c;
+    inc(Source);
+    if c>$7f shl 7 then begin // Values between 16257 and 2080768
+      if PAnsiChar(Source)>=PAnsiChar(SourceMax) then exit;
+      c := Source^;
+      c := c shl 14;
+      inc(Source);
+      Value := Value and $3FFF or c;
+      if c>$7f shl 14 then begin // Values between 2080769 and 266338304
+        if PAnsiChar(Source)>=PAnsiChar(SourceMax) then exit;
+        c := Source^;
+        c := c shl 21;
+        inc(Source);
+        Value := Value and $1FFFFF or c;
+        if c>$7f shl 21 then begin
+          if PAnsiChar(Source)>=PAnsiChar(SourceMax) then exit;
+          c := Source^;
+          c := c shl 28;
+          inc(Source);
+          Value := Value and $FFFFFFF or c;
+        end;
+      end;
+    end;
+  end;
+  result := Source; // safely decoded
+end;
+
+// 41927 -----------------------------------------------------------------------
+
+function FromVarString(var Source: PByte): RawUTF8;
+var len: PtrUInt;
+begin
+  len := FromVarUInt32(Source);
+  FastSetStringCP(Result,Source,len,CP_UTF8);
+  inc(Source,len);
+end;
+
+function FromVarString(var Source: PByte; SourceMax: PByte): RawUTF8;
+var len: cardinal;
+begin
+  Source := FromVarUInt32Safe(Source,SourceMax,len);
+  if (Source=nil) or (PAnsiChar(Source)+len>PAnsiChar(SourceMax)) then
+    len := 0;
+  FastSetStringCP(Result,Source,len,CP_UTF8);
+  inc(Source,len);
+end;
+
+procedure FromVarString(var Source: PByte; var Value: TSynTempBuffer);
+var len: integer;
+begin
+  len := FromVarUInt32(Source);
+  Value.Init(Source,len);
+  PByteArray(Value.buf)[len] := 0; // include trailing #0
+  inc(Source,len);
+end;
+
+function FromVarString(var Source: PByte; SourceMax: PByte;
+  var Value: TSynTempBuffer): boolean;
+var len: cardinal;
+begin
+  if SourceMax=nil then
+    len := FromVarUInt32(Source) else begin
+    Source := FromVarUInt32Safe(Source,SourceMax,len);
+    if (Source=nil) or (PAnsiChar(Source)+len>PAnsiChar(SourceMax)) then begin
+      result := false;
+      exit;
+    end;
+  end;
+  Value.Init(Source,len);
+  PByteArray(Value.buf)[len] := 0; // include trailing #0
+  inc(Source,len);
+  result := true;
+end;
+
+procedure FromVarString(var Source: PByte; var Value: RawByteString;
+  CodePage: integer);
+var Len: PtrUInt;
+begin
+  Len := FromVarUInt32(Source);
+  FastSetStringCP(Value,Source,Len,CodePage);
+  inc(Source,Len);
+end;
+
+function FromVarString(var Source: PByte; SourceMax: PByte;
+  var Value: RawByteString; CodePage: integer): boolean;
+var len: cardinal;
+begin
+  if SourceMax=nil then
+    len := FromVarUInt32(Source) else begin
+    Source := FromVarUInt32Safe(Source,SourceMax,len);
+    if (Source=nil) or (PAnsiChar(Source)+len>PAnsiChar(SourceMax)) then begin
+      result := false;
+      exit;
+    end;
+  end;
+  FastSetStringCP(Value,Source,len,CodePage);
+  inc(Source,len);
+  result := true;
 end;
 
 // 42060 -----------------------------------------------------------------------
@@ -3082,6 +3933,91 @@ begin // info is expected to come from a DeRef() if retrieved from RTTI
   end;
 end;
 
+// 42382 -----------------------------------------------------------------------
+
+function ManagedTypeLoad(data: PAnsiChar; var source: PAnsiChar;
+  info: PTypeInfo; sourceMax: PAnsiChar): integer;
+// returns source=nil on error, or final source + result=data^ length
+var DynArray: TDynArray;
+    itemtype: PTypeInfo;
+    itemsize: cardinal;
+    i: PtrInt;
+begin // info is expected to come from a DeRef() if retrieved from RTTI
+  result := SizeOf(PtrUInt); // size of most items
+  if info^.Kind in [tkLString{$ifdef FPC},tkLStringOld{$endif},tkWString
+      {$ifdef HASVARUSTRING},tkUString{$endif}] then
+    if sourceMax<>nil then begin
+      source := pointer(FromVarUInt32Safe(PByte(source),PByte(sourceMax),itemsize));
+      if source=nil then
+        exit;
+      if source+itemsize>sourceMax then begin
+        source := nil;
+        exit; // avoid buffer overflow
+      end;
+    end else
+      itemsize := FromVarUInt32(PByte(source)); // in source buffer bytes
+  case info^.Kind of
+  tkLString{$ifdef FPC}, tkLStringOld{$endif}: begin
+    {$ifdef HASCODEPAGE}
+    FastSetStringCP(data^,source,itemsize,LStringCodePage(info));
+    {$else}
+    SetString(PRawUTF8(data)^,source,itemsize);
+    {$endif HASCODEPAGE}
+    inc(source,itemsize);
+  end;
+  tkWString: begin
+    SetString(PWideString(data)^,PWideChar(source),itemsize shr 1);
+    inc(source,itemsize);
+  end;
+  {$ifdef HASVARUSTRING}
+  tkUString: begin
+    SetString(PUnicodeString(data)^,PWideChar(source),itemsize shr 1);
+    inc(source,itemsize);
+  end;
+  {$endif}
+  tkRecord{$ifdef FPC},tkObject{$endif}:
+    source := RecordLoad(data^,source,info,@result,sourceMax);
+  tkArray: begin
+    itemtype := ArrayItemType(info,result);
+    if info=nil then
+      source := nil else
+      if itemtype=nil then
+        if (sourceMax<>nil) and (source+result>sourceMax) then
+          source := nil else begin
+          MoveSmall(source,data,result);
+          inc(source,result);
+        end else
+        for i := 1 to info^.elCount do begin
+          inc(data,ManagedTypeLoad(data,source,itemtype,sourceMax));
+          if source=nil then
+            exit;
+        end;
+  end;
+  {$ifndef NOVARIANTS}
+  tkVariant: begin
+    source := VariantLoad(PVariant(data)^,source,@JSON_OPTIONS[true]);
+    result := SizeOf(Variant); // size of tkVariant in record
+  end;
+  {$endif NOVARIANTS}
+  tkDynArray: begin
+    DynArray.Init(info,data^);
+    source := DynArray.LoadFrom(source,nil,{nohash=}true,sourceMax);
+  end;
+  {$ifndef DELPHI5OROLDER}
+  tkInterface: begin
+    if (sourceMax<>nil) and (source+SizeOf(Int64)>sourceMax) then begin
+      source := nil;
+      exit;
+    end;
+    PIInterface(data)^ := PIInterface(source)^; // with proper refcount
+    inc(source,SizeOf(Int64)); // consume 64-bit even on CPU32
+  end;
+  {$endif DELPHI5OROLDER}
+  else
+    source := nil; // notify error for unexpected input type
+  end;
+end;
+
 // 42465 -----------------------------------------------------------------------
 
 function GetManagedFields(info: PTypeInfo; out firstfield: PFieldInfo): integer;
@@ -3254,6 +4190,83 @@ begin
   end;
 end;
 
+// 42716 -----------------------------------------------------------------------
+
+function RecordLoad(var Rec; Source: PAnsiChar; TypeInfo: pointer;
+  Len: PInteger; SourceMax: PAnsiChar): PAnsiChar;
+var info,fieldinfo: PTypeInfo;
+    n, F: integer;
+    offset: PtrInt;
+    field: PFieldInfo;
+    R: PAnsiChar;
+begin
+  result := nil; // indicates error
+  R := @Rec;
+  info := GetTypeInfo(TypeInfo,tkRecordKinds);
+  if (R=nil) or (info=nil) then // should have been checked before
+    exit;
+  if Len<>nil then
+    Len^ := info^.recSize;
+  n := GetManagedFields(info,field);
+  if Source=nil then begin  // inline RecordClear() function
+    for F := 1 to n do begin
+      {$ifdef FPC}FPCFinalize{$else}_Finalize{$endif}(R+field^.Offset,Deref(field^.TypeInfo));
+      inc(field);
+    end;
+    exit;
+  end;
+  offset := 0;
+  for F := 1 to n do begin
+    {$ifdef HASDIRECTTYPEINFO} // inlined DeRef()
+    fieldinfo := field^.TypeInfo;
+    {$else}
+    {$ifdef CPUINTEL}
+    fieldinfo := PPointer(field^.TypeInfo)^;
+    {$else}
+    fieldinfo := DeRef(field^.TypeInfo);
+    {$endif}
+    {$endif}
+    {$ifdef FPC_OLDRTTI} // old FPC did include RTTI for unmanaged fields! :)
+    if not (fieldinfo^.Kind in tkManagedTypes) then begin
+      inc(field);
+      continue; // as with Delphi
+    end;
+    {$endif};
+    offset := integer(field^.Offset)-offset;
+    if offset<>0 then begin
+      if (SourceMax<>nil) and (Source+offset>SourceMax) then
+        exit;
+      MoveFast(Source^,R^,offset);
+      inc(Source,offset);
+      inc(R,offset);
+    end;
+    offset := ManagedTypeLoad(R,Source,fieldinfo,SourceMax);
+    if Source=nil then
+      exit; // error at loading
+    inc(R,offset);
+    inc(offset,field^.Offset);
+    inc(field);
+  end;
+  offset := integer(info^.recSize)-offset;
+  if offset<0 then
+    raise ESynException.Create('RecordLoad offset<0') else
+  if offset<>0 then begin
+    if (SourceMax<>nil) and (Source+offset>SourceMax) then
+      exit;
+    MoveFast(Source^,R^,offset);
+    result := Source+offset;
+  end else
+    result := Source;
+end;
+
+function RecordLoad(var Res; const Source: RawByteString; TypeInfo: pointer): boolean;
+var P: PAnsiChar;
+begin
+  P := pointer(Source);
+  P := RecordLoad(Res,P,TypeInfo,nil,P+length(Source));
+  result := (P<>nil) and (P-pointer(Source)=length(Source));
+end;
+
 // 43887 -----------------------------------------------------------------------
 
 function ManagedTypeSaveRTTIHash(info: PTypeInfo; var crc: cardinal): integer;
@@ -3314,6 +4327,11 @@ begin // info is expected to come from a DeRef() if retrieved from RTTI
   end;
 end;
 
+// 43955 -----------------------------------------------------------------------
+
+const
+  NULCHAR: AnsiChar = #0;
+
 // 45685 -----------------------------------------------------------------------
 
 function VariantSaveLength(const Value: variant): integer;
@@ -3360,6 +4378,146 @@ begin // match VariantSave() storage
         result := 0; // notify invalid/unhandled variant content
     end;
   end;
+end;
+
+// 45731 -----------------------------------------------------------------------
+
+function VariantSave(const Value: variant): RawByteString;
+var P: PAnsiChar;
+begin
+  SetString(result,nil,VariantSaveLength(Value));
+  P := VariantSave(Value,pointer(result));
+  if P-pointer(result)<>length(result) then
+    raise ESynException.Create('VariantSave length');
+end;
+
+function VariantLoad(const Bin: RawByteString;
+  CustomVariantOptions: PDocVariantOptions): variant;
+begin
+  if VariantLoad(result,Pointer(Bin),CustomVariantOptions,
+     PAnsiChar(pointer(Bin))+length(Bin))=nil then
+    VarClear(result);
+end;
+
+function VariantLoad(var Value: variant; Source: PAnsiChar;
+  CustomVariantOptions: PDocVariantOptions; SourceMax: PAnsiChar): PAnsiChar;
+var JSON: PUTF8Char;
+    n: cardinal;
+    tmp: TSynTempBuffer; // GetJSON*() does in-place unescape -> private copy
+begin
+  result := nil; // error
+  VarClear(Value);
+  if (SourceMax<>nil) and (Source+2>SourceMax) then exit;
+  TVarData(Value).VType := PWord(Source)^;
+  inc(Source,SizeOf(TVarData(Value).VType));
+  case TVarData(Value).VType of
+  varNull, varEmpty: ;
+  varShortInt, varByte: begin
+    if (SourceMax<>nil) and (Source>=SourceMax) then exit;
+    TVarData(Value).VByte := byte(Source^);
+    inc(Source);
+  end;
+  varSmallint, varWord, varBoolean: begin
+    if (SourceMax<>nil) and (Source+2>SourceMax) then exit;
+    TVarData(Value).VWord := PWord(Source)^;
+    inc(Source,SizeOf(Word));
+  end;
+  varSingle, varLongWord, varInteger: begin
+    if (SourceMax<>nil) and (Source+4>SourceMax) then exit;
+    TVarData(Value).VInteger := PInteger(Source)^;
+    inc(Source,SizeOf(Integer));
+  end;
+  varInt64, varWord64, varDouble, varDate, varCurrency: begin
+    if (SourceMax<>nil) and (Source+8>SourceMax) then exit;
+    TVarData(Value).VInt64 := PInt64(Source)^;
+    inc(Source,SizeOf(Int64));
+  end;
+  varString, varOleStr {$ifdef HASVARUSTRING}, varUString{$endif}: begin
+    TVarData(Value).VAny := nil; // avoid GPF below when assigning a string variable to VAny
+    if not FromVarUInt32(PByte(Source),PByte(SourceMax),n) or
+       ((SourceMax<>nil) and (Source+n>SourceMax)) then
+      exit;
+    case TVarData(Value).VType of
+    varString:
+      FastSetString(RawUTF8(TVarData(Value).VString),Source,n); // explicit RawUTF8
+    varOleStr:
+      SetString(WideString(TVarData(Value).VAny),PWideChar(Source),n shr 1);
+    {$ifdef HASVARUSTRING}
+    varUString:
+      SetString(UnicodeString(TVarData(Value).VAny),PWideChar(Source),n shr 1);
+    {$endif}
+    end;
+    inc(Source,n);
+  end;
+  else
+    if CustomVariantOptions<>nil then begin
+      try // expected format for complex type is JSON (VType may differ)
+        if FromVarString(PByte(Source),PByte(SourceMax),tmp) then
+        try
+          JSON := tmp.buf;
+          TVarData(Value).VType := varEmpty; // avoid GPF below
+// TODO: Fix          GetJSONToAnyVariant(Value,JSON,nil,CustomVariantOptions,false);
+        finally
+          tmp.Done;
+        end else
+          exit;
+      except
+        on Exception do
+          exit; // notify invalid/unhandled variant content
+      end;
+    end else
+      exit;
+  end;
+  result := Source;
+end;
+
+// 46737 -----------------------------------------------------------------------
+
+function _Safe(const DocVariant: variant): PDocVariantData;
+{$ifdef FPC_OR_PUREPASCAL}
+var docv,vt: integer;
+begin
+  result := @DocVariant;
+  docv := DocVariantVType;
+  vt := result^.VType;
+  if vt=docv then
+    exit else
+  if vt=varByRef or varVariant then begin
+    result := PVarData(result)^.VPointer;
+    if integer(result^.VType)=docv then
+      exit;
+  end;
+  result := @DocVariantDataFake;
+end;
+{$else}
+asm
+      mov   ecx,DocVariantVType
+      movzx edx,word ptr [eax].TVarData.VType
+      cmp   edx,ecx
+      jne   @by
+      ret
+@ptr: mov   eax,[eax].TVarData.VPointer
+      movzx edx,word ptr [eax].TVarData.VType
+      cmp   edx,ecx
+      je    @ok
+@by:  cmp   edx,varByRef or varVariant
+      je    @ptr
+      lea   eax,[DocVariantDataFake]
+@ok:
+end;
+{$endif}
+
+function _Safe(const DocVariant: variant; ExpectedKind: TDocVariantKind): PDocVariantData;
+var o: TDocVariantOptions;
+begin
+  result := _Safe(DocVariant);
+  o := result^.VOptions;
+  if dvoIsArray in o then begin
+    if ExpectedKind=dvArray then
+      exit;
+  end else if (dvoIsObject in o) and (ExpectedKind=dvObject) then
+    exit;
+  raise EDocVariant.CreateUTF8('_Safe(%)?',[ToText(ExpectedKind)^]);
 end;
 
 // 49672 -----------------------------------------------------------------------
@@ -3997,7 +5155,6 @@ begin
       result := (ManagedTypeLoad(Data,Source,info,SourceMax)<>0) and (Source<>nil);
   end;
 end;
-
 
 //------------------------------------------------------------------------------
 
