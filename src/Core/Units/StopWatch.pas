@@ -11,9 +11,10 @@ interface
 type
   IStopWatch = interface
     ['{C4EBF6C1-1E91-4DA7-A99B-5101707DD067}']
-    procedure Start;
-    procedure Stop;
     procedure Reset;
+    procedure Start;
+    procedure ResetAndStart;
+    procedure Stop;
     function GetElapsedMilliseconds: Double;
     function GetElapsedTicks: Int64;
     function GetIsRunning: Boolean;
@@ -35,6 +36,7 @@ type
     function GetTimeStamp: Int64;
     procedure Reset;
     procedure Start;
+    procedure ResetAndStart;    
     class function StartNew: IStopWatch;
     class function Instance: IStopWatch;    
     procedure Stop;
@@ -130,6 +132,12 @@ begin
     FRunning := True;
   end;
 end;
+
+procedure TStopWatch.ResetAndStart;
+begin
+  Reset;
+  Start;
+end;   
 
 class function TStopwatch.StartNew: IStopwatch;
 begin
