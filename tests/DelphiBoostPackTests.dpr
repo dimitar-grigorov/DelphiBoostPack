@@ -28,6 +28,8 @@ uses
   BpHashBobJenkins in '..\src\Core\Classes\BpHashBobJenkins.pas',
   BpStrDictionaryTests in 'Core\BpStrDictionaryTests.pas',
   BpStrDictionary in '..\src\Core\Classes\BpStrDictionary.pas',
+  BpStringBuilderTests in 'Core\BpStringBuilderTests.pas',
+  BpStringBuilder in '..\src\Core\Classes\BpStringBuilder.pas',
   BpSysUtilsTests in 'Core\BpSysUtilsTests.pas',
   BpSysUtils in '..\src\Core\Units\BpSysUtils.pas',
   BpStringOperationsBenchmark in 'Benchmarks\BpStringOperationsBenchmark.pas',
