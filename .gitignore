@@ -68,5 +68,8 @@ __recovery/
 # Boss dependency manager vendor folder https://github.com/HashLoad/boss
 modules/
 
+# Local development plan, not part of the repo
+PLAN.md
+
 !bin/
 !dcu/
