@@ -30,6 +30,8 @@ uses
   BpStrDictionary in '..\src\Core\Classes\BpStrDictionary.pas',
   BpStringBuilderTests in 'Core\BpStringBuilderTests.pas',
   BpStringBuilder in '..\src\Core\Classes\BpStringBuilder.pas',
+  BpStrUtilsTests in 'Core\BpStrUtilsTests.pas',
+  BpStrUtils in '..\src\Core\Units\BpStrUtils.pas',
   BpSysUtilsTests in 'Core\BpSysUtilsTests.pas',
   BpSysUtils in '..\src\Core\Units\BpSysUtils.pas',
   BpStringOperationsBenchmark in 'Benchmarks\BpStringOperationsBenchmark.pas',
