@@ -1,5 +1,20 @@
 unit BpHashBobJenkins;
 
+// Bob Jenkins lookup3 hash (http://burtleburtle.net/bob/c/lookup3.c) for
+// Delphi 7/2007 and later.
+//
+// The implementation is a faithful port of HashLittle from Delphi XE6
+// System.Generics.Defaults (the engine behind BobJenkinsHash and, later,
+// System.Hash.THashBobJenkins), including Embarcadero's deviation from
+// canonical lookup3: the initial state uses (Len shl 2) instead of Len.
+// This keeps hash values byte-for-byte identical with the modern RTL, so
+// results can be verified against any Delphi XE+ installation.
+//
+// Note for cross-version use: hashing a *string* hashes its bytes, so an
+// AnsiString on Delphi 2007 and a UnicodeString on XE6 produce different
+// hashes for the same text. Byte-oriented known-answer tests must use the
+// untyped-buffer overload of GetHashValue.
+
 interface
 
 {$IF CompilerVersion >= 18}
@@ -41,6 +56,37 @@ type
 
 implementation
 
+type
+  // three consecutive 32-bit words, for aligned block reads
+  TCardinalTriple = array[0..2] of Cardinal;
+  PCardinalTriple = ^TCardinalTriple;
+
+function Rot(x, k: Cardinal): Cardinal; {$IFDEF Delphi_2007_UP} inline; {$ENDIF}
+begin
+  Result := (x shl k) or (x shr (32 - k));
+end;
+
+procedure Mix(var a, b, c: Cardinal); {$IFDEF Delphi_2007_UP} inline; {$ENDIF}
+begin
+  Dec(a, c); a := a xor Rot(c, 4); Inc(c, b);
+  Dec(b, a); b := b xor Rot(a, 6); Inc(a, c);
+  Dec(c, b); c := c xor Rot(b, 8); Inc(b, a);
+  Dec(a, c); a := a xor Rot(c, 16); Inc(c, b);
+  Dec(b, a); b := b xor Rot(a, 19); Inc(a, c);
+  Dec(c, b); c := c xor Rot(b, 4); Inc(b, a);
+end;
+
+procedure Final(var a, b, c: Cardinal); {$IFDEF Delphi_2007_UP} inline; {$ENDIF}
+begin
+  c := c xor b; Dec(c, Rot(b, 14));
+  a := a xor c; Dec(a, Rot(c, 11));
+  b := b xor a; Dec(b, Rot(a, 25));
+  c := c xor b; Dec(c, Rot(b, 16));
+  a := a xor c; Dec(a, Rot(c, 4));
+  b := b xor a; Dec(b, Rot(a, 14));
+  c := c xor b; Dec(c, Rot(b, 24));
+end;
+
 constructor TbpHashBobJenkins.Create;
 begin
   inherited Create;
@@ -61,7 +107,6 @@ procedure TbpHashBobJenkins.Update(const AData: TBytes; ALength: Cardinal);
 begin
   if ALength = 0 then
     ALength := Length(AData);
-  // Update(AData, ALength);
   Update(Pointer(AData)^, ALength);
 end;
 
@@ -109,70 +154,133 @@ end;
 function TbpHashBobJenkins.GetDigest: TBytes;
 begin
   SetLength(Result, 4);
-  Move(FHash, Result[0], 4);  // Direct memory move
+  Move(FHash, Result[0], 4);
 end;
 
+// Port of Delphi XE6 System.Generics.Defaults.HashLittle.
+// - the last full 12-byte block is NOT mixed in the loop: it is added to
+//   a/b/c and folded by Final(), exactly like the reference
+// - Len = 0 exits early WITHOUT Final(), exactly like the reference
+// - the tail never reads past Data: the aligned path uses masked 32-bit
+//   reads (cannot cross a page boundary), the unaligned path reads only
+//   the remaining bytes one by one
 class function TbpHashBobJenkins.HashLittle(const Data; Len, InitVal: Integer): Integer;
 var
   a, b, c: Cardinal;
-  pb, endPtr: PByte;
+  pd: PCardinalTriple;
+  pb: PByteArray;
 begin
-  a := $DEADBEEF + Cardinal(Len) + Cardinal(InitVal);
+  a := Cardinal($DEADBEEF) + Cardinal(Len shl 2) + Cardinal(InitVal);
   b := a;
   c := a;
-  pb := PByte(@Data);
-  endPtr := PByte(Cardinal(pb) + Cardinal(Len));
 
-  while Cardinal(pb) + 12 <= Cardinal(endPtr) do
+  if (Cardinal(@Data) and 3) = 0 then
   begin
-    Inc(a, PCardinal(pb)^);
-    Inc(b, PCardinal(Cardinal(pb) + 4)^);
-    Inc(c, PCardinal(Cardinal(pb) + 8)^);
-
-    // Mix(a, b, c) inline
-    Dec(a, c); a := a xor ((c shl 4) or (c shr 28)); Inc(c, b);
-    Dec(b, a); b := b xor ((a shl 6) or (a shr 26)); Inc(a, c);
-    Dec(c, b); c := c xor ((b shl 8) or (b shr 24)); Inc(b, a);
-    Dec(a, c); a := a xor ((c shl 16) or (c shr 16)); Inc(c, b);
-    Dec(b, a); b := b xor ((a shl 19) or (a shr 13)); Inc(a, c);
-    Dec(c, b); c := c xor ((b shl 4) or (b shr 28)); Inc(b, a);
-
-    Inc(pb, 12);
-  end;
-
-  Len := Cardinal(endPtr) - Cardinal(pb);
-  if Len > 0 then
-  begin
-    Inc(a, Cardinal(pb^));
-    if Len > 1 then Inc(a, Cardinal(PByte(Cardinal(pb) + 1)^) shl 8);
-    if Len > 2 then Inc(a, Cardinal(PByte(Cardinal(pb) + 2)^) shl 16);
-
-    if Len > 3 then
+    // 4-byte aligned data
+    pd := PCardinalTriple(@Data);
+    while Len > 12 do
     begin
-      pb := PByte(Cardinal(pb) + 3);
-      Inc(b, Cardinal(pb^));
-      if Len > 4 then Inc(b, Cardinal(PByte(Cardinal(pb) + 1)^) shl 8);
-      if Len > 5 then Inc(b, Cardinal(PByte(Cardinal(pb) + 2)^) shl 16);
+      Inc(a, pd^[0]);
+      Inc(b, pd^[1]);
+      Inc(c, pd^[2]);
+      Mix(a, b, c);
+      Dec(Len, 12);
+      pd := PCardinalTriple(Cardinal(pd) + 12);
     end;
 
-    if Len > 6 then
-    begin
-      pb := PByte(Cardinal(pb) + 6);
-      Inc(c, Cardinal(pb^));
-      if Len > 7 then Inc(c, Cardinal(PByte(Cardinal(pb) + 1)^) shl 8);
-      if Len > 8 then Inc(c, Cardinal(PByte(Cardinal(pb) + 2)^) shl 16);
+    case Len of
+      0:
+      begin
+        Result := Integer(c);
+        Exit;
+      end;
+      1: Inc(a, pd^[0] and $FF);
+      2: Inc(a, pd^[0] and $FFFF);
+      3: Inc(a, pd^[0] and $FFFFFF);
+      4: Inc(a, pd^[0]);
+      5:
+      begin
+        Inc(a, pd^[0]);
+        Inc(b, pd^[1] and $FF);
+      end;
+      6:
+      begin
+        Inc(a, pd^[0]);
+        Inc(b, pd^[1] and $FFFF);
+      end;
+      7:
+      begin
+        Inc(a, pd^[0]);
+        Inc(b, pd^[1] and $FFFFFF);
+      end;
+      8:
+      begin
+        Inc(a, pd^[0]);
+        Inc(b, pd^[1]);
+      end;
+      9:
+      begin
+        Inc(a, pd^[0]);
+        Inc(b, pd^[1]);
+        Inc(c, pd^[2] and $FF);
+      end;
+      10:
+      begin
+        Inc(a, pd^[0]);
+        Inc(b, pd^[1]);
+        Inc(c, pd^[2] and $FFFF);
+      end;
+      11:
+      begin
+        Inc(a, pd^[0]);
+        Inc(b, pd^[1]);
+        Inc(c, pd^[2] and $FFFFFF);
+      end;
+      12:
+      begin
+        Inc(a, pd^[0]);
+        Inc(b, pd^[1]);
+        Inc(c, pd^[2]);
+      end;
     end;
+  end
+  else
+  begin
+    // unaligned data: byte-by-byte reads, never past the end
+    pb := PByteArray(@Data);
+    while Len > 12 do
+    begin
+      Inc(a, Cardinal(pb^[0]) + Cardinal(pb^[1]) shl 8 + Cardinal(pb^[2]) shl 16 + Cardinal(pb^[3]) shl 24);
+      Inc(b, Cardinal(pb^[4]) + Cardinal(pb^[5]) shl 8 + Cardinal(pb^[6]) shl 16 + Cardinal(pb^[7]) shl 24);
+      Inc(c, Cardinal(pb^[8]) + Cardinal(pb^[9]) shl 8 + Cardinal(pb^[10]) shl 16 + Cardinal(pb^[11]) shl 24);
+      Mix(a, b, c);
+      Dec(Len, 12);
+      pb := PByteArray(Cardinal(pb) + 12);
+    end;
+
+    if Len = 0 then
+    begin
+      Result := Integer(c);
+      Exit;
+    end;
+
+    // cumulative tail: byte i goes to word (i div 4), shifted (i mod 4)*8 -
+    // the same fall-through mapping as the reference goto chain
+    if Len >= 12 then Inc(c, Cardinal(pb^[11]) shl 24);
+    if Len >= 11 then Inc(c, Cardinal(pb^[10]) shl 16);
+    if Len >= 10 then Inc(c, Cardinal(pb^[9]) shl 8);
+    if Len >= 9 then Inc(c, Cardinal(pb^[8]));
+    if Len >= 8 then Inc(b, Cardinal(pb^[7]) shl 24);
+    if Len >= 7 then Inc(b, Cardinal(pb^[6]) shl 16);
+    if Len >= 6 then Inc(b, Cardinal(pb^[5]) shl 8);
+    if Len >= 5 then Inc(b, Cardinal(pb^[4]));
+    if Len >= 4 then Inc(a, Cardinal(pb^[3]) shl 24);
+    if Len >= 3 then Inc(a, Cardinal(pb^[2]) shl 16);
+    if Len >= 2 then Inc(a, Cardinal(pb^[1]) shl 8);
+    Inc(a, Cardinal(pb^[0]));
   end;
 
-  // Final(a, b, c) inline
-  c := c xor b; Dec(c, (b shl 14) or (b shr 18));
-  a := a xor c; Dec(a, (c shl 11) or (c shr 21));
-  b := b xor a; Dec(b, (a shl 25) or (a shr 7));
-  c := c xor b; Dec(c, (b shl 16) or (b shr 16));
-  a := a xor c; Dec(a, (c shl 4) or (c shr 28));
-  b := b xor a; Dec(b, (a shl 14) or (a shr 18));
-  c := c xor b; Dec(c, (b shl 24) or (b shr 8));
-
+  Final(a, b, c);
   Result := Integer(c);
 end;
 
