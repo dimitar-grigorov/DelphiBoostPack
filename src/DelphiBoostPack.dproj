@@ -45,6 +45,7 @@
     <DCCReference Include="Core\Classes\BpIntList.pas" />
     <DCCReference Include="Core\Classes\BpObjectComparer.pas" />
     <DCCReference Include="Core\Classes\BpStrDictionary.pas" />
+    <DCCReference Include="Core\Classes\BpStringBuilder.pas" />
     <DCCReference Include="Core\Classes\InterfacedCollectionItem.pas" />
     <DCCReference Include="Core\Interfaces\BpIntListIntf.pas" />
     <DCCReference Include="Core\Interfaces\UniqueIdIntf.pas" />
