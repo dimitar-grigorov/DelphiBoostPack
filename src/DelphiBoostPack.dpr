@@ -12,6 +12,7 @@ uses
   InterfacedCollectionItem in 'Core\Classes\InterfacedCollectionItem.pas',
   BpHashBobJenkins in 'Core\Classes\BpHashBobJenkins.pas',
   BpStrDictionary in 'Core\Classes\BpStrDictionary.pas',
+  BpStringBuilder in 'Core\Classes\BpStringBuilder.pas',
   BpSysUtils in 'Core\Units\BpSysUtils.pas',
   StopWatch in 'Core\Units\StopWatch.pas';
 
