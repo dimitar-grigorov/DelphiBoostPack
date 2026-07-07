@@ -13,6 +13,7 @@ uses
   BpHashBobJenkins in 'Core\Classes\BpHashBobJenkins.pas',
   BpStrDictionary in 'Core\Classes\BpStrDictionary.pas',
   BpStringBuilder in 'Core\Classes\BpStringBuilder.pas',
+  BpStrUtils in 'Core\Units\BpStrUtils.pas',
   BpSysUtils in 'Core\Units\BpSysUtils.pas',
   StopWatch in 'Core\Units\StopWatch.pas';
 
