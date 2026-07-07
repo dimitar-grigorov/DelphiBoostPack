@@ -24,6 +24,8 @@ type
   // raised for missing keys, duplicate keys and failed typed conversions
   EbpStrDictionary = class(Exception);
 
+  TbpIntegerDynArray = array of Integer;
+
   // ForEach callback; set AStop to True to break the iteration
   TbpStrDictForEach = procedure(const AKey: string; const AValue: Variant;
     var AStop: Boolean) of object;
@@ -64,6 +66,33 @@ type
     procedure SetCapacity(ACapacity: Integer);
     procedure ForEach(ACallback: TbpStrDictForEach);
     procedure GetKeys(AList: TStrings);
+    // typed accessors with validation. GetX raises on a missing key or a
+    // wrong stored type, GetXDef returns ADefault instead, TryGetX never
+    // raises. Conversion is strict: no boolean-to-int, no numeric strings,
+    // no float-to-int truncation
+    procedure SetInt(const AKey: string; AValue: Integer);
+    function GetInt(const AKey: string): Integer;
+    function GetIntDef(const AKey: string; ADefault: Integer): Integer;
+    function TryGetInt(const AKey: string; out AValue: Integer): Boolean;
+    procedure SetInt64(const AKey: string; AValue: Int64);
+    function GetInt64(const AKey: string): Int64;
+    function GetInt64Def(const AKey: string; ADefault: Int64): Int64;
+    function TryGetInt64(const AKey: string; out AValue: Int64): Boolean;
+    procedure SetStr(const AKey, AValue: string);
+    function GetStr(const AKey: string): string;
+    function GetStrDef(const AKey, ADefault: string): string;
+    function TryGetStr(const AKey: string; out AValue: string): Boolean;
+    procedure SetBool(const AKey: string; AValue: Boolean);
+    function GetBool(const AKey: string): Boolean;
+    function GetBoolDef(const AKey: string; ADefault: Boolean): Boolean;
+    function TryGetBool(const AKey: string; out AValue: Boolean): Boolean;
+    procedure SetFloat(const AKey: string; AValue: Double);
+    function GetFloat(const AKey: string): Double;
+    function GetFloatDef(const AKey: string; ADefault: Double): Double;
+    function TryGetFloat(const AKey: string; out AValue: Double): Boolean;
+    procedure SetIntArray(const AKey: string; const AValues: array of Integer);
+    function GetIntArray(const AKey: string): TbpIntegerDynArray;
+    function TryGetIntArray(const AKey: string; out AValues: TbpIntegerDynArray): Boolean;
     property Count: Integer read FCount;
     property Capacity: Integer read GetCapacity;
     property CaseInsensitive: Boolean read FCaseInsensitive;
@@ -79,6 +108,102 @@ uses
 const
   gcEmptyHash = -1;                            // sentinel: slot is free
   gcPositiveMask = not Integer($80000000);     // $7FFFFFFF
+
+{$IF CompilerVersion < 20}
+const
+  varUString = $0102;  // UnicodeString variant type, first defined in Delphi 2009
+{$IFEND}
+
+const
+  gcVarWord64 = $0015; // UInt64 variant type (varWord64/varUInt64, missing in D2007)
+
+// strict conversions: only variants that already hold the requested kind
+// of data pass; nothing is parsed, truncated or implicitly widened
+
+function TryVarToInt64(const AValue: Variant; out AResult: Int64): Boolean;
+begin
+  case VarType(AValue) of
+    varShortInt, varSmallint, varInteger, varByte, varWord, varLongWord,
+    varInt64, gcVarWord64:
+    begin
+      AResult := AValue;
+      Result := True;
+    end;
+  else
+    AResult := 0;
+    Result := False;
+  end;
+end;
+
+function TryVarToInt(const AValue: Variant; out AResult: Integer): Boolean;
+var
+  lvInt64: Int64;
+begin
+  Result := TryVarToInt64(AValue, lvInt64) and
+    (lvInt64 >= Low(Integer)) and (lvInt64 <= High(Integer));
+  if Result then
+    AResult := Integer(lvInt64)
+  else
+    AResult := 0;
+end;
+
+function TryVarToStr(const AValue: Variant; out AResult: string): Boolean;
+begin
+  case VarType(AValue) of
+    varOleStr, varString, varUString:
+    begin
+      AResult := AValue;
+      Result := True;
+    end;
+  else
+    AResult := '';
+    Result := False;
+  end;
+end;
+
+function TryVarToBool(const AValue: Variant; out AResult: Boolean): Boolean;
+begin
+  Result := VarType(AValue) = varBoolean;
+  if Result then
+    AResult := AValue
+  else
+    AResult := False;
+end;
+
+function TryVarToFloat(const AValue: Variant; out AResult: Double): Boolean;
+begin
+  case VarType(AValue) of
+    varShortInt, varSmallint, varInteger, varByte, varWord, varLongWord,
+    varInt64, gcVarWord64, varSingle, varDouble, varCurrency:
+    begin
+      AResult := AValue;
+      Result := True;
+    end;
+  else
+    AResult := 0;
+    Result := False;
+  end;
+end;
+
+function TryVarToIntArray(const AValue: Variant; out AResult: TbpIntegerDynArray): Boolean;
+var
+  lvLow, lvHigh, i: Integer;
+begin
+  Result := False;
+  AResult := nil;
+  if (not VarIsArray(AValue)) or (VarArrayDimCount(AValue) <> 1) then
+    Exit;
+  lvLow := VarArrayLowBound(AValue, 1);
+  lvHigh := VarArrayHighBound(AValue, 1);
+  SetLength(AResult, lvHigh - lvLow + 1);
+  for i := lvLow to lvHigh do
+    if not TryVarToInt(AValue[i], AResult[i - lvLow]) then
+    begin
+      AResult := nil;
+      Exit;
+    end;
+  Result := True;
+end;
 
 constructor TbpStrDictionary.Create(ACaseInsensitive: Boolean; AInitialCapacity: Integer);
 begin
@@ -354,6 +479,187 @@ end;
 procedure TbpStrDictionary.SetItem(const AKey: string; const AValue: Variant);
 begin
   AddOrSet(AKey, AValue);
+end;
+
+// raises a descriptive conversion error naming the key and the stored type
+procedure RaiseTypeError(const AKey, AExpected: string; const AValue: Variant);
+begin
+  raise EbpStrDictionary.CreateFmt('Value for key "%s" is not %s (stored type: %s)',
+    [AKey, AExpected, VarTypeAsText(VarType(AValue))]);
+end;
+
+procedure TbpStrDictionary.SetInt(const AKey: string; AValue: Integer);
+begin
+  AddOrSet(AKey, AValue);
+end;
+
+function TbpStrDictionary.GetInt(const AKey: string): Integer;
+var
+  lvValue: Variant;
+begin
+  lvValue := GetItem(AKey);
+  if not TryVarToInt(lvValue, Result) then
+    RaiseTypeError(AKey, 'an Integer', lvValue);
+end;
+
+function TbpStrDictionary.GetIntDef(const AKey: string; ADefault: Integer): Integer;
+begin
+  if not TryGetInt(AKey, Result) then
+    Result := ADefault;
+end;
+
+function TbpStrDictionary.TryGetInt(const AKey: string; out AValue: Integer): Boolean;
+var
+  lvValue: Variant;
+begin
+  Result := TryGetValue(AKey, lvValue) and TryVarToInt(lvValue, AValue);
+  if not Result then
+    AValue := 0;
+end;
+
+procedure TbpStrDictionary.SetInt64(const AKey: string; AValue: Int64);
+begin
+  AddOrSet(AKey, AValue);
+end;
+
+function TbpStrDictionary.GetInt64(const AKey: string): Int64;
+var
+  lvValue: Variant;
+begin
+  lvValue := GetItem(AKey);
+  if not TryVarToInt64(lvValue, Result) then
+    RaiseTypeError(AKey, 'an Int64', lvValue);
+end;
+
+function TbpStrDictionary.GetInt64Def(const AKey: string; ADefault: Int64): Int64;
+begin
+  if not TryGetInt64(AKey, Result) then
+    Result := ADefault;
+end;
+
+function TbpStrDictionary.TryGetInt64(const AKey: string; out AValue: Int64): Boolean;
+var
+  lvValue: Variant;
+begin
+  Result := TryGetValue(AKey, lvValue) and TryVarToInt64(lvValue, AValue);
+  if not Result then
+    AValue := 0;
+end;
+
+procedure TbpStrDictionary.SetStr(const AKey, AValue: string);
+begin
+  AddOrSet(AKey, AValue);
+end;
+
+function TbpStrDictionary.GetStr(const AKey: string): string;
+var
+  lvValue: Variant;
+begin
+  lvValue := GetItem(AKey);
+  if not TryVarToStr(lvValue, Result) then
+    RaiseTypeError(AKey, 'a string', lvValue);
+end;
+
+function TbpStrDictionary.GetStrDef(const AKey, ADefault: string): string;
+begin
+  if not TryGetStr(AKey, Result) then
+    Result := ADefault;
+end;
+
+function TbpStrDictionary.TryGetStr(const AKey: string; out AValue: string): Boolean;
+var
+  lvValue: Variant;
+begin
+  Result := TryGetValue(AKey, lvValue) and TryVarToStr(lvValue, AValue);
+  if not Result then
+    AValue := '';
+end;
+
+procedure TbpStrDictionary.SetBool(const AKey: string; AValue: Boolean);
+begin
+  AddOrSet(AKey, AValue);
+end;
+
+function TbpStrDictionary.GetBool(const AKey: string): Boolean;
+var
+  lvValue: Variant;
+begin
+  lvValue := GetItem(AKey);
+  if not TryVarToBool(lvValue, Result) then
+    RaiseTypeError(AKey, 'a Boolean', lvValue);
+end;
+
+function TbpStrDictionary.GetBoolDef(const AKey: string; ADefault: Boolean): Boolean;
+begin
+  if not TryGetBool(AKey, Result) then
+    Result := ADefault;
+end;
+
+function TbpStrDictionary.TryGetBool(const AKey: string; out AValue: Boolean): Boolean;
+var
+  lvValue: Variant;
+begin
+  Result := TryGetValue(AKey, lvValue) and TryVarToBool(lvValue, AValue);
+  if not Result then
+    AValue := False;
+end;
+
+procedure TbpStrDictionary.SetFloat(const AKey: string; AValue: Double);
+begin
+  AddOrSet(AKey, AValue);
+end;
+
+function TbpStrDictionary.GetFloat(const AKey: string): Double;
+var
+  lvValue: Variant;
+begin
+  lvValue := GetItem(AKey);
+  if not TryVarToFloat(lvValue, Result) then
+    RaiseTypeError(AKey, 'a Float', lvValue);
+end;
+
+function TbpStrDictionary.GetFloatDef(const AKey: string; ADefault: Double): Double;
+begin
+  if not TryGetFloat(AKey, Result) then
+    Result := ADefault;
+end;
+
+function TbpStrDictionary.TryGetFloat(const AKey: string; out AValue: Double): Boolean;
+var
+  lvValue: Variant;
+begin
+  Result := TryGetValue(AKey, lvValue) and TryVarToFloat(lvValue, AValue);
+  if not Result then
+    AValue := 0;
+end;
+
+procedure TbpStrDictionary.SetIntArray(const AKey: string; const AValues: array of Integer);
+var
+  lvArray: Variant;
+  i: Integer;
+begin
+  lvArray := VarArrayCreate([0, Length(AValues) - 1], varInteger);
+  for i := 0 to Length(AValues) - 1 do
+    lvArray[i] := AValues[i];
+  AddOrSet(AKey, lvArray);
+end;
+
+function TbpStrDictionary.GetIntArray(const AKey: string): TbpIntegerDynArray;
+var
+  lvValue: Variant;
+begin
+  lvValue := GetItem(AKey);
+  if not TryVarToIntArray(lvValue, Result) then
+    RaiseTypeError(AKey, 'an Integer array', lvValue);
+end;
+
+function TbpStrDictionary.TryGetIntArray(const AKey: string; out AValues: TbpIntegerDynArray): Boolean;
+var
+  lvValue: Variant;
+begin
+  Result := TryGetValue(AKey, lvValue) and TryVarToIntArray(lvValue, AValues);
+  if not Result then
+    AValues := nil;
 end;
 
 end.
