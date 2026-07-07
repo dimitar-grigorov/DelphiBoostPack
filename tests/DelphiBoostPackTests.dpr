@@ -31,6 +31,7 @@ uses
   BpSysUtilsTests in 'Core\BpSysUtilsTests.pas',
   BpSysUtils in '..\src\Core\Units\BpSysUtils.pas',
   BpStringOperationsBenchmark in 'Benchmarks\BpStringOperationsBenchmark.pas',
+  BpStrDictionaryBenchmark in 'Benchmarks\BpStrDictionaryBenchmark.pas',
   BpBaseBenchmarkTestCase in 'Benchmarks\BpBaseBenchmarkTestCase.pas',
   BpTypesOperationsBenchmark in 'Benchmarks\BpTypesOperationsBenchmark.pas';
 
