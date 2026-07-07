@@ -1,14 +1,8 @@
 program DelphiBoostPackTests;
-{
 
-  Delphi DUnit Test Project
-  -------------------------
-  This project contains the DUnit test framework and the GUI/Console test runners.
-  Add "CONSOLE_TESTRUNNER" to the conditional defines entry in the project options 
-  to use the console test runner.  Otherwise the GUI test runner will be used by 
-  default.
-
-}
+// Delphi DUnit test project.
+// Define CONSOLE_TESTRUNNER (Build_Tests_D2007.cmd does) to get the console test runner,
+// otherwise the GUI test runner is used.
 
 {$IFDEF CONSOLE_TESTRUNNER}
 {$APPTYPE CONSOLE}
@@ -40,13 +34,25 @@ uses
 
 {$R *.RES}
 
+var
+  lvResult: TTestResult;
+
 begin
   {$IF CompilerVersion >= 18.0}
   System.ReportMemoryLeaksOnShutdown := True;
   {$IFEND}
   Application.Initialize;
   if IsConsole then
-    TextTestRunner.RunRegisteredTests
+  begin
+    // Nonzero exit code on red tests so build scripts and CI can gate on the result
+    lvResult := TextTestRunner.RunRegisteredTests;
+    try
+      if not lvResult.WasSuccessful then
+        System.ExitCode := 1;
+    finally
+      lvResult.Free;
+    end;
+  end
   else
     GUITestRunner.RunRegisteredTests;
 end.
