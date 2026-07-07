@@ -37,6 +37,7 @@ uses
   BpStringOperationsBenchmark in 'Benchmarks\BpStringOperationsBenchmark.pas',
   BpStrDictionaryBenchmark in 'Benchmarks\BpStrDictionaryBenchmark.pas',
   BpStringBuilderBenchmark in 'Benchmarks\BpStringBuilderBenchmark.pas',
+  BpStrUtilsBenchmark in 'Benchmarks\BpStrUtilsBenchmark.pas',
   BpBaseBenchmarkTestCase in 'Benchmarks\BpBaseBenchmarkTestCase.pas',
   BpTypesOperationsBenchmark in 'Benchmarks\BpTypesOperationsBenchmark.pas';
 
