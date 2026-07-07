@@ -26,6 +26,8 @@ uses
   InterfacedCollectionItem in '..\src\Core\Classes\InterfacedCollectionItem.pas',
   BpHashBobJenkinsTests in 'Core\BpHashBobJenkinsTests.pas',
   BpHashBobJenkins in '..\src\Core\Classes\BpHashBobJenkins.pas',
+  BpStrDictionaryTests in 'Core\BpStrDictionaryTests.pas',
+  BpStrDictionary in '..\src\Core\Classes\BpStrDictionary.pas',
   BpSysUtilsTests in 'Core\BpSysUtilsTests.pas',
   BpSysUtils in '..\src\Core\Units\BpSysUtils.pas',
   BpStringOperationsBenchmark in 'Benchmarks\BpStringOperationsBenchmark.pas',
