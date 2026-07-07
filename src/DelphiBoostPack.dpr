@@ -13,7 +13,6 @@ uses
   BpHashBobJenkins in 'Core\Classes\BpHashBobJenkins.pas',
   BpSysUtils in 'Core\Units\BpSysUtils.pas',
   StopWatch in 'Core\Units\StopWatch.pas';
-  //BpDictionary in 'Core\Classes\BpDictionary.pas';
 
 begin
   System.ReportMemoryLeaksOnShutdown := True;
