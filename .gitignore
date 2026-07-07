@@ -71,5 +71,6 @@ modules/
 # Local development plan, not part of the repo
 PLAN.md
 
-!bin/
-!dcu/
+# Compiler output folders (leading ! must be escaped, otherwise it means "un-ignore")
+\!bin/
+\!dcu/
