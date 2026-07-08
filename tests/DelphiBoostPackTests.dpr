@@ -32,6 +32,8 @@ uses
   BpStringBuilder in '..\src\Core\Classes\BpStringBuilder.pas',
   BpBase64Tests in 'Core\BpBase64Tests.pas',
   BpBase64 in '..\src\Core\Units\BpBase64.pas',
+  BpHMACSHA256Tests in 'Core\BpHMACSHA256Tests.pas',
+  BpHMACSHA256 in '..\src\Core\Classes\BpHMACSHA256.pas',
   BpMD5Tests in 'Core\BpMD5Tests.pas',
   BpMD5 in '..\src\Core\Classes\BpMD5.pas',
   BpSHA256Tests in 'Core\BpSHA256Tests.pas',
