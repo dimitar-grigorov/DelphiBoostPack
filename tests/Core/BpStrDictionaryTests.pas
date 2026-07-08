@@ -5,7 +5,7 @@ unit BpStrDictionaryTests;
 interface
 
 uses
-  TestFramework, SysUtils, Classes, Variants, BpStrDictionary;
+  TestFramework, SysUtils, Classes, Variants, BpStrDictionary, BpVariantUtils;
 
 type
   TBpStrDictionaryTests = class(TTestCase)

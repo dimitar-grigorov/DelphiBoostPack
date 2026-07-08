@@ -24,10 +24,6 @@ type
   // raised for missing keys, duplicate keys and failed typed conversions
   EbpStrDictionary = class(Exception);
 
-  // alias so existing users of the unit keep compiling; the type and the
-  // strict conversions now live in BpVariantUtils
-  TbpIntegerDynArray = BpVariantUtils.TbpIntegerDynArray;
-
   // ForEach callback; set AStop to True to break the iteration
   TbpStrDictForEach = procedure(const AKey: string; const AValue: Variant;
     var AStop: Boolean) of object;
@@ -107,9 +103,10 @@ implementation
 uses
   BpHashBobJenkins;
 
+// per-unit names so amalgamated bundles can embed both dictionaries
 const
-  gcEmptyHash = -1;                            // sentinel: slot is free
-  gcPositiveMask = not Integer($80000000);     // $7FFFFFFF
+  gcStrEmptyHash = -1;                         // sentinel: slot is free
+  gcStrPositiveMask = not Integer($80000000);  // $7FFFFFFF
 
 constructor TbpStrDictionary.Create(ACaseInsensitive: Boolean; AInitialCapacity: Integer);
 begin
@@ -133,8 +130,8 @@ begin
   end
   else
     Result := TbpHashBobJenkins.GetHashValue(Pointer(AKey)^, Length(AKey) * SizeOf(Char), 0);
-  // force the hash into 0..MaxInt so it can never collide with gcEmptyHash
-  Result := gcPositiveMask and ((gcPositiveMask and Result) + 1);
+  // force the hash into 0..MaxInt so it can never collide with gcStrEmptyHash
+  Result := gcStrPositiveMask and ((gcStrPositiveMask and Result) + 1);
 end;
 
 function TbpStrDictionary.KeysEqual(const AKey1, AKey2: string): Boolean;
@@ -159,7 +156,7 @@ begin
   while True do
   begin
     lvHC := FItems[lvIndex].HashCode;
-    if lvHC = gcEmptyHash then
+    if lvHC = gcStrEmptyHash then
     begin
       Result := not lvIndex;
       Exit;
@@ -196,12 +193,12 @@ begin
   FItems := nil;
   SetLength(FItems, ANewCapacity);
   for i := 0 to ANewCapacity - 1 do
-    FItems[i].HashCode := gcEmptyHash;
+    FItems[i].HashCode := gcStrEmptyHash;
   // grow at 75% load; guarantees at least one always-empty slot
   FGrowThreshold := ANewCapacity shr 1 + ANewCapacity shr 2;
   // reinsert using the cached hash codes, no rehashing of the keys
   for i := 0 to Length(lvOldItems) - 1 do
-    if lvOldItems[i].HashCode <> gcEmptyHash then
+    if lvOldItems[i].HashCode <> gcStrEmptyHash then
     begin
       lvIndex := not GetBucketIndex(lvOldItems[i].Key, lvOldItems[i].HashCode);
       FItems[lvIndex].HashCode := lvOldItems[i].HashCode;
@@ -293,18 +290,20 @@ begin
   Result := GetBucketIndex(AKey, HashOf(AKey)) >= 0;
 end;
 
-// wrap-aware test whether AItem's home bucket lies in (ABottom, ATopInc],
-// used by Remove to decide if an entry may slide back into the gap
-function InCircularRange(ABottom, AItem, ATopInc: Integer): Boolean;
-begin
-  Result := ((ABottom < AItem) and (AItem <= ATopInc)) or
-    ((ATopInc < ABottom) and (AItem > ABottom)) or
-    ((ATopInc < ABottom) and (AItem <= ATopInc));
-end;
-
 function TbpStrDictionary.Remove(const AKey: string): Boolean;
 var
   lvGap, lvIndex, lvHC, lvBucket, lvLen: Integer;
+
+  // wrap-aware test whether AItem's home bucket lies in (ABottom, ATopInc],
+  // decides if an entry may slide back into the gap; nested (not unit-level)
+  // so amalgamated bundles can embed both dictionaries without a name clash
+  function InCircularRange(ABottom, AItem, ATopInc: Integer): Boolean;
+  begin
+    Result := ((ABottom < AItem) and (AItem <= ATopInc)) or
+      ((ATopInc < ABottom) and (AItem > ABottom)) or
+      ((ATopInc < ABottom) and (AItem <= ATopInc));
+  end;
+
 begin
   lvIndex := GetBucketIndex(AKey, HashOf(AKey));
   Result := lvIndex >= 0;
@@ -318,7 +317,7 @@ begin
   begin
     lvIndex := (lvIndex + 1) and (lvLen - 1);
     lvHC := FItems[lvIndex].HashCode;
-    if lvHC = gcEmptyHash then
+    if lvHC = gcStrEmptyHash then
       Break;
     lvBucket := lvHC and (lvLen - 1);
     if not InCircularRange(lvGap, lvBucket, lvIndex) then
@@ -327,7 +326,7 @@ begin
       lvGap := lvIndex;
     end;
   end;
-  FItems[lvGap].HashCode := gcEmptyHash;
+  FItems[lvGap].HashCode := gcStrEmptyHash;
   FItems[lvGap].Key := '';
   FItems[lvGap].Value := Unassigned;
   Dec(FCount);
@@ -349,7 +348,7 @@ begin
     Exit;
   lvStop := False;
   for i := 0 to Length(FItems) - 1 do
-    if FItems[i].HashCode <> gcEmptyHash then
+    if FItems[i].HashCode <> gcStrEmptyHash then
     begin
       ACallback(FItems[i].Key, FItems[i].Value, lvStop);
       if lvStop then
@@ -365,7 +364,7 @@ begin
   try
     AList.Clear;
     for i := 0 to Length(FItems) - 1 do
-      if FItems[i].HashCode <> gcEmptyHash then
+      if FItems[i].HashCode <> gcStrEmptyHash then
         AList.Add(FItems[i].Key);
   finally
     AList.EndUpdate;

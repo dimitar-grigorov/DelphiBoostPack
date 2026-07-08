@@ -66,8 +66,8 @@ const
   // per-round left-rotation amounts, one row per round group
   gcShifts: array[0..3, 0..3] of Byte = (
     (7, 12, 17, 22), (5, 9, 14, 20), (4, 11, 16, 23), (6, 10, 15, 21));
-  gcHexDigits = '0123456789abcdef';
-  gcFileChunkSize = 64 * 1024;
+  gcMd5HexDigits = '0123456789abcdef';
+  gcMd5FileChunkSize = 64 * 1024;
 
 constructor TbpMD5.Create;
 begin
@@ -262,9 +262,9 @@ begin
   try
     lvHasher := TbpMD5.Create;
     try
-      SetLength(lvChunk, gcFileChunkSize);
+      SetLength(lvChunk, gcMd5FileChunkSize);
       repeat
-        lvRead := lvStream.Read(lvChunk[0], gcFileChunkSize);
+        lvRead := lvStream.Read(lvChunk[0], gcMd5FileChunkSize);
         if lvRead > 0 then
           lvHasher.Update(lvChunk[0], lvRead);
       until lvRead <= 0;
@@ -294,8 +294,8 @@ begin
   SetLength(Result, SizeOf(ADigest) * 2);
   for i := 0 to High(ADigest) do
   begin
-    Result[i * 2 + 1] := gcHexDigits[(ADigest[i] shr 4) + 1];
-    Result[i * 2 + 2] := gcHexDigits[(ADigest[i] and $0F) + 1];
+    Result[i * 2 + 1] := gcMd5HexDigits[(ADigest[i] shr 4) + 1];
+    Result[i * 2 + 2] := gcMd5HexDigits[(ADigest[i] and $0F) + 1];
   end;
 end;
 

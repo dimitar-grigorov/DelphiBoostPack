@@ -66,8 +66,8 @@ const
     $A2BFE8A1, $A81A664B, $C24B8B70, $C76C51A3, $D192E819, $D6990624, $F40E3585, $106AA070,
     $19A4C116, $1E376C08, $2748774C, $34B0BCB5, $391C0CB3, $4ED8AA4A, $5B9CCA4F, $682E6FF3,
     $748F82EE, $78A5636F, $84C87814, $8CC70208, $90BEFFFA, $A4506CEB, $BEF9A3F7, $C67178F2);
-  gcHexDigits = '0123456789abcdef';
-  gcFileChunkSize = 64 * 1024;
+  gcShaHexDigits = '0123456789abcdef';
+  gcShaFileChunkSize = 64 * 1024;
 
 constructor TbpSHA256.Create;
 begin
@@ -268,9 +268,9 @@ begin
   try
     lvHasher := TbpSHA256.Create;
     try
-      SetLength(lvChunk, gcFileChunkSize);
+      SetLength(lvChunk, gcShaFileChunkSize);
       repeat
-        lvRead := lvStream.Read(lvChunk[0], gcFileChunkSize);
+        lvRead := lvStream.Read(lvChunk[0], gcShaFileChunkSize);
         if lvRead > 0 then
           lvHasher.Update(lvChunk[0], lvRead);
       until lvRead <= 0;
@@ -300,8 +300,8 @@ begin
   SetLength(Result, SizeOf(ADigest) * 2);
   for i := 0 to High(ADigest) do
   begin
-    Result[i * 2 + 1] := gcHexDigits[(ADigest[i] shr 4) + 1];
-    Result[i * 2 + 2] := gcHexDigits[(ADigest[i] and $0F) + 1];
+    Result[i * 2 + 1] := gcShaHexDigits[(ADigest[i] shr 4) + 1];
+    Result[i * 2 + 2] := gcShaHexDigits[(ADigest[i] and $0F) + 1];
   end;
 end;
 

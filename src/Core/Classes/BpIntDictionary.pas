@@ -102,9 +102,10 @@ implementation
 uses
   BpVariantUtils;
 
+// per-unit names so amalgamated bundles can embed both dictionaries
 const
-  gcEmptyHash = -1;                            // sentinel: slot is free
-  gcPositiveMask = not Integer($80000000);     // $7FFFFFFF
+  gcIntEmptyHash = -1;                         // sentinel: slot is free
+  gcIntPositiveMask = not Integer($80000000);  // $7FFFFFFF
 
 {$Q-} // the hash mix relies on wrapping 64-bit arithmetic
 function BpHashInt64(AKey: Int64): Integer;
@@ -120,10 +121,10 @@ begin
   Result := Integer(AKey);
 end;
 
-// forces a hash into 0..MaxInt so it can never collide with gcEmptyHash
+// forces a hash into 0..MaxInt so it can never collide with gcIntEmptyHash
 function PositiveHashOf(AKey: Int64): Integer;
 begin
-  Result := gcPositiveMask and ((gcPositiveMask and BpHashInt64(AKey)) + 1);
+  Result := gcIntPositiveMask and ((gcIntPositiveMask and BpHashInt64(AKey)) + 1);
 end;
 
 constructor TbpIntDictionary.Create(AInitialCapacity: Integer);
@@ -150,7 +151,7 @@ begin
   while True do
   begin
     lvHC := FItems[lvIndex].HashCode;
-    if lvHC = gcEmptyHash then
+    if lvHC = gcIntEmptyHash then
     begin
       Result := not lvIndex;
       Exit;
@@ -187,12 +188,12 @@ begin
   FItems := nil;
   SetLength(FItems, ANewCapacity);
   for i := 0 to ANewCapacity - 1 do
-    FItems[i].HashCode := gcEmptyHash;
+    FItems[i].HashCode := gcIntEmptyHash;
   // grow at 75% load; guarantees at least one always-empty slot
   FGrowThreshold := ANewCapacity shr 1 + ANewCapacity shr 2;
   // reinsert using the cached hash codes, no rehashing of the keys
   for i := 0 to Length(lvOldItems) - 1 do
-    if lvOldItems[i].HashCode <> gcEmptyHash then
+    if lvOldItems[i].HashCode <> gcIntEmptyHash then
     begin
       lvIndex := not GetBucketIndex(lvOldItems[i].Key, lvOldItems[i].HashCode);
       FItems[lvIndex].HashCode := lvOldItems[i].HashCode;
@@ -284,18 +285,20 @@ begin
   Result := GetBucketIndex(AKey, PositiveHashOf(AKey)) >= 0;
 end;
 
-// wrap-aware test whether AItem's home bucket lies in (ABottom, ATopInc],
-// used by Remove to decide if an entry may slide back into the gap
-function InCircularRange(ABottom, AItem, ATopInc: Integer): Boolean;
-begin
-  Result := ((ABottom < AItem) and (AItem <= ATopInc)) or
-    ((ATopInc < ABottom) and (AItem > ABottom)) or
-    ((ATopInc < ABottom) and (AItem <= ATopInc));
-end;
-
 function TbpIntDictionary.Remove(AKey: Int64): Boolean;
 var
   lvGap, lvIndex, lvHC, lvBucket, lvLen: Integer;
+
+  // wrap-aware test whether AItem's home bucket lies in (ABottom, ATopInc],
+  // decides if an entry may slide back into the gap; nested (not unit-level)
+  // so amalgamated bundles can embed both dictionaries without a name clash
+  function InCircularRange(ABottom, AItem, ATopInc: Integer): Boolean;
+  begin
+    Result := ((ABottom < AItem) and (AItem <= ATopInc)) or
+      ((ATopInc < ABottom) and (AItem > ABottom)) or
+      ((ATopInc < ABottom) and (AItem <= ATopInc));
+  end;
+
 begin
   lvIndex := GetBucketIndex(AKey, PositiveHashOf(AKey));
   Result := lvIndex >= 0;
@@ -309,7 +312,7 @@ begin
   begin
     lvIndex := (lvIndex + 1) and (lvLen - 1);
     lvHC := FItems[lvIndex].HashCode;
-    if lvHC = gcEmptyHash then
+    if lvHC = gcIntEmptyHash then
       Break;
     lvBucket := lvHC and (lvLen - 1);
     if not InCircularRange(lvGap, lvBucket, lvIndex) then
@@ -318,7 +321,7 @@ begin
       lvGap := lvIndex;
     end;
   end;
-  FItems[lvGap].HashCode := gcEmptyHash;
+  FItems[lvGap].HashCode := gcIntEmptyHash;
   FItems[lvGap].Key := 0;
   FItems[lvGap].Value := Unassigned;
   Dec(FCount);
@@ -340,7 +343,7 @@ begin
     Exit;
   lvStop := False;
   for i := 0 to Length(FItems) - 1 do
-    if FItems[i].HashCode <> gcEmptyHash then
+    if FItems[i].HashCode <> gcIntEmptyHash then
     begin
       ACallback(FItems[i].Key, FItems[i].Value, lvStop);
       if lvStop then
@@ -355,7 +358,7 @@ begin
   SetLength(Result, FCount);
   lvOut := 0;
   for i := 0 to Length(FItems) - 1 do
-    if FItems[i].HashCode <> gcEmptyHash then
+    if FItems[i].HashCode <> gcIntEmptyHash then
     begin
       Result[lvOut] := FItems[i].Key;
       Inc(lvOut);
