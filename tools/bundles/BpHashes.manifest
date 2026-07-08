@@ -1,0 +1,6 @@
+# BpHashes - SHA-256, MD5, HMAC-SHA256 and the Base64 they depend on.
+# Order matters: a unit may only use units listed above it.
+Core\Units\BpBase64.pas
+Core\Classes\BpSHA256.pas
+Core\Classes\BpMD5.pas
+Core\Classes\BpHMACSHA256.pas

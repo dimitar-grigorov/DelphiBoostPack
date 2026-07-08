@@ -1,0 +1,4 @@
+# BpHttpClientStandalone - WinInet HTTPS client with the Base64 it needs.
+# Order matters: a unit may only use units listed above it.
+Core\Units\BpBase64.pas
+Core\Classes\BpHttpClient.pas
