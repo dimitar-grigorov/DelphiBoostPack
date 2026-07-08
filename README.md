@@ -1,56 +1,58 @@
 # DelphiBoostPack
 
-A small, dependency-free utility library for old Delphi versions. Main development happens on Delphi 2007, the goal is to keep everything working from Delphi 7 up to 11.3. If you maintain a legacy codebase and miss things like dictionaries, a fast StringBuilder or a usable HTTP client, this is for you.
+The parts of a modern RTL that Delphi 2007 never got: hash dictionaries, a fast StringBuilder, SHA-256 / MD5 / HMAC, Base64, a WinInet HTTP client and a JSON parser. Pure Pascal, no DLLs, no packages to register. Drop in a unit and go.
 
-No external DLLs, no design-time packages, no runtime dependencies beyond the RTL and WinInet (for the HTTP client). Everything is covered by DUnit tests.
+It targets Delphi 2007 first and stays clean from Delphi 7 all the way to 11.3, because rewriting a 300-unit legacy app just to get a `TDictionary` is not a plan. If you are stuck on an old compiler and keep reaching for things it does not have, help yourself to whatever is useful here.
+
+Everything has DUnit tests, and the crypto and hash units are cross-checked against the Windows CryptoAPI and the XE6 RTL so the numbers actually match.
 
 ## What's inside
 
 ### Collections
-- **TbpStrDictionary** / **TbpIntDictionary** (`BpStrDictionary.pas`, `BpIntDictionary.pas`) - hash dictionaries with string and Int64 keys for Delphi versions without generics. The engine follows the XE6 `TDictionary` design: open addressing, linear probing, power-of-two capacity, backward-shift deletion. Values are Variants with typed accessors (`GetInt`, `TryGetStr`, `GetFloatDef` and friends) that validate instead of silently converting.
-- **TbpIntList** (`BpIntList.pas`) - a `TStringList`-style list of integers with sorting, delimited text and the usual index operations.
+- **TbpStrDictionary** / **TbpIntDictionary** - real hash maps with string and Int64 keys, for compilers with no generics. Same engine as XE6's `TDictionary`: open addressing, linear probing, power-of-two capacity, backward-shift deletion. Values are Variants, but the typed accessors (`GetInt`, `TryGetStr`, `GetFloatDef` and the rest) check the type instead of quietly coercing it.
+- **TbpIntList** - a list of integers that behaves like `TStringList`: sorting, delimited text, the usual indexing.
 
 ### Strings
-- **TbpStringBuilder** (`BpStringBuilder.pas`) - StringBuilder modeled on the XE6 API but considerably faster, since it appends through a cached raw pointer instead of the `Length` property setter.
-- **BpStrUtils.pas** - `Split`, `Join`, `StartsWith`/`EndsWith` and `FastStringReplace`, which collects match positions first and builds the result in a single allocation instead of copying the tail on every match like `SysUtils.StringReplace` does.
+- **TbpStringBuilder** - the XE6 `TStringBuilder` API, minus the slow part. The RTL routes every append through the `Length` setter; this one writes through a cached pointer, so it is quite a bit faster.
+- **BpStrUtils** - `Split`, `Join`, `StartsWith` / `EndsWith`, and a `FastStringReplace` that finds every match first and builds the result in one allocation. `SysUtils.StringReplace` recopies the tail on each hit and goes quadratic; this one does not.
 
 ### Hashing and encoding
-- **BpSHA256.pas** - SHA-256 per FIPS 180-4 in pure Pascal. Streaming interface plus one-shot class functions for buffers, strings and files, with hex or Base64 output. Verified against the FIPS known-answer vectors and cross-checked against Windows CryptoAPI.
-- **BpMD5.pas** - MD5 per RFC 1321, same interface as BpSHA256. Broken for signatures, still handy for legacy checksums and ETags.
-- **BpHMACSHA256.pas** - HMAC-SHA256 per RFC 2104, for API signatures and webhook verification.
-- **BpHashBobJenkins.pas** - Bob Jenkins lookup3 hash, byte-for-byte identical with the XE+ RTL `BobJenkinsHash`, used by the string dictionary.
-- **BpBase64.pas** - Base64 and Base64url per RFC 4648. Single-allocation encode, decoder accepts both alphabets, tolerates missing padding and skips whitespace.
+- **BpSHA256** - SHA-256 (FIPS 180-4), pure Pascal. Stream it in chunks or call a one-shot class function for a buffer, string or file, hex or Base64 out. Checked against the FIPS vectors and CryptoAPI.
+- **BpMD5** - MD5 (RFC 1321), same shape as the SHA unit. It is broken for anything security-related, so keep it to legacy checksums, ETags and content fingerprints.
+- **BpHMACSHA256** - HMAC-SHA256 (RFC 2104) for API request signing and webhook verification.
+- **BpHashBobJenkins** - the Bob Jenkins lookup3 hash, byte-for-byte identical to the XE+ `BobJenkinsHash`. It is what powers the string dictionary.
+- **BpBase64** - Base64 and Base64url (RFC 4648). One allocation to encode; the decoder eats either alphabet, forgives missing padding and skips whitespace, so MIME-wrapped input just works.
 
 ### HTTP and JSON
-- **TbpHttpClient** (`BpHttpClient.pas`) - HTTP/HTTPS client over WinInet, so TLS comes from Windows (Schannel) and no OpenSSL DLLs are needed. `Get`/`Post`/`Put`/`Delete` return a response record, with persistent headers, bearer token and basic auth helpers, and `PostJson` for the typical API call.
-- **TbpJsonValue** (`BpJson.pas`) - JSON reader and writer per RFC 8259. One class models the whole tree by `Kind` (null/bool/int/float/string/array/object); the parser is strict single-pass recursive descent (rejects leading zeros, control characters in strings, trailing commas and text after the value, with line/position in the error). Typed object accessors follow the dictionary convention (`GetStr`/`GetStrDef`/`TryGetStr`), `FindPath` walks dotted paths like `data.items[0].name`, and `ToJson`/`ToJsonPretty` write it back out. No data binding, no dependencies beyond the string builder.
+- **TbpHttpClient** - HTTP and HTTPS over WinInet. TLS comes from Schannel, which means no OpenSSL DLLs shipping alongside your exe. `Get` / `Post` / `Put` / `Delete` hand back a response record; bearer tokens, basic auth and persistent headers are one call each, and `PostJson` sets the content type for you.
+- **TbpJsonValue** - a JSON reader and writer (RFC 8259). One class is the whole tree, tagged by `Kind`. The parser is strict on purpose: leading zeros, raw control characters, trailing commas and junk after the value all fail, and the error tells you the line and column. Pull values out with the same typed accessors as the dictionaries, reach deep with `FindPath('data.items[0].name')`, and write it back with `ToJson` or `ToJsonPretty`. No RTTI, no data binding, just the tree.
 
-### Other
-- **TbpObjectComparer** (`BpObjectComparer.pas`) - compares two objects via RTTI and reports which published properties differ, including collections.
-- **BpVariantUtils.pas** - strict Variant-to-native conversions. Succeeds only when the Variant already holds the requested kind of data, no parsing or implicit widening.
-- **BpSysUtils.pas** - small compatibility shims like `CharInSet` for pre-2009 compilers.
-- **StopWatch.pas** - high-precision stopwatch (`QueryPerformanceCounter`) for Delphi 7-2007, used by the benchmark suite.
+### Odds and ends
+- **TbpObjectComparer** - diffs two objects by RTTI and tells you which published properties changed, collections included.
+- **BpVariantUtils** - strict Variant-to-native conversions. It only succeeds when the Variant already holds that type; nothing is parsed or widened behind your back.
+- **BpSysUtils** - small shims like `CharInSet` for the pre-2009 compilers.
+- **StopWatch** - a `QueryPerformanceCounter` stopwatch for Delphi 7-2007, used by the benchmarks.
 
-## Single-file bundles
+## Grab a single file
 
-If you just want to drop one `.pas` file into a project, take a bundle from `dist\`:
+Do not want to add ten units to your project? Take one file from `dist\` instead. Each bundle is self-contained:
 
-- **BpDictionaries.pas** - both dictionaries with the hash and Variant helpers embedded
+- **BpDictionaries.pas** - both dictionaries, with the hash and Variant helpers baked in
 - **BpHashes.pas** - SHA-256, MD5, HMAC-SHA256 and Base64
-- **BpHttpClientStandalone.pas** - the HTTP client with Base64 embedded
-- **BpJsonStandalone.pas** - the JSON reader/writer with the string builder embedded
+- **BpHttpClientStandalone.pas** - the HTTP client with Base64 baked in
+- **BpJsonStandalone.pas** - the JSON reader/writer with the string builder baked in
 
-The bundles are generated from the modular units, SQLite amalgamation style, by `tools\Amalgamate.ps1`. Do not edit them directly; fix the source unit and regenerate:
+These are generated from the modular units, SQLite amalgamation style, by `tools\Amalgamate.ps1`. They are build artifacts, so do not patch them by hand; fix the real unit and regenerate:
 
 ```
 powershell -ExecutionPolicy Bypass -File tools\Amalgamate.ps1
 ```
 
-Use at most one bundle per project. Two bundles embedding the same helper unit would declare duplicate identifiers. `tools\VerifyBundles.cmd` compiles each bundle standalone and runs a short smoke test against known-answer vectors.
+One catch: use at most one bundle per project. Two bundles that embed the same helper would collide on duplicate identifiers. `tools\VerifyBundles.cmd` compiles each bundle on its own and runs a smoke test against known-answer vectors, so you can trust what ships.
 
 ## Building and testing
 
-The `.cmd` scripts at the repository root build with Delphi 2007 via MSBuild:
+The `.cmd` scripts at the repo root drive Delphi 2007 through MSBuild:
 
 ```
 Build_Main_D2007.cmd Release
@@ -58,25 +60,23 @@ Build_Tests_D2007.cmd Debug
 RunTests_D2007.cmd
 ```
 
-Tests are DUnit; the suite also contains benchmarks that compare the performance-oriented classes against their RTL counterparts.
+The test project is DUnit and also carries benchmarks that pit the performance units against their RTL equivalents, so the speed claims above are not just talk.
 
 ## Coding style
 
-To keep the codebase consistent:
+If you send a patch, match the house style:
 
-- **Local variables** start with `lv`, e.g. `lvIndex`, `lvName`.
-- **Global variables** start with `gv`, e.g. `gvUserCount`.
-- **Local constants** start with `lc`, **global constants** with `gc`.
-- **Classes** use the `Tbp` prefix (from Boost Pack), e.g. `TbpStringBuilder`.
-- **One class per unit** where practical; the unit is named after the class, e.g. `TbpIntList` lives in `BpIntList.pas`.
-- **Comments** are one-line `//` comments; `{ }` braces are reserved for compiler directives.
+- Locals start with `lv`, globals with `gv`, local constants with `lc`, global constants with `gc`.
+- Classes get the `Tbp` prefix (Boost Pack), e.g. `TbpStringBuilder`.
+- One class per unit where it makes sense, and the unit is named after it (`TbpIntList` lives in `BpIntList.pas`).
+- Comments are `//` lines. Braces `{ }` are for compiler directives only.
 
-## Contribution
+## Contributing
 
-Contributions are welcome. Fork the repository, make your changes and submit a pull request. Bug fixes, new utilities and documentation improvements are all appreciated.
+Fork it, fix or add something, open a pull request. Bugs, new units and better docs are all fair game.
 
-## Official Delphi Downloads
+## Getting Delphi
 
-Official ISOs and web installers for a wide range of Delphi and RAD Studio versions are collected here:
+Official ISOs and web installers for the older Delphi and RAD Studio releases are collected here:
 
 - [Delphi Official Downloads](https://github.com/dimitar-grigorov/DelphiBoostPack/blob/main/Delphi%20Official%20Downloads.md)
