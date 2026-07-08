@@ -21,8 +21,9 @@ No external DLLs, no design-time packages, no runtime dependencies beyond the RT
 - **BpHashBobJenkins.pas** - Bob Jenkins lookup3 hash, byte-for-byte identical with the XE+ RTL `BobJenkinsHash`, used by the string dictionary.
 - **BpBase64.pas** - Base64 and Base64url per RFC 4648. Single-allocation encode, decoder accepts both alphabets, tolerates missing padding and skips whitespace.
 
-### HTTP
+### HTTP and JSON
 - **TbpHttpClient** (`BpHttpClient.pas`) - HTTP/HTTPS client over WinInet, so TLS comes from Windows (Schannel) and no OpenSSL DLLs are needed. `Get`/`Post`/`Put`/`Delete` return a response record, with persistent headers, bearer token and basic auth helpers, and `PostJson` for the typical API call.
+- **TbpJsonValue** (`BpJson.pas`) - JSON reader and writer per RFC 8259. One class models the whole tree by `Kind` (null/bool/int/float/string/array/object); the parser is strict single-pass recursive descent (rejects leading zeros, control characters in strings, trailing commas and text after the value, with line/position in the error). Typed object accessors follow the dictionary convention (`GetStr`/`GetStrDef`/`TryGetStr`), `FindPath` walks dotted paths like `data.items[0].name`, and `ToJson`/`ToJsonPretty` write it back out. No data binding, no dependencies beyond the string builder.
 
 ### Other
 - **TbpObjectComparer** (`BpObjectComparer.pas`) - compares two objects via RTTI and reports which published properties differ, including collections.
@@ -37,6 +38,7 @@ If you just want to drop one `.pas` file into a project, take a bundle from `dis
 - **BpDictionaries.pas** - both dictionaries with the hash and Variant helpers embedded
 - **BpHashes.pas** - SHA-256, MD5, HMAC-SHA256 and Base64
 - **BpHttpClientStandalone.pas** - the HTTP client with Base64 embedded
+- **BpJsonStandalone.pas** - the JSON reader/writer with the string builder embedded
 
 The bundles are generated from the modular units, SQLite amalgamation style, by `tools\Amalgamate.ps1`. Do not edit them directly; fix the source unit and regenerate:
 

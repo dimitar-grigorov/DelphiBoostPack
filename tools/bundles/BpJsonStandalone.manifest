@@ -1,0 +1,4 @@
+# BpJsonStandalone - the JSON reader/writer with its string builder embedded.
+# Order matters: a unit may only use units listed above it.
+Core\Classes\BpStringBuilder.pas
+Core\Classes\BpJson.pas

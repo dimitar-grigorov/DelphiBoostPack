@@ -12,7 +12,7 @@ set "SCRATCH=%TEMP%\BpVerifyBundles"
 if exist "%SCRATCH%" rd /s /q "%SCRATCH%"
 md "%SCRATCH%"
 
-for %%B in (BpDictionaries BpHashes BpHttpClientStandalone) do (
+for %%B in (BpDictionaries BpHashes BpHttpClientStandalone BpJsonStandalone) do (
   echo Verifying %%B...
   "%DCC%" -B -Q -E"%SCRATCH%" -N0"%SCRATCH%" -U"%~dp0..\dist" "%~dp0smoke\Smoke%%B.dpr" > "%SCRATCH%\%%B.log" 2>&1
   if errorlevel 1 (
