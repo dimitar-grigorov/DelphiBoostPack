@@ -387,7 +387,7 @@ begin
 end;
 
 // raises a descriptive conversion error naming the key and the stored type
-procedure RaiseTypeError(const AKey, AExpected: string; const AValue: Variant);
+procedure RaiseStrTypeError(const AKey, AExpected: string; const AValue: Variant);
 begin
   raise EbpStrDictionary.CreateFmt('Value for key "%s" is not %s (stored type: %s)',
     [AKey, AExpected, VarTypeAsText(VarType(AValue))]);
@@ -404,7 +404,7 @@ var
 begin
   lvValue := GetItem(AKey);
   if not BpTryVarToInt(lvValue, Result) then
-    RaiseTypeError(AKey, 'an Integer', lvValue);
+    RaiseStrTypeError(AKey, 'an Integer', lvValue);
 end;
 
 function TbpStrDictionary.GetIntDef(const AKey: string; ADefault: Integer): Integer;
@@ -433,7 +433,7 @@ var
 begin
   lvValue := GetItem(AKey);
   if not BpTryVarToInt64(lvValue, Result) then
-    RaiseTypeError(AKey, 'an Int64', lvValue);
+    RaiseStrTypeError(AKey, 'an Int64', lvValue);
 end;
 
 function TbpStrDictionary.GetInt64Def(const AKey: string; ADefault: Int64): Int64;
@@ -462,7 +462,7 @@ var
 begin
   lvValue := GetItem(AKey);
   if not BpTryVarToStr(lvValue, Result) then
-    RaiseTypeError(AKey, 'a string', lvValue);
+    RaiseStrTypeError(AKey, 'a string', lvValue);
 end;
 
 function TbpStrDictionary.GetStrDef(const AKey, ADefault: string): string;
@@ -491,7 +491,7 @@ var
 begin
   lvValue := GetItem(AKey);
   if not BpTryVarToBool(lvValue, Result) then
-    RaiseTypeError(AKey, 'a Boolean', lvValue);
+    RaiseStrTypeError(AKey, 'a Boolean', lvValue);
 end;
 
 function TbpStrDictionary.GetBoolDef(const AKey: string; ADefault: Boolean): Boolean;
@@ -520,7 +520,7 @@ var
 begin
   lvValue := GetItem(AKey);
   if not BpTryVarToFloat(lvValue, Result) then
-    RaiseTypeError(AKey, 'a Float', lvValue);
+    RaiseStrTypeError(AKey, 'a Float', lvValue);
 end;
 
 function TbpStrDictionary.GetFloatDef(const AKey: string; ADefault: Double): Double;
@@ -555,7 +555,7 @@ var
 begin
   lvValue := GetItem(AKey);
   if not BpTryVarToIntArray(lvValue, Result) then
-    RaiseTypeError(AKey, 'an Integer array', lvValue);
+    RaiseStrTypeError(AKey, 'an Integer array', lvValue);
 end;
 
 function TbpStrDictionary.TryGetIntArray(const AKey: string; out AValues: TbpIntegerDynArray): Boolean;
