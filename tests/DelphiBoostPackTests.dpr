@@ -38,6 +38,8 @@ uses
   BpHttpClient in '..\src\Core\Classes\BpHttpClient.pas',
   BpIntDictionaryTests in 'Core\BpIntDictionaryTests.pas',
   BpIntDictionary in '..\src\Core\Classes\BpIntDictionary.pas',
+  BpJsonTests in 'Core\BpJsonTests.pas',
+  BpJson in '..\src\Core\Classes\BpJson.pas',
   BpMD5Tests in 'Core\BpMD5Tests.pas',
   BpMD5 in '..\src\Core\Classes\BpMD5.pas',
   BpSHA256Tests in 'Core\BpSHA256Tests.pas',
