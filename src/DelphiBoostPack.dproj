@@ -57,6 +57,7 @@
     <DCCReference Include="Core\Units\BpBase64.pas" />
     <DCCReference Include="Core\Units\BpStrUtils.pas" />
     <DCCReference Include="Core\Units\BpSysUtils.pas" />
+    <DCCReference Include="Core\Units\BpVariantUtils.pas" />
     <DCCReference Include="Core\Units\StopWatch.pas" />
   </ItemGroup>
 </Project>
