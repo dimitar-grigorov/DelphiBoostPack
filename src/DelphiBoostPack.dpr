@@ -13,6 +13,7 @@ uses
   BpHashBobJenkins in 'Core\Classes\BpHashBobJenkins.pas',
   BpStrDictionary in 'Core\Classes\BpStrDictionary.pas',
   BpStringBuilder in 'Core\Classes\BpStringBuilder.pas',
+  BpHMACSHA256 in 'Core\Classes\BpHMACSHA256.pas',
   BpMD5 in 'Core\Classes\BpMD5.pas',
   BpSHA256 in 'Core\Classes\BpSHA256.pas',
   BpBase64 in 'Core\Units\BpBase64.pas',
