@@ -34,6 +34,8 @@ uses
   BpBase64 in '..\src\Core\Units\BpBase64.pas',
   BpHMACSHA256Tests in 'Core\BpHMACSHA256Tests.pas',
   BpHMACSHA256 in '..\src\Core\Classes\BpHMACSHA256.pas',
+  BpHttpClientTests in 'Core\BpHttpClientTests.pas',
+  BpHttpClient in '..\src\Core\Classes\BpHttpClient.pas',
   BpMD5Tests in 'Core\BpMD5Tests.pas',
   BpMD5 in '..\src\Core\Classes\BpMD5.pas',
   BpSHA256Tests in 'Core\BpSHA256Tests.pas',
