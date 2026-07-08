@@ -48,6 +48,7 @@ uses
   BpStringBuilderBenchmark in 'Benchmarks\BpStringBuilderBenchmark.pas',
   BpStrUtilsBenchmark in 'Benchmarks\BpStrUtilsBenchmark.pas',
   BpBase64Benchmark in 'Benchmarks\BpBase64Benchmark.pas',
+  BpHashBenchmark in 'Benchmarks\BpHashBenchmark.pas',
   BpBaseBenchmarkTestCase in 'Benchmarks\BpBaseBenchmarkTestCase.pas',
   BpTypesOperationsBenchmark in 'Benchmarks\BpTypesOperationsBenchmark.pas';
 
