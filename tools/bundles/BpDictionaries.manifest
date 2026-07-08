@@ -1,0 +1,6 @@
+# BpDictionaries - both hash dictionaries with everything they need.
+# Order matters: a unit may only use units listed above it.
+Core\Classes\BpHashBobJenkins.pas
+Core\Units\BpVariantUtils.pas
+Core\Classes\BpStrDictionary.pas
+Core\Classes\BpIntDictionary.pas
