@@ -1,36 +1,80 @@
 # DelphiBoostPack
 
-Welcome to DelphiBoostPack, a comprehensive utility library designed to enhance and extend the capabilities of Delphi 2007 and earlier versions. This repository aims to bridge the gap between older Delphi environments and modern software development practices by providing a collection of utilities, classes, and routines that incorporate features commonly found in newer programming languages.
+A small, dependency-free utility library for old Delphi versions. Main development happens on Delphi 2007, the goal is to keep everything working from Delphi 7 up to 11.3. If you maintain a legacy codebase and miss things like dictionaries, a fast StringBuilder or a usable HTTP client, this is for you.
 
-**Intent of the Repository:**
+No external DLLs, no design-time packages, no runtime dependencies beyond the RTL and WinInet (for the HTTP client). Everything is covered by DUnit tests.
 
-Our goal is to support the Delphi developer community by offering easy-to-integrate solutions that improve productivity, code maintainability, and application performance. Whether you're working with databases, managing collections, or requiring advanced data manipulation, DelphiBoostPack offers a suite of tools to streamline your development process without the need to upgrade from your trusted Delphi version.
+## What's inside
 
-**Development and Compatibility:**
+### Collections
+- **TbpStrDictionary** / **TbpIntDictionary** (`BpStrDictionary.pas`, `BpIntDictionary.pas`) - hash dictionaries with string and Int64 keys for Delphi versions without generics. The engine follows the XE6 `TDictionary` design: open addressing, linear probing, power-of-two capacity, backward-shift deletion. Values are Variants with typed accessors (`GetInt`, `TryGetStr`, `GetFloatDef` and friends) that validate instead of silently converting.
+- **TbpIntList** (`BpIntList.pas`) - a `TStringList`-style list of integers with sorting, delimited text and the usual index operations.
 
-The main development of DelphiBoostPack is done on Delphi 2007, ensuring that the tools and utilities are optimized for this version. However, the plan is to support a wide range of Delphi versions, from Delphi 7 to Delphi 11.3. This broad compatibility range is intended to make the utilities accessible and beneficial to developers working across different versions of Delphi, allowing for a modern development experience even on older platforms.
+### Strings
+- **TbpStringBuilder** (`BpStringBuilder.pas`) - StringBuilder modeled on the XE6 API but considerably faster, since it appends through a cached raw pointer instead of the `Length` property setter.
+- **BpStrUtils.pas** - `Split`, `Join`, `StartsWith`/`EndsWith` and `FastStringReplace`, which collects match positions first and builds the result in a single allocation instead of copying the tail on every match like `SysUtils.StringReplace` does.
 
-## Coding Style Guidelines
+### Hashing and encoding
+- **BpSHA256.pas** - SHA-256 per FIPS 180-4 in pure Pascal. Streaming interface plus one-shot class functions for buffers, strings and files, with hex or Base64 output. Verified against the FIPS known-answer vectors and cross-checked against Windows CryptoAPI.
+- **BpMD5.pas** - MD5 per RFC 1321, same interface as BpSHA256. Broken for signatures, still handy for legacy checksums and ETags.
+- **BpHMACSHA256.pas** - HMAC-SHA256 per RFC 2104, for API signatures and webhook verification.
+- **BpHashBobJenkins.pas** - Bob Jenkins lookup3 hash, byte-for-byte identical with the XE+ RTL `BobJenkinsHash`, used by the string dictionary.
+- **BpBase64.pas** - Base64 and Base64url per RFC 4648. Single-allocation encode, decoder accepts both alphabets, tolerates missing padding and skips whitespace.
 
-To maintain consistency and code readability within the DelphiBoostPack, we adhere to the following coding style guidelines:
+### HTTP
+- **TbpHttpClient** (`BpHttpClient.pas`) - HTTP/HTTPS client over WinInet, so TLS comes from Windows (Schannel) and no OpenSSL DLLs are needed. `Get`/`Post`/`Put`/`Delete` return a response record, with persistent headers, bearer token and basic auth helpers, and `PostJson` for the typical API call.
 
--   **Local Variables**: All local variables must start with the `lv` prefix, e.g., `lvIndex`, `lvName`.
--   **Global Variables**: Global variables should start with the `gv` prefix, e.g., `gvApplicationState`, `gvUserCount`.
--   **Local Constants**: Prefix local constants with `lc`, e.g., `lcMaxSize`, `lcFilePath`.
--   **Global Constants**: Global constants must start with `gc`, e.g., `gcAppName`, `gcVersion`.
--   **Class Prefix**: Most classes within the repository must have the prefix `Tbp` (from Boost Pack), indicating their belonging to the DelphiBoostPack collection, e.g., `TbpCustomList`, `TbpDatabaseConnector`.
--   **Unit Naming**: It is recommended that one unit contains only one class to maintain clarity and ease of maintenance. For instance, the class `TbpIntegerList` should be located in the unit named `bpIntegerList.pas`.
+### Other
+- **TbpObjectComparer** (`BpObjectComparer.pas`) - compares two objects via RTTI and reports which published properties differ, including collections.
+- **BpVariantUtils.pas** - strict Variant-to-native conversions. Succeeds only when the Variant already holds the requested kind of data, no parsing or implicit widening.
+- **BpSysUtils.pas** - small compatibility shims like `CharInSet` for pre-2009 compilers.
+- **StopWatch.pas** - high-precision stopwatch (`QueryPerformanceCounter`) for Delphi 7-2007, used by the benchmark suite.
 
-By following these guidelines, we ensure that the codebase remains organized, intuitive, and accessible to contributors and users alike.
+## Single-file bundles
+
+If you just want to drop one `.pas` file into a project, take a bundle from `dist\`:
+
+- **BpDictionaries.pas** - both dictionaries with the hash and Variant helpers embedded
+- **BpHashes.pas** - SHA-256, MD5, HMAC-SHA256 and Base64
+- **BpHttpClientStandalone.pas** - the HTTP client with Base64 embedded
+
+The bundles are generated from the modular units, SQLite amalgamation style, by `tools\Amalgamate.ps1`. Do not edit them directly; fix the source unit and regenerate:
+
+```
+powershell -ExecutionPolicy Bypass -File tools\Amalgamate.ps1
+```
+
+Use at most one bundle per project. Two bundles embedding the same helper unit would declare duplicate identifiers. `tools\VerifyBundles.cmd` compiles each bundle standalone and runs a short smoke test against known-answer vectors.
+
+## Building and testing
+
+The `.cmd` scripts at the repository root build with Delphi 2007 via MSBuild:
+
+```
+Build_Main_D2007.cmd Release
+Build_Tests_D2007.cmd Debug
+RunTests_D2007.cmd
+```
+
+Tests are DUnit; the suite also contains benchmarks that compare the performance-oriented classes against their RTL counterparts.
+
+## Coding style
+
+To keep the codebase consistent:
+
+- **Local variables** start with `lv`, e.g. `lvIndex`, `lvName`.
+- **Global variables** start with `gv`, e.g. `gvUserCount`.
+- **Local constants** start with `lc`, **global constants** with `gc`.
+- **Classes** use the `Tbp` prefix (from Boost Pack), e.g. `TbpStringBuilder`.
+- **One class per unit** where practical; the unit is named after the class, e.g. `TbpIntList` lives in `BpIntList.pas`.
+- **Comments** are one-line `//` comments; `{ }` braces are reserved for compiler directives.
 
 ## Contribution
 
-We welcome contributions from the Delphi community! Whether you're fixing a bug, adding a new utility, or improving documentation, your input is valuable. Please feel free to fork the repository, make your changes, and submit a pull request.
+Contributions are welcome. Fork the repository, make your changes and submit a pull request. Bug fixes, new utilities and documentation improvements are all appreciated.
 
 ## Official Delphi Downloads
 
-For those looking to download the latest or specific versions of Delphi, official ISOs and web installers can be found through the following link:
+Official ISOs and web installers for a wide range of Delphi and RAD Studio versions are collected here:
 
 - [Delphi Official Downloads](https://github.com/dimitar-grigorov/DelphiBoostPack/blob/main/Delphi%20Official%20Downloads.md)
-
-This link provides access to a wide range of Delphi and RAD Studio versions, ensuring developers can find the specific version they need to support their projects or update their development environment.
