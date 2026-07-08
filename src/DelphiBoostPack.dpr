@@ -21,6 +21,7 @@ uses
   BpBase64 in 'Core\Units\BpBase64.pas',
   BpStrUtils in 'Core\Units\BpStrUtils.pas',
   BpSysUtils in 'Core\Units\BpSysUtils.pas',
+  BpVariantUtils in 'Core\Units\BpVariantUtils.pas',
   StopWatch in 'Core\Units\StopWatch.pas';
 
 begin

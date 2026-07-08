@@ -99,17 +99,12 @@ function BpHashInt64(AKey: Int64): Integer;
 
 implementation
 
+uses
+  BpVariantUtils;
+
 const
   gcEmptyHash = -1;                            // sentinel: slot is free
   gcPositiveMask = not Integer($80000000);     // $7FFFFFFF
-
-{$IF CompilerVersion < 20}
-const
-  varUString = $0102;  // UnicodeString variant type, first defined in Delphi 2009
-{$IFEND}
-
-const
-  gcVarWord64 = $0015; // UInt64 variant type (varWord64/varUInt64, missing in D2007)
 
 {$Q-} // the hash mix relies on wrapping 64-bit arithmetic
 function BpHashInt64(AKey: Int64): Integer;
@@ -129,74 +124,6 @@ end;
 function PositiveHashOf(AKey: Int64): Integer;
 begin
   Result := gcPositiveMask and ((gcPositiveMask and BpHashInt64(AKey)) + 1);
-end;
-
-// strict conversions: only variants that already hold the requested kind
-// of data pass; nothing is parsed, truncated or implicitly widened
-
-function TryVarToInt64(const AValue: Variant; out AResult: Int64): Boolean;
-begin
-  case VarType(AValue) of
-    varShortInt, varSmallint, varInteger, varByte, varWord, varLongWord,
-    varInt64, gcVarWord64:
-    begin
-      AResult := AValue;
-      Result := True;
-    end;
-  else
-    AResult := 0;
-    Result := False;
-  end;
-end;
-
-function TryVarToInt(const AValue: Variant; out AResult: Integer): Boolean;
-var
-  lvInt64: Int64;
-begin
-  Result := TryVarToInt64(AValue, lvInt64) and
-    (lvInt64 >= Low(Integer)) and (lvInt64 <= High(Integer));
-  if Result then
-    AResult := Integer(lvInt64)
-  else
-    AResult := 0;
-end;
-
-function TryVarToStr(const AValue: Variant; out AResult: string): Boolean;
-begin
-  case VarType(AValue) of
-    varOleStr, varString, varUString:
-    begin
-      AResult := AValue;
-      Result := True;
-    end;
-  else
-    AResult := '';
-    Result := False;
-  end;
-end;
-
-function TryVarToBool(const AValue: Variant; out AResult: Boolean): Boolean;
-begin
-  Result := VarType(AValue) = varBoolean;
-  if Result then
-    AResult := AValue
-  else
-    AResult := False;
-end;
-
-function TryVarToFloat(const AValue: Variant; out AResult: Double): Boolean;
-begin
-  case VarType(AValue) of
-    varShortInt, varSmallint, varInteger, varByte, varWord, varLongWord,
-    varInt64, gcVarWord64, varSingle, varDouble, varCurrency:
-    begin
-      AResult := AValue;
-      Result := True;
-    end;
-  else
-    AResult := 0;
-    Result := False;
-  end;
 end;
 
 constructor TbpIntDictionary.Create(AInitialCapacity: Integer);
@@ -467,7 +394,7 @@ var
   lvValue: Variant;
 begin
   lvValue := GetItem(AKey);
-  if not TryVarToInt(lvValue, Result) then
+  if not BpTryVarToInt(lvValue, Result) then
     RaiseTypeError(AKey, 'an Integer', lvValue);
 end;
 
@@ -481,7 +408,7 @@ function TbpIntDictionary.TryGetInt(AKey: Int64; out AValue: Integer): Boolean;
 var
   lvValue: Variant;
 begin
-  Result := TryGetValue(AKey, lvValue) and TryVarToInt(lvValue, AValue);
+  Result := TryGetValue(AKey, lvValue) and BpTryVarToInt(lvValue, AValue);
   if not Result then
     AValue := 0;
 end;
@@ -496,7 +423,7 @@ var
   lvValue: Variant;
 begin
   lvValue := GetItem(AKey);
-  if not TryVarToInt64(lvValue, Result) then
+  if not BpTryVarToInt64(lvValue, Result) then
     RaiseTypeError(AKey, 'an Int64', lvValue);
 end;
 
@@ -510,7 +437,7 @@ function TbpIntDictionary.TryGetInt64(AKey: Int64; out AValue: Int64): Boolean;
 var
   lvValue: Variant;
 begin
-  Result := TryGetValue(AKey, lvValue) and TryVarToInt64(lvValue, AValue);
+  Result := TryGetValue(AKey, lvValue) and BpTryVarToInt64(lvValue, AValue);
   if not Result then
     AValue := 0;
 end;
@@ -525,7 +452,7 @@ var
   lvValue: Variant;
 begin
   lvValue := GetItem(AKey);
-  if not TryVarToStr(lvValue, Result) then
+  if not BpTryVarToStr(lvValue, Result) then
     RaiseTypeError(AKey, 'a string', lvValue);
 end;
 
@@ -539,7 +466,7 @@ function TbpIntDictionary.TryGetStr(AKey: Int64; out AValue: string): Boolean;
 var
   lvValue: Variant;
 begin
-  Result := TryGetValue(AKey, lvValue) and TryVarToStr(lvValue, AValue);
+  Result := TryGetValue(AKey, lvValue) and BpTryVarToStr(lvValue, AValue);
   if not Result then
     AValue := '';
 end;
@@ -554,7 +481,7 @@ var
   lvValue: Variant;
 begin
   lvValue := GetItem(AKey);
-  if not TryVarToBool(lvValue, Result) then
+  if not BpTryVarToBool(lvValue, Result) then
     RaiseTypeError(AKey, 'a Boolean', lvValue);
 end;
 
@@ -568,7 +495,7 @@ function TbpIntDictionary.TryGetBool(AKey: Int64; out AValue: Boolean): Boolean;
 var
   lvValue: Variant;
 begin
-  Result := TryGetValue(AKey, lvValue) and TryVarToBool(lvValue, AValue);
+  Result := TryGetValue(AKey, lvValue) and BpTryVarToBool(lvValue, AValue);
   if not Result then
     AValue := False;
 end;
@@ -583,7 +510,7 @@ var
   lvValue: Variant;
 begin
   lvValue := GetItem(AKey);
-  if not TryVarToFloat(lvValue, Result) then
+  if not BpTryVarToFloat(lvValue, Result) then
     RaiseTypeError(AKey, 'a Float', lvValue);
 end;
 
@@ -597,7 +524,7 @@ function TbpIntDictionary.TryGetFloat(AKey: Int64; out AValue: Double): Boolean;
 var
   lvValue: Variant;
 begin
-  Result := TryGetValue(AKey, lvValue) and TryVarToFloat(lvValue, AValue);
+  Result := TryGetValue(AKey, lvValue) and BpTryVarToFloat(lvValue, AValue);
   if not Result then
     AValue := 0;
 end;
