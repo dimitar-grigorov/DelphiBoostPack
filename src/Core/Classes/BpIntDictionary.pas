@@ -381,7 +381,7 @@ begin
 end;
 
 // raises a descriptive conversion error naming the key and the stored type
-procedure RaiseTypeError(AKey: Int64; const AExpected: string; const AValue: Variant);
+procedure RaiseIntTypeError(AKey: Int64; const AExpected: string; const AValue: Variant);
 begin
   raise EbpIntDictionary.CreateFmt('Value for key %d is not %s (stored type: %s)',
     [AKey, AExpected, VarTypeAsText(VarType(AValue))]);
@@ -398,7 +398,7 @@ var
 begin
   lvValue := GetItem(AKey);
   if not BpTryVarToInt(lvValue, Result) then
-    RaiseTypeError(AKey, 'an Integer', lvValue);
+    RaiseIntTypeError(AKey, 'an Integer', lvValue);
 end;
 
 function TbpIntDictionary.GetIntDef(AKey: Int64; ADefault: Integer): Integer;
@@ -427,7 +427,7 @@ var
 begin
   lvValue := GetItem(AKey);
   if not BpTryVarToInt64(lvValue, Result) then
-    RaiseTypeError(AKey, 'an Int64', lvValue);
+    RaiseIntTypeError(AKey, 'an Int64', lvValue);
 end;
 
 function TbpIntDictionary.GetInt64Def(AKey: Int64; ADefault: Int64): Int64;
@@ -456,7 +456,7 @@ var
 begin
   lvValue := GetItem(AKey);
   if not BpTryVarToStr(lvValue, Result) then
-    RaiseTypeError(AKey, 'a string', lvValue);
+    RaiseIntTypeError(AKey, 'a string', lvValue);
 end;
 
 function TbpIntDictionary.GetStrDef(AKey: Int64; const ADefault: string): string;
@@ -485,7 +485,7 @@ var
 begin
   lvValue := GetItem(AKey);
   if not BpTryVarToBool(lvValue, Result) then
-    RaiseTypeError(AKey, 'a Boolean', lvValue);
+    RaiseIntTypeError(AKey, 'a Boolean', lvValue);
 end;
 
 function TbpIntDictionary.GetBoolDef(AKey: Int64; ADefault: Boolean): Boolean;
@@ -514,7 +514,7 @@ var
 begin
   lvValue := GetItem(AKey);
   if not BpTryVarToFloat(lvValue, Result) then
-    RaiseTypeError(AKey, 'a Float', lvValue);
+    RaiseIntTypeError(AKey, 'a Float', lvValue);
 end;
 
 function TbpIntDictionary.GetFloatDef(AKey: Int64; ADefault: Double): Double;
