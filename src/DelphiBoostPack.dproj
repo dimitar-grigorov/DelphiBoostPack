@@ -48,6 +48,7 @@
     <DCCReference Include="Core\Classes\BpHMACSHA256.pas" />
     <DCCReference Include="Core\Classes\BpHttpClient.pas" />
     <DCCReference Include="Core\Classes\BpIntDictionary.pas" />
+    <DCCReference Include="Core\Classes\BpJson.pas" />
     <DCCReference Include="Core\Classes\BpMD5.pas" />
     <DCCReference Include="Core\Classes\BpSHA256.pas" />
     <DCCReference Include="Core\Classes\BpStringBuilder.pas" />
