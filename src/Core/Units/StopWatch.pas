@@ -1,8 +1,7 @@
-{
- Delphi 7-2007 High-Precision Stopwatch
-}
-
 unit StopWatch;
+
+// Delphi 7-2007 high-precision stopwatch, a QueryPerformanceCounter wrapper
+// used by the benchmarks.
 
 interface
 

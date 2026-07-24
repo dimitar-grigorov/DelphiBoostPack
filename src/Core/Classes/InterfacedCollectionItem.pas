@@ -1,5 +1,8 @@
 unit InterfacedCollectionItem;
 
+// A TCollectionItem that forwards IInterface to its owning collection's
+// owner, so items can be queried for interfaces the owner implements.
+
 interface
 
 uses

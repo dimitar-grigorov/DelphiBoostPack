@@ -1,5 +1,8 @@
 unit BpSysUtils;
 
+// Small shims for pre-2009 compilers, e.g. CharInSet, which SysUtils only
+// gained in Delphi 2009.
+
 interface
 
 {$IF CompilerVersion < 20.0}  // Delphi 2009 or lower
@@ -7,11 +10,11 @@ interface
 uses
   SysUtils;
 
-function CharInSet(C: WideChar; const CharSet: TSysCharSet): Boolean; overload;
+function CharInSet(aChar: WideChar; const aCharSet: TSysCharSet): Boolean; overload;
 
-function CharInSet(C: Byte; const CharSet: TSysCharSet): Boolean; overload;
+function CharInSet(aChar: Byte; const aCharSet: TSysCharSet): Boolean; overload;
 
-function CharInSet(C: Char; const CharSet: TSysCharSet): Boolean; overload;
+function CharInSet(aChar: Char; const aCharSet: TSysCharSet): Boolean; overload;
 
 {$IFEND}
 
@@ -19,16 +22,16 @@ implementation
 
 {$IF CompilerVersion < 20.0}
 
-function CharInSet(C: WideChar; const CharSet: TSysCharSet): Boolean;
+function CharInSet(aChar: WideChar; const aCharSet: TSysCharSet): Boolean;
 var
   I: AnsiChar;
 begin
   Result := False;
   for I := Low(AnsiChar) to High(AnsiChar) do
   begin
-    if I in CharSet then
+    if I in aCharSet then
     begin
-      if C = WideChar(I) then
+      if aChar = WideChar(I) then
       begin
         Result := True;
         Exit;
@@ -37,14 +40,14 @@ begin
   end;
 end;
 
-function CharInSet(C: Byte; const CharSet: TSysCharSet): Boolean;
+function CharInSet(aChar: Byte; const aCharSet: TSysCharSet): Boolean;
 begin
-  Result := AnsiChar(C) in CharSet;
+  Result := AnsiChar(aChar) in aCharSet;
 end;
 
-function CharInSet(C: Char; const CharSet: TSysCharSet): Boolean;
+function CharInSet(aChar: Char; const aCharSet: TSysCharSet): Boolean;
 begin
-  Result := AnsiChar(C) in CharSet;
+  Result := AnsiChar(aChar) in aCharSet;
 end;
 
 {$IFEND}

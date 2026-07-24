@@ -1,5 +1,8 @@
 unit UniqueIdIntf;
 
+// Implemented by collection items that can be matched across two collection
+// snapshots by a stable id instead of by index; BpObjectComparer uses it.
+
 interface
 
 type
