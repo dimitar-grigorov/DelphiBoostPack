@@ -35,6 +35,7 @@ Everything has DUnit tests, and the crypto and hash units are cross-checked agai
 - **`TbpJsonValue`** - a JSON reader and writer (RFC 8259). One class is the whole tree, tagged by `Kind`. The parser is strict on purpose: leading zeros, raw control characters, trailing commas and junk after the value all fail, and the error tells you the line and column. Pull values out with the same typed accessors as the dictionaries, reach deep with `FindPath('data.items[0].name')`, and write it back with `ToJson` or `ToJsonPretty`. No RTTI, no data binding, just the tree.
 
 ### Odds and ends
+- **`TbpCredentials`** - a Python-keyring-style secret store on the Windows Credential Manager. `SetPassword` / `GetPassword` / `DeletePassword` keyed by (service, username); entries land in the same vault the Control Panel shows, stored as UTF-16LE so .NET code reads them too. The `*Protected` variants add a DPAPI layer with app-supplied entropy on top, and `FindUserNames` / `DeleteAll` enumerate a service. No config files with plaintext passwords.
 - **`TbpObjectComparer`** - diffs two objects by RTTI and tells you which published properties changed, collections included.
 - **`BpVariantUtils`** - strict Variant-to-native conversions. It only succeeds when the Variant already holds that type; nothing is parsed or widened behind your back.
 - **`BpSysUtils`** - small shims like `CharInSet` for the pre-2009 compilers.
@@ -86,6 +87,28 @@ FTask.Cancel;                         // partial file cleaned up
 ```
 
 Need auth or timeouts on an async download? Create `TbpHttpDownloadTask` yourself, configure its `Client` (the full `TbpHttpClient` surface), set `Url` + `DestFileName`/`DestStream`, wire the events, `Start`. Console apps pass `Create(False)` / `BpDownloadAsync(..., False)` and get events on the worker thread. Resume is one header away: send `'Range: bytes=123456-'` and append on a 206.
+
+## Keeping secrets out of config files
+
+`TbpCredentials` stores secrets in the Windows Credential Manager, keyed by service and username like Python's keyring (the entry lands under `'<service>/<username>'`). Store the API token once, then feed it to the HTTP client at startup:
+
+```pascal
+TbpCredentials.SetPassword('MyApp', 'api', 'secret-token');   // once, e.g. from a setup dialog
+
+lvClient.BearerToken := TbpCredentials.GetPassword('MyApp', 'api');  // raises EbpCredentials if missing
+// or the soft version:
+if TbpCredentials.TryGetPassword('MyApp', 'api', lvToken) then
+  lvClient.BearerToken := lvToken;
+
+TbpCredentials.DeletePassword('MyApp', 'api');                // True if it existed
+```
+
+The vault is per-user: other accounts cannot read it, but any process running as you can. The `*Protected` variants add a `CryptProtectData` layer keyed by an entropy value your app supplies, so a casual same-user reader gets ciphertext (friction, not a hard boundary):
+
+```pascal
+TbpCredentials.SetPasswordProtected('MyApp', 'api', 'secret-token', 'my-app-pepper');
+lvToken := TbpCredentials.GetPasswordProtected('MyApp', 'api', 'my-app-pepper');
+```
 
 ## Grab a single file
 
