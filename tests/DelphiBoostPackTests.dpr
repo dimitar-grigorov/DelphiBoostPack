@@ -44,6 +44,8 @@ uses
   BpStringBuilder in '..\src\Core\Classes\BpStringBuilder.pas',
   BpBase64Tests in 'Core\BpBase64Tests.pas',
   BpBase64 in '..\src\Core\Units\BpBase64.pas',
+  BpDateUtilsTests in 'Core\BpDateUtilsTests.pas',
+  BpDateUtils in '..\src\Core\Units\BpDateUtils.pas',
   BpHMACSHA256Tests in 'Core\BpHMACSHA256Tests.pas',
   BpHMACSHA256 in '..\src\Core\Classes\BpHMACSHA256.pas',
   BpCancellationTokenTests in 'Core\BpCancellationTokenTests.pas',
