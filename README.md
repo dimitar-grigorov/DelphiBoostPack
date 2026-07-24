@@ -24,6 +24,7 @@ Everything has DUnit tests, and the crypto and hash units are cross-checked agai
 - **`BpSHA256`** - SHA-256 (FIPS 180-4), pure Pascal. Stream it in chunks or call a one-shot class function for a buffer, string or file, hex or Base64 out. Checked against the FIPS vectors and CryptoAPI.
 - **`BpMD5`** - MD5 (RFC 1321), same shape as the SHA unit. It is broken for anything security-related, so keep it to legacy checksums, ETags and content fingerprints.
 - **`BpHMACSHA256`** - HMAC-SHA256 (RFC 2104) for API request signing and webhook verification.
+- **`BpPasswordHash`** - password hashing done right: PBKDF2-HMAC-SHA256 (RFC 2898 / NIST SP 800-132). `BpHashPassword` salts from the Windows CSPRNG, derives with 600,000 iterations (current OWASP guidance) and returns a self-describing record (`$pbkdf2-sha256$600000$<salt>$<hash>`); `BpVerifyPassword` re-derives and compares in constant time, and malformed records just return `False`. The raw `BpPBKDF2SHA256` is exposed too, checked against the published test vectors and Python's `hashlib`.
 - **`BpHashBobJenkins`** - the Bob Jenkins lookup3 hash, byte-for-byte identical to the XE+ `BobJenkinsHash`. It is what powers the string dictionary.
 - **`BpBase64`** - Base64 and Base64url (RFC 4648). One allocation to encode; the decoder eats either alphabet, forgives missing padding and skips whitespace, so MIME-wrapped input just works.
 
@@ -91,7 +92,7 @@ Need auth or timeouts on an async download? Create `TbpHttpDownloadTask` yoursel
 Do not want to add ten units to your project? Take one file from `dist\` instead. Each bundle is self-contained:
 
 - **`BpDictionaries.pas`** - both dictionaries, with the hash and Variant helpers baked in
-- **`BpHashes.pas`** - SHA-256, MD5, HMAC-SHA256 and Base64
+- **`BpHashes.pas`** - SHA-256, MD5, HMAC-SHA256, PBKDF2 password hashing and Base64
 - **`BpHttpClientStandalone.pas`** - the HTTP client, streaming downloads, the async download task and cancellation token, with Base64 baked in
 - **`BpJsonStandalone.pas`** - the JSON reader/writer with the string builder baked in
 
