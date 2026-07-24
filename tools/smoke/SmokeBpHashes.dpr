@@ -21,6 +21,11 @@ begin
     Writeln('FAIL: HMAC-SHA256 vector')
   else if Base64Encode(AnsiString('foobar')) <> 'Zm9vYmFy' then
     Writeln('FAIL: Base64 vector')
+  else if BpPBKDF2SHA256Hex('password', 'salt', 1, 32) <>
+    '120fb6cffcf8b32c43e7225256c4f837a86548c92ccc35480805987cb70be17b' then
+    Writeln('FAIL: PBKDF2-SHA256 vector')
+  else if not BpVerifyPassword('pw', BpHashPassword('pw', 10)) then
+    Writeln('FAIL: PBKDF2 round trip')
   else
   begin
     Writeln('OK: BpHashes');
