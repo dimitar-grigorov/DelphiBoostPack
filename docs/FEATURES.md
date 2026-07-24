@@ -2,7 +2,7 @@
 
 Every unit in DelphiBoostPack: what it is for, how to call it, and where the sharp edges are. The [README](../README.md) is the tour; this is the manual.
 
-Each unit is standalone. Add it to `uses` and go - no packages, no DLLs, no base class to inherit from. Prefer a single file? See [single-file bundles](#single-file-bundles).
+Add a unit to `uses` and go - no packages, no third-party DLLs, no base class to inherit from. Most units stand alone; the few that want a companion say so. Prefer a single file? See [single-file bundles](#single-file-bundles).
 
 ## Contents
 
@@ -28,7 +28,7 @@ Each unit is standalone. Add it to `uses` and go - no packages, no DLLs, no base
 
 ## Network and async
 
-### TbpHttpClient
+### [TbpHttpClient](../src/Core/Classes/BpHttpClient.pas)
 
 `BpHttpClient.pas` - HTTP and HTTPS over WinInet. TLS comes from Schannel, the same stack Windows Update uses, so no OpenSSL DLLs ship next to your exe and no certificate bundle goes stale. The shape is borrowed from C# `HttpClient` and JS `fetch`: one call per verb, a response record back.
 
@@ -153,7 +153,7 @@ lvResp := lvClient.Download(lvUrl, lvAppendStream, HandleProgress, FToken, lvHea
 
 `ParseUrl` and `BuildHeaders` are public too - useful on their own, and the reason URL parsing is unit-tested.
 
-### TbpHttpDownloadTask
+### [TbpHttpDownloadTask](../src/Core/Classes/BpHttpClient.pas)
 
 `BpHttpClient.pas` - the non-blocking download, shaped like a C# `Task` or a JS promise. `Start` returns immediately, the download runs on its own worker thread, and progress and completion arrive as events on the thread that created the task. No `ProcessMessages` anywhere: events are marshalled through a hidden window's message queue.
 
@@ -200,7 +200,7 @@ FTask.Start;
 
 All result properties are lock-guarded, so reading them from any thread is safe. Console apps with no message loop pass `Create(False)` (or `BpDownloadAsync(..., False)`) and get their events on the worker thread. `BpDownloadToStreamAsync` is the stream flavour. A task is one-shot: create a new one per download.
 
-### TbpCancellationToken
+### [TbpCancellationToken](../src/Core/Classes/BpHttpClient.pas)
 
 `BpHttpClient.pas` - the C# `CancellationToken` / JS `AbortController` idea for Delphi 7. One side calls `Cancel`, the working side polls - and a registered cleanup runs inside the `Cancel` itself, which is how a download aborts a read that is already blocked instead of waiting for it to time out.
 
@@ -215,7 +215,7 @@ FToken.Cancel;   // safe from any thread, one-shot
 
 Thread-safe, one-shot and transport-agnostic - there is nothing HTTP in it, so it fits any cooperative cancel. `TbpHttpDownloadTask` owns one and exposes it as `Token`.
 
-### TbpTask
+### [TbpTask](../src/Core/Classes/BpTasks.pas)
 
 `BpTasks.pas` - run any method on a worker thread and get the result back on the thread that started it. C# `Task` ergonomics on a compiler that predates them by a decade. Self-contained: `Classes, SysUtils, Windows, Messages` and nothing else from the pack. One thread per task, no pool - a scoped stand-in for AsyncCalls when you just want this one thing off the UI thread.
 
@@ -292,7 +292,7 @@ FTask.Start;                  // raises EbpTask if Work is unassigned
 
 ## Data
 
-### TbpJsonValue
+### [TbpJsonValue](../src/Core/Classes/BpJson.pas)
 
 `BpJson.pas` - a JSON reader and writer (RFC 8259) in one class. No RTTI, no data binding, no attributes: the tree is the API, tagged by `Kind`.
 
@@ -303,8 +303,8 @@ uses BpJson;
 
 lvJson := TbpJsonValue.Parse(lvResponseBody);
 try
-  lvName := lvJson.GetStr('name');                        // raises on wrong kind
-  lvAge := lvJson.GetIntDef('age', 0);                    // default on missing
+  lvName := lvJson.GetStr('name');                         // raises on wrong kind
+  lvAge := lvJson.GetIntDef('age', 0);                     // default on missing
   if lvJson.TryGetBool('active', lvActive) then ...
 
   lvFirst := lvJson.PathStrDef('data.items[0].name', '');  // dotted path, no nil checks
@@ -320,8 +320,8 @@ Arrays and objects share `Count` and `Items[]`; objects add `Names[]`:
 ```pascal
 lvItems := lvJson.FindPath('data.items');     // nil when missing or wrong kind
 if lvItems <> nil then
-  for lvI := 0 to lvItems.Count - 1 do
-    Log(lvItems.Items[lvI].GetStrDef('name', '(unnamed)'));
+  for lvIdx := 0 to lvItems.Count - 1 do
+    Log(lvItems.Items[lvIdx].GetStrDef('name', '(unnamed)'));
 ```
 
 | Access | Missing | Wrong kind |
@@ -357,28 +357,28 @@ end;
 
 Ownership is simple: a container owns its children, so freeing the root frees the tree. `Clone` gives you a deep copy you own; the standalone `CreateX` constructors give you a value you own until you add it somewhere.
 
-### BpDateUtils
+### [BpDateUtils](../src/Core/Units/BpDateUtils.pas)
 
-`BpDateUtils.pas` - the ISO 8601 / RFC 3339 handling the RTL skipped until XE6. Delphi 2007 has no `ISO8601ToDate` at all, and every JSON API dates in ISO 8601, so this is the natural companion to [TbpJsonValue](#tbpjsonvalue).
+The ISO 8601 / RFC 3339 handling the RTL skipped until XE6. Delphi 2007 has no `ISO8601ToDate` at all, and every JSON API dates in ISO 8601, so this is the natural companion to [TbpJsonValue](#tbpjsonvalue).
 
 ```pascal
 uses BpDateUtils;
 
-lvUtc := BpISO8601ToDateTime('2026-07-24T12:34:56.789+03:00');   // UTC TDateTime
+lvUtc := BpISO8601ToDateTime('2026-07-24T12:34:56.789+03:00');  // UTC TDateTime
 if not BpTryISO8601ToDateTime(lvJson.GetStr('created_at'), lvCreated) then
   raise Exception.Create('bad timestamp');
 
-lvText := BpDateTimeToISO8601(lvUtc);            // 2026-07-24T09:34:56Z
-lvLocal := BpDateTimeToISO8601Local(lvUtc);      // 2026-07-24T12:34:56+03:00
+lvText := BpDateTimeToISO8601(lvUtc);                           // 2026-07-24T09:34:56Z
+lvLocal := BpDateTimeToISO8601Local(lvUtc);                     // 2026-07-24T12:34:56+03:00
 
-lvStamp := BpDateTimeToUnix(lvUtc);              // Int64 seconds
-lvMillis := BpDateTimeToUnixMS(lvUtc);           // Int64 milliseconds
+lvStamp := BpDateTimeToUnix(lvUtc);                             // Int64 seconds
+lvMillis := BpDateTimeToUnixMS(lvUtc);                          // Int64 milliseconds
 lvBack := BpUnixMSToDateTime(lvMillis);
 ```
 
 It parses date-only values, `T`-or-space separators, fractional seconds and every zone form (`Z`, `+hh:mm`, `+hhmm`, `+hh`), and it parses them strictly - malformed input is rejected, not guessed at. A value with no zone comes back as written, since there is nothing to convert. Epoch conversion is `Int64` in both directions, so dates before 1970 and past 2038 round-trip cleanly.
 
-### TbpStrDictionary
+### [TbpStrDictionary](../src/Core/Classes/BpStrDictionary.pas)
 
 `BpStrDictionary.pas` - a string-keyed hash map with a `TDictionary`-style API, for compilers with no generics. `TDictionary` arrived in Delphi 2009; before that the choice was `TStringList.Values` (linear scans, everything a string) or nothing.
 
@@ -436,7 +436,7 @@ The set is `Int`, `Int64`, `Str`, `Bool`, `Float`, plus `IntArray` on the string
 
 Under the hood: open addressing with linear probing, power-of-two capacity, a 0.75 load factor and backward-shift deletion, so there are no tombstones to slow down later lookups. Hashing is [BpHashBobJenkins](#bphashbobjenkins). Case-insensitive mode hashes and compares the upper-cased key.
 
-### TbpIntDictionary
+### [TbpIntDictionary](../src/Core/Classes/BpIntDictionary.pas)
 
 `BpIntDictionary.pas` - the same map with `Int64` keys. No case option, and `GetKeys` returns a `TbpInt64DynArray` instead of filling a `TStrings`:
 
@@ -449,8 +449,8 @@ try
   lvById.SetStr(1002, 'Grace');
 
   lvKeys := lvById.GetKeys;
-  for lvI := 0 to High(lvKeys) do
-    Log(Format('%d -> %s', [lvKeys[lvI], lvById.GetStr(lvKeys[lvI])]));
+  for lvIdx := 0 to High(lvKeys) do
+    Log(Format('%d -> %s', [lvKeys[lvIdx], lvById.GetStr(lvKeys[lvIdx])]));
 finally
   lvById.Free;
 end;
@@ -458,7 +458,7 @@ end;
 
 Keys go through the Thomas Wang 64-to-32 bit mix, exposed as `BpHashInt64` if you want it elsewhere.
 
-### TbpIntList
+### [TbpIntList](../src/Core/Classes/BpIntList.pas)
 
 `BpIntList.pas` - a list of integers that behaves like the `TStringList` you already know: `Add`, `Delete`, `Insert`, `IndexOf`, `Sorted`, `CommaText`, `DelimitedText`, load and save.
 
@@ -482,7 +482,7 @@ end;
 
 `Sorted := True` sorts and keeps insertions ordered, which is what makes `BinarySearch` worth reaching for on big lists; `IndexOf` is the linear fallback and works either way. Sorting is an in-place quicksort over a plain `array of Integer` - no `TList` of casted pointers, no boxing. The class implements `IBpIntList` if you prefer interface lifetimes, and `TIntegerList` / `TIntList` are aliases for older code.
 
-### TbpInt64List
+### [TbpInt64List](../src/Core/Classes/BpInt64List.pas)
 
 `BpInt64List.pas` - the same list, storing `Int64`. Reach for it when the values are database keys, file sizes, Unix timestamps in milliseconds or anything else that outgrows 32 bits.
 
@@ -505,21 +505,21 @@ Same API as `TbpIntList` - `Add`, `Delete`, `Insert`, `IndexOf`, `BinarySearch`,
 
 ## Strings
 
-### TbpStringBuilder
+### [TbpStringBuilder](../src/Core/Classes/BpStringBuilder.pas)
 
 `BpStringBuilder.pas` - the XE6 `TStringBuilder` API on the compilers that never got it. Appends write through a cached pointer into the buffer and grow it geometrically, instead of resizing the string on every call. [BpStringBuilderBenchmark.pas](../tests/Benchmarks/BpStringBuilderBenchmark.pas) measures it against naive `s := s + x` concatenation, honest caveats included.
 
 ```pascal
 uses BpStringBuilder;
 
-lvSb := TbpStringBuilder.Create(1024);          // presize when you can
+lvSb := TbpStringBuilder.Create(1024);  // presize when you can
 try
   lvSb.Append('SELECT * FROM ').Append(lvTable);
   lvSb.AppendLine(' WHERE id IN (');
-  for lvI := 0 to lvIds.Count - 1 do
+  for lvIdx := 0 to lvIds.Count - 1 do
   begin
-    if lvI > 0 then lvSb.Append(', ');
-    lvSb.Append(lvIds[lvI]);                    // Integer overload, no IntToStr
+    if lvIdx > 0 then lvSb.Append(', ');
+    lvSb.Append(lvIds[lvIdx]);          // Integer overload, no IntToStr
   end;
   lvSb.AppendFormat(') LIMIT %d', [lvLimit]);
   lvSql := lvSb.ToString;
@@ -530,9 +530,9 @@ end;
 
 `Append` is overloaded for `string`, `Char`, `Char` + repeat count, `Integer`, `Int64`, `Double` and `Boolean`, and every overload returns `Self` so calls chain. `AppendLine`, `AppendFormat`, `Insert`, `Clear` and `ToString` behave as in the RTL. `Chars[]` is the default property for random access, and `Length` is writable - shrinking truncates, extending pads with `#0`. Out-of-range indexes and invalid capacities raise `EbpStringBuilder`.
 
-### BpStrUtils
+### [BpStrUtils](../src/Core/Units/BpStrUtils.pas)
 
-`BpStrUtils.pas` - the string helpers the old RTL never had.
+The string helpers the old RTL never had.
 
 ```pascal
 uses BpStrUtils;
@@ -560,9 +560,9 @@ It takes the same `TReplaceFlags` as the RTL version, so it is a drop-in swap wh
 
 The crypto and hash units are checked against the published standard vectors (FIPS, RFC), the Windows CryptoAPI and the XE6 RTL, so the numbers actually match other implementations. All pure Pascal, no DLLs.
 
-### BpSHA256
+### [BpSHA256](../src/Core/Classes/BpSHA256.pas)
 
-`BpSHA256.pas` - SHA-256 (FIPS 180-4). One-shot class functions for the everyday case, streaming for the rest.
+SHA-256 (FIPS 180-4). One-shot class functions for the everyday case, streaming for the rest.
 
 ```pascal
 uses BpSHA256;
@@ -585,15 +585,15 @@ end;
 
 `Update` is overloaded for a raw buffer, `TBytes` and `AnsiString`. `Final` resets the instance, so you can reuse it. `HashBuffer` / `HashBytes` / `HashStr` / `HashFile` return a `TbpSHA256Digest`; `DigestToHex` and `DigestToBase64` format it.
 
-### BpMD5
+### [BpMD5](../src/Core/Classes/BpMD5.pas)
 
-`BpMD5.pas` - MD5 (RFC 1321), the same shape as [BpSHA256](#bpsha256): `HashStrHex`, `HashFileHex`, streaming `Update` / `Final`, `DigestToHex`, `DigestToBase64`.
+MD5 (RFC 1321), the same shape as [BpSHA256](#bpsha256): `HashStrHex`, `HashFileHex`, streaming `Update` / `Final`, `DigestToHex`, `DigestToBase64`.
 
 MD5 is broken for anything security-related. Keep it to legacy checksums, ETags, content fingerprints and old protocols that demand it - for anything new, use SHA-256.
 
-### BpHMACSHA256
+### [BpHMACSHA256](../src/Core/Classes/BpHMACSHA256.pas)
 
-`BpHMACSHA256.pas` - HMAC-SHA256 (RFC 2104), for signing API requests and verifying webhooks.
+HMAC-SHA256 (RFC 2104), for signing API requests and verifying webhooks.
 
 ```pascal
 uses BpHMACSHA256;
@@ -605,9 +605,9 @@ if not BpConstantTimeEquals(lvSig, lvHeaderSig) then     // from BpPasswordHash
 
 Streaming works as in the hash units - `Create(aKey)`, `Update`, `Final` - which is what you want when the message is a stream rather than a string. `Compute`, `ComputeHex` and `ComputeBase64` cover the one-shot cases, and keys of any length are handled per the RFC.
 
-### BpPasswordHash
+### [BpPasswordHash](../src/Core/Classes/BpPasswordHash.pas)
 
-`BpPasswordHash.pas` - password hashing done properly: PBKDF2-HMAC-SHA256 (RFC 2898 / NIST SP 800-132). Never store a bare SHA-256 of a password; that is a dictionary attack waiting to happen.
+Password hashing done properly: PBKDF2-HMAC-SHA256 (RFC 2898 / NIST SP 800-132). Never store a bare SHA-256 of a password; that is a dictionary attack waiting to happen.
 
 ```pascal
 uses BpPasswordHash;
@@ -632,9 +632,9 @@ if BpVerifyPassword(lvEntered, lvStored) then
 
 The raw KDF is checked against the published test vectors and Python's `hashlib`.
 
-### BpBase64
+### [BpBase64](../src/Core/Units/BpBase64.pas)
 
-`BpBase64.pas` - Base64 and Base64url (RFC 4648).
+Base64 and Base64url (RFC 4648).
 
 ```pascal
 uses BpBase64;
@@ -647,9 +647,9 @@ lvRaw := Base64DecodeStr(lvText);                       // AnsiString flavour
 
 Encoding is a single allocation. The decoder eats either alphabet, forgives missing padding and skips whitespace, so MIME-wrapped input just works; genuinely invalid input raises `EbpBase64`.
 
-### BpHashBobJenkins
+### [BpHashBobJenkins](../src/Core/Classes/BpHashBobJenkins.pas)
 
-`BpHashBobJenkins.pas` - the Bob Jenkins lookup3 hash (public domain), producing the same values as the RTL's `BobJenkinsHash`, which makes it a drop-in for code that expects them.
+The Bob Jenkins lookup3 hash (public domain), producing the same values as the RTL's `BobJenkinsHash`, which makes it a drop-in for code that expects them.
 
 ```pascal
 uses BpHashBobJenkins;
@@ -663,20 +663,20 @@ Fast, well distributed and non-cryptographic - this is a bucket index, not a fin
 
 ## Windows and odds and ends
 
-### TbpCredentials
+### [TbpCredentials](../src/Core/Classes/BpCredentials.pas)
 
 `BpCredentials.pas` - a secret store on the Windows Credential Manager, keyed by service and username like Python's keyring. No more config files with plaintext passwords.
 
 ```pascal
 uses BpCredentials;
 
-TbpCredentials.SetPassword('MyApp', 'api', 'secret-token');    // once, from a setup dialog
+TbpCredentials.SetPassword('MyApp', 'api', 'secret-token');          // once, at setup
 
 lvClient.BearerToken := TbpCredentials.GetPassword('MyApp', 'api');  // raises if missing
 if TbpCredentials.TryGetPassword('MyApp', 'api', lvToken) then       // soft version
   lvClient.BearerToken := lvToken;
 
-TbpCredentials.DeletePassword('MyApp', 'api');                 // True if it existed
+TbpCredentials.DeletePassword('MyApp', 'api');                       // True if it existed
 ```
 
 Entries land under `'<service>/<username>'` in the same vault the Control Panel shows, stored as UTF-16LE so .NET code reads them too. `FindUserNames` lists the accounts stored under a service and `DeleteAll` clears them, which covers uninstall and account switching.
@@ -690,7 +690,7 @@ lvToken := TbpCredentials.GetPasswordProtected('MyApp', 'api', 'my-app-pepper');
 
 Wrong entropy raises `EbpCredentials`; `TryGetPasswordProtected` returns `False` instead.
 
-### TbpObjectComparer
+### [TbpObjectComparer](../src/Core/Classes/BpObjectComparer.pas)
 
 `BpObjectComparer.pas` - diffs two `TPersistent` objects by RTTI and tells you which published properties changed, walking nested objects and `TCollection` items.
 
@@ -698,18 +698,18 @@ Wrong entropy raises `EbpCredentials`; `TryGetPasswordProtected` returns `False`
 uses BpObjectComparer;
 
 lvDiffs := TbpObjectComparer.CompareObjects(lvBefore, lvAfter);
-for lvI := 0 to High(lvDiffs) do
-  Log(Format('%s: %s -> %s', [lvDiffs[lvI].NewPropPath,
-    VarToStr(lvDiffs[lvI].OldValue), VarToStr(lvDiffs[lvI].NewValue)]));
+for lvIdx := 0 to High(lvDiffs) do
+  Log(Format('%s: %s -> %s', [lvDiffs[lvIdx].NewPropPath,
+    VarToStr(lvDiffs[lvIdx].OldValue), VarToStr(lvDiffs[lvIdx].NewValue)]));
 
 Memo1.Text := TbpObjectComparer.CompareObjectsAsString(lvBefore, lvAfter);
 ```
 
 Each difference is an `IPropDifference` with the property path and the old and new values, so it drops straight into an audit log or a "you changed these settings" dialog. Collection items can be matched by identity rather than position when they implement `IUniqueID` (`UniqueIdIntf.pas`), which is why old and new paths are separate fields - a moved item is reported as changed, not as two unrelated edits.
 
-### BpVariantUtils
+### [BpVariantUtils](../src/Core/Units/BpVariantUtils.pas)
 
-`BpVariantUtils.pas` - strict Variant-to-native conversions. Each function succeeds only when the Variant already holds that type; nothing is parsed, widened or rounded behind your back.
+Strict Variant-to-native conversions. Each function succeeds only when the Variant already holds that type; nothing is parsed, widened or rounded behind your back.
 
 ```pascal
 uses BpVariantUtils;
@@ -720,13 +720,13 @@ if BpTryVarToIntArray(lvField, lvIds) then ...
 
 `BpTryVarToInt`, `BpTryVarToInt64`, `BpTryVarToStr`, `BpTryVarToBool`, `BpTryVarToFloat`, `BpTryVarToIntArray`. This is the shared rule set behind the dictionaries' typed accessors, so `GetIntDef` and `BpTryVarToInt` agree by construction.
 
-### BpSysUtils
+### [BpSysUtils](../src/Core/Units/BpSysUtils.pas)
 
-`BpSysUtils.pas` - small shims for the pre-2009 compilers, compiled only where they are missing. `CharInSet` overloads for `Char`, `WideChar` and `Byte`, so code written against a newer RTL builds on Delphi 7 and 2007 unchanged. The whole unit is inside `{$IF CompilerVersion < 20.0}`, so leaving it in `uses` on a modern compiler costs nothing.
+Small shims for the pre-2009 compilers, compiled only where they are missing. `CharInSet` overloads for `Char`, `WideChar` and `Byte`, so code written against a newer RTL builds on Delphi 7 and 2007 unchanged. The whole unit is inside `{$IF CompilerVersion < 20.0}`, so leaving it in `uses` on a modern compiler costs nothing.
 
-### StopWatch
+### [StopWatch](../src/Core/Units/StopWatch.pas)
 
-`StopWatch.pas` - a `QueryPerformanceCounter` stopwatch with the `TStopwatch` shape, for Delphi 7 to 2007 (also `{$IF CompilerVersion < 20.0}`, so the RTL class wins on newer compilers).
+A `QueryPerformanceCounter` stopwatch with the `TStopwatch` shape, for Delphi 7 to 2007 (also `{$IF CompilerVersion < 20.0}`, so the RTL class wins on newer compilers).
 
 ```pascal
 uses StopWatch;

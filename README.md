@@ -11,10 +11,10 @@ HTTP, JSON, hash dictionaries, SHA-256, background tasks. Pure Pascal source, no
 
 ## Install
 
-There is nothing to install - pick whichever of these two suits you:
+Nothing to install, two ways in:
 
-- **Modular.** Add `src\Core\Classes` and `src\Core\Units` to your library path (or your project's search path), or just copy the units you use into the project. Most units are single files with nothing behind them; a few want a companion - the dictionaries want `BpVariantUtils` and `BpHashBobJenkins`, `BpJson` wants `BpStringBuilder`, `BpHttpClient` and the hashes want `BpBase64`.
-- **One file.** Copy a bundle out of [dist/](dist/) instead, or put `dist` on the library path. Each bundle already contains everything it needs, so do not also use the modular units it embeds.
+- **Modular.** Put `src\Core\Classes` and `src\Core\Units` on your library path, or copy the units you use. A few want a companion: the dictionaries want `BpVariantUtils` and `BpHashBobJenkins`, `BpJson` wants `BpStringBuilder`, `BpHttpClient` and the hashes want `BpBase64`.
+- **One file.** Take a bundle from [dist/](dist/) instead. Each is self-contained, so do not also use the modular units it embeds.
 
 An HTTPS call and a JSON parse, on a 2007 compiler, with nothing else installed:
 
@@ -111,7 +111,9 @@ RunTests_D2007.cmd /bench     add the benchmarks
 
 ## Contributing
 
-Fork it, fix or add something, open a pull request. Bugs, new units and better docs are all fair game. Match the house style: locals `lv`, globals `gv`, constants `lc` / `gc`, parameters `a` (`aValue`), classes `Tbp`, one class per unit named after it, `//` comments only.
+Fork it, fix or add something, open a pull request. Bugs, new units and better docs are all fair game.
+
+House style: locals `lv`, globals `gv`, constants `lc` / `gc`, parameters `a` (`aValue`); classes get the `Tbp` prefix, one class per unit where it makes sense and the unit named after it; comments are `//` lines.
 
 ## Getting Delphi
 
