@@ -1,6 +1,6 @@
 # DelphiBoostPack
 
-The parts of a modern RTL that Delphi 2007 never got: hash dictionaries, a fast StringBuilder, SHA-256 / MD5 / HMAC, Base64, a WinInet HTTP client and a JSON parser. Pure Pascal, no DLLs, no packages to register. Drop in a unit and go.
+The parts of a modern RTL that Delphi 2007 never got: hash dictionaries, a fast StringBuilder, SHA-256 / MD5 / HMAC, Base64, a WinInet HTTP client with async streaming downloads, and a JSON parser. Pure Pascal, no DLLs, no packages to register. Drop in a unit and go.
 
 It targets Delphi 2007 first and stays clean from Delphi 7 all the way to 11.3, because rewriting a 300-unit legacy app just to get a `TDictionary` is not a plan. If you are stuck on an old compiler and keep reaching for things it does not have, help yourself to whatever is useful here.
 
@@ -24,7 +24,9 @@ Everything has DUnit tests, and the crypto and hash units are cross-checked agai
 - **BpBase64** - Base64 and Base64url (RFC 4648). One allocation to encode; the decoder eats either alphabet, forgives missing padding and skips whitespace, so MIME-wrapped input just works.
 
 ### HTTP and JSON
-- **TbpHttpClient** - HTTP and HTTPS over WinInet. TLS comes from Schannel, which means no OpenSSL DLLs shipping alongside your exe. `Get` / `Post` / `Put` / `Delete` hand back a response record; bearer tokens, basic auth and persistent headers are one call each, and `PostJson` sets the content type for you.
+- **TbpHttpClient** - HTTP and HTTPS over WinInet. TLS comes from Schannel, which means no OpenSSL DLLs shipping alongside your exe. `Get` / `Post` / `Put` / `Delete` hand back a response record; bearer tokens, basic auth and persistent headers are one call each, and `PostJson` sets the content type for you. `Download` / `DownloadToFile` stream a body of any size to a `TStream` or a file in constant memory, with `Int64` progress callbacks and cooperative cancellation; `DownloadToFile` deletes the partial file on any failure or cancel, so an error page never masquerades as the payload.
+- **TbpHttpDownloadTask** - the non-blocking wrapper, shaped like a C# `Task` or a JS promise: `Start` returns immediately, the download runs on its own worker thread (no `ProcessMessages` anywhere), progress and completion arrive as events on the main thread, and `Cancel` aborts promptly even while the worker sits in a blocked read. The destructor cancels, joins and cleans up, whatever state the task died in.
+- **TbpCancellationToken** - the C# `CancellationToken` / JS `AbortController` idea for Delphi 7: one side calls `Cancel`, the working side polls or registers a cleanup that runs inside the cancel. Thread-safe, one-shot, transport-agnostic.
 - **TbpJsonValue** - a JSON reader and writer (RFC 8259). One class is the whole tree, tagged by `Kind`. The parser is strict on purpose: leading zeros, raw control characters, trailing commas and junk after the value all fail, and the error tells you the line and column. Pull values out with the same typed accessors as the dictionaries, reach deep with `FindPath('data.items[0].name')`, and write it back with `ToJson` or `ToJsonPretty`. No RTTI, no data binding, just the tree.
 
 ### Odds and ends
@@ -33,13 +35,45 @@ Everything has DUnit tests, and the crypto and hash units are cross-checked agai
 - **BpSysUtils** - small shims like `CharInSet` for the pre-2009 compilers.
 - **StopWatch** - a `QueryPerformanceCounter` stopwatch for Delphi 7-2007, used by the benchmarks.
 
+## Downloading files
+
+The download API borrows its shape from modern C# and JS instead of the classic Delphi component dance. A progress callback gets `Int64` counters (`ATotal` is `-1` when the server sent no `Content-Length`) and can abort inline; a cancellation token lets anyone else abort from outside:
+
+```pascal
+procedure TMainForm.HandleProgress(ASender: TObject; const AReceived, ATotal: Int64;
+  var ACancel: Boolean);
+begin
+  ProgressBar1.Position := BpHttpProgressPercent(AReceived, ATotal);  // -1 = unknown
+end;
+
+// synchronous building block; blocking, so run it on a worker thread
+lvClient.DownloadToFile('https://host/big.zip', 'C:\temp\big.zip',
+  HandleProgress, FToken);  // FToken.Cancel aborts promptly, partial file deleted
+```
+
+`TbpHttpDownloadTask` is that worker thread, prepackaged. Create it on the main thread, wire the events, `Start` and return; the UI never freezes and there is no `ProcessMessages` trickery, events arrive through the message queue:
+
+```pascal
+FTask := TbpHttpDownloadTask.Create;         // True (default): events on this thread
+FTask.Url := 'https://host/big.zip';
+FTask.DestFileName := 'C:\temp\big.zip';
+FTask.Client.BearerToken := 'secret';        // full TbpHttpClient config available
+FTask.OnProgress := HandleProgress;
+FTask.OnComplete := HandleComplete;          // fires on every terminal state
+FTask.Start;                                 // returns immediately
+// later, from the Stop button:
+FTask.Cancel;                                // -> State = dtsCancelled, file cleaned up
+```
+
+In `HandleComplete` check `FTask.State`: `dtsSucceeded`, `dtsFailed` (message in `ErrorMessage`, WinInet code in `ErrorCode`, HTTP status in `HttpStatus`) or `dtsCancelled`. Console apps and tests pass `Create(False)` and get events directly on the worker thread. Resume is one header away: send `'Range: bytes=123456-'` in `AHeaders` and append on a 206.
+
 ## Grab a single file
 
 Do not want to add ten units to your project? Take one file from `dist\` instead. Each bundle is self-contained:
 
 - **BpDictionaries.pas** - both dictionaries, with the hash and Variant helpers baked in
 - **BpHashes.pas** - SHA-256, MD5, HMAC-SHA256 and Base64
-- **BpHttpClientStandalone.pas** - the HTTP client with Base64 baked in
+- **BpHttpClientStandalone.pas** - the HTTP client, streaming downloads, the async download task and cancellation token, with Base64 baked in
 - **BpJsonStandalone.pas** - the JSON reader/writer with the string builder baked in
 
 These are generated from the modular units, SQLite amalgamation style, by `tools\Amalgamate.ps1`. They are build artifacts, so do not patch them by hand; fix the real unit and regenerate:
