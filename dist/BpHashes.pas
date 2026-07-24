@@ -7,7 +7,7 @@ unit BpHashes;
 //   src\Core\Classes\BpMD5.pas
 //   src\Core\Classes\BpHMACSHA256.pas
 //   src\Core\Classes\BpPasswordHash.pas
-// Source commit c3e0013, generated 2026-07-24 by tools\Amalgamate.ps1.
+// Source commit 2677e2a, generated 2026-07-24 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   powershell -ExecutionPolicy Bypass -File tools\Amalgamate.ps1
 // Notes:
@@ -36,14 +36,14 @@ uses
 type
   EbpBase64 = class(Exception);
 
-function Base64Encode(const AData; ASize: Integer): string; overload;
-function Base64Encode(const ABytes: TBytes): string; overload;
-function Base64Encode(const AText: AnsiString): string; overload;
-function Base64UrlEncode(const AData; ASize: Integer): string; overload;
-function Base64UrlEncode(const ABytes: TBytes): string; overload;
-function Base64UrlEncode(const AText: AnsiString): string; overload;
-function Base64Decode(const ABase64: string): TBytes;
-function Base64DecodeStr(const ABase64: string): AnsiString;
+function Base64Encode(const aData; aSize: Integer): string; overload;
+function Base64Encode(const aBytes: TBytes): string; overload;
+function Base64Encode(const aText: AnsiString): string; overload;
+function Base64UrlEncode(const aData; aSize: Integer): string; overload;
+function Base64UrlEncode(const aBytes: TBytes): string; overload;
+function Base64UrlEncode(const aText: AnsiString): string; overload;
+function Base64Decode(const aBase64: string): TBytes;
+function Base64DecodeStr(const aBase64: string): AnsiString;
 
 // ==================================================================
 // BpSHA256.pas - interface
@@ -75,23 +75,23 @@ type
     FLenBits: Int64;
     FBuffer: array[0..63] of Byte;  // partial input block
     FIndex: Integer;                // filled bytes in FBuffer
-    procedure Compress(AData: PByteArray);
+    procedure Compress(aData: PByteArray);
   public
     constructor Create;
     // resets to a fresh hash; Final calls it automatically
     procedure Init;
-    procedure Update(const AData; ASize: Integer); overload;
-    procedure Update(const ABytes: TBytes); overload;
-    procedure Update(const AText: AnsiString); overload;
-    procedure Final(out ADigest: TbpSHA256Digest);
-    class function HashBuffer(const AData; ASize: Integer): TbpSHA256Digest;
-    class function HashBytes(const ABytes: TBytes): TbpSHA256Digest;
-    class function HashStr(const AText: AnsiString): TbpSHA256Digest;
-    class function HashFile(const AFileName: string): TbpSHA256Digest;
-    class function HashStrHex(const AText: AnsiString): string;
-    class function HashFileHex(const AFileName: string): string;
-    class function DigestToHex(const ADigest: TbpSHA256Digest): string;
-    class function DigestToBase64(const ADigest: TbpSHA256Digest): string;
+    procedure Update(const aData; aSize: Integer); overload;
+    procedure Update(const aBytes: TBytes); overload;
+    procedure Update(const aText: AnsiString); overload;
+    procedure Final(out aDigest: TbpSHA256Digest);
+    class function HashBuffer(const aData; aSize: Integer): TbpSHA256Digest;
+    class function HashBytes(const aBytes: TBytes): TbpSHA256Digest;
+    class function HashStr(const aText: AnsiString): TbpSHA256Digest;
+    class function HashFile(const aFileName: string): TbpSHA256Digest;
+    class function HashStrHex(const aText: AnsiString): string;
+    class function HashFileHex(const aFileName: string): string;
+    class function DigestToHex(const aDigest: TbpSHA256Digest): string;
+    class function DigestToBase64(const aDigest: TbpSHA256Digest): string;
   end;
 
 // ==================================================================
@@ -121,23 +121,23 @@ type
     FLenBits: Int64;
     FBuffer: array[0..63] of Byte;  // partial input block
     FIndex: Integer;                // filled bytes in FBuffer
-    procedure Compress(AData: PByteArray);
+    procedure Compress(aData: PByteArray);
   public
     constructor Create;
     // resets to a fresh hash; Final calls it automatically
     procedure Init;
-    procedure Update(const AData; ASize: Integer); overload;
-    procedure Update(const ABytes: TBytes); overload;
-    procedure Update(const AText: AnsiString); overload;
-    procedure Final(out ADigest: TbpMD5Digest);
-    class function HashBuffer(const AData; ASize: Integer): TbpMD5Digest;
-    class function HashBytes(const ABytes: TBytes): TbpMD5Digest;
-    class function HashStr(const AText: AnsiString): TbpMD5Digest;
-    class function HashFile(const AFileName: string): TbpMD5Digest;
-    class function HashStrHex(const AText: AnsiString): string;
-    class function HashFileHex(const AFileName: string): string;
-    class function DigestToHex(const ADigest: TbpMD5Digest): string;
-    class function DigestToBase64(const ADigest: TbpMD5Digest): string;
+    procedure Update(const aData; aSize: Integer); overload;
+    procedure Update(const aBytes: TBytes); overload;
+    procedure Update(const aText: AnsiString); overload;
+    procedure Final(out aDigest: TbpMD5Digest);
+    class function HashBuffer(const aData; aSize: Integer): TbpMD5Digest;
+    class function HashBytes(const aBytes: TBytes): TbpMD5Digest;
+    class function HashStr(const aText: AnsiString): TbpMD5Digest;
+    class function HashFile(const aFileName: string): TbpMD5Digest;
+    class function HashStrHex(const aText: AnsiString): string;
+    class function HashFileHex(const aFileName: string): string;
+    class function DigestToHex(const aDigest: TbpMD5Digest): string;
+    class function DigestToBase64(const aDigest: TbpMD5Digest): string;
   end;
 
 // ==================================================================
@@ -165,20 +165,20 @@ type
     FHasher: TbpSHA256;                // inner hash while streaming, outer in Final
     FInnerPad: array[0..63] of Byte;   // key xor $36
     FOuterPad: array[0..63] of Byte;   // key xor $5C
-    procedure SetKey(const AKey; AKeySize: Integer);
+    procedure SetKey(const aKey; aKeySize: Integer);
   public
-    constructor Create(const AKey; AKeySize: Integer); overload;
-    constructor Create(const AKey: AnsiString); overload;
-    constructor Create(const AKey: TBytes); overload;
+    constructor Create(const aKey; aKeySize: Integer); overload;
+    constructor Create(const aKey: AnsiString); overload;
+    constructor Create(const aKey: TBytes); overload;
     destructor Destroy; override;
-    procedure Update(const AData; ASize: Integer); overload;
-    procedure Update(const ABytes: TBytes); overload;
-    procedure Update(const AText: AnsiString); overload;
-    procedure Final(out ADigest: TbpSHA256Digest);
-    class function Compute(const AKey, AText: AnsiString): TbpSHA256Digest; overload;
-    class function Compute(const AKey, AData: TBytes): TbpSHA256Digest; overload;
-    class function ComputeHex(const AKey, AText: AnsiString): string;
-    class function ComputeBase64(const AKey, AText: AnsiString): string;
+    procedure Update(const aData; aSize: Integer); overload;
+    procedure Update(const aBytes: TBytes); overload;
+    procedure Update(const aText: AnsiString); overload;
+    procedure Final(out aDigest: TbpSHA256Digest);
+    class function Compute(const aKey, aText: AnsiString): TbpSHA256Digest; overload;
+    class function Compute(const aKey, aData: TBytes): TbpSHA256Digest; overload;
+    class function ComputeHex(const aKey, aText: AnsiString): string;
+    class function ComputeBase64(const aKey, aText: AnsiString): string;
   end;
 
 // ==================================================================
@@ -249,22 +249,22 @@ begin
   gvDecodeTable[Ord('=')] := gcPadding;
 end;
 
-function EncodeBuffer(ASource: PByte; ASize: Integer; const AAlphabet: string;
-  APadded: Boolean): string;
+function EncodeBuffer(aSource: PByte; aSize: Integer; const aAlphabet: string;
+  aPadded: Boolean): string;
 var
   lvDest: PChar;
   lvB0, lvB1, lvB2: Byte;
   lvFull, lvRest, lvOutLen, i: Integer;
 begin
   Result := '';
-  if ASize <= 0 then
+  if aSize <= 0 then
     Exit;
-  lvFull := ASize div 3;
-  lvRest := ASize mod 3;
+  lvFull := aSize div 3;
+  lvRest := aSize mod 3;
   lvOutLen := lvFull * 4;
   if lvRest > 0 then
   begin
-    if APadded then
+    if aPadded then
       Inc(lvOutLen, 4)
     else
       Inc(lvOutLen, lvRest + 1);
@@ -273,21 +273,21 @@ begin
   lvDest := Pointer(Result);
   for i := 1 to lvFull do
   begin
-    lvB0 := ASource^; Inc(ASource);
-    lvB1 := ASource^; Inc(ASource);
-    lvB2 := ASource^; Inc(ASource);
-    lvDest[0] := AAlphabet[(lvB0 shr 2) + 1];
-    lvDest[1] := AAlphabet[(((lvB0 and $03) shl 4) or (lvB1 shr 4)) + 1];
-    lvDest[2] := AAlphabet[(((lvB1 and $0F) shl 2) or (lvB2 shr 6)) + 1];
-    lvDest[3] := AAlphabet[(lvB2 and $3F) + 1];
+    lvB0 := aSource^; Inc(aSource);
+    lvB1 := aSource^; Inc(aSource);
+    lvB2 := aSource^; Inc(aSource);
+    lvDest[0] := aAlphabet[(lvB0 shr 2) + 1];
+    lvDest[1] := aAlphabet[(((lvB0 and $03) shl 4) or (lvB1 shr 4)) + 1];
+    lvDest[2] := aAlphabet[(((lvB1 and $0F) shl 2) or (lvB2 shr 6)) + 1];
+    lvDest[3] := aAlphabet[(lvB2 and $3F) + 1];
     Inc(lvDest, 4);
   end;
   if lvRest = 1 then
   begin
-    lvB0 := ASource^;
-    lvDest[0] := AAlphabet[(lvB0 shr 2) + 1];
-    lvDest[1] := AAlphabet[((lvB0 and $03) shl 4) + 1];
-    if APadded then
+    lvB0 := aSource^;
+    lvDest[0] := aAlphabet[(lvB0 shr 2) + 1];
+    lvDest[1] := aAlphabet[((lvB0 and $03) shl 4) + 1];
+    if aPadded then
     begin
       lvDest[2] := '=';
       lvDest[3] := '=';
@@ -295,59 +295,59 @@ begin
   end
   else if lvRest = 2 then
   begin
-    lvB0 := ASource^; Inc(ASource);
-    lvB1 := ASource^;
-    lvDest[0] := AAlphabet[(lvB0 shr 2) + 1];
-    lvDest[1] := AAlphabet[(((lvB0 and $03) shl 4) or (lvB1 shr 4)) + 1];
-    lvDest[2] := AAlphabet[((lvB1 and $0F) shl 2) + 1];
-    if APadded then
+    lvB0 := aSource^; Inc(aSource);
+    lvB1 := aSource^;
+    lvDest[0] := aAlphabet[(lvB0 shr 2) + 1];
+    lvDest[1] := aAlphabet[(((lvB0 and $03) shl 4) or (lvB1 shr 4)) + 1];
+    lvDest[2] := aAlphabet[((lvB1 and $0F) shl 2) + 1];
+    if aPadded then
       lvDest[3] := '=';
   end;
 end;
 
-function Base64Encode(const AData; ASize: Integer): string;
+function Base64Encode(const aData; aSize: Integer): string;
 begin
-  Result := EncodeBuffer(PByte(@AData), ASize, gcBase64Chars, True);
+  Result := EncodeBuffer(PByte(@aData), aSize, gcBase64Chars, True);
 end;
 
-function Base64Encode(const ABytes: TBytes): string;
+function Base64Encode(const aBytes: TBytes): string;
 begin
-  if Length(ABytes) = 0 then
+  if Length(aBytes) = 0 then
     Result := ''
   else
-    Result := EncodeBuffer(@ABytes[0], Length(ABytes), gcBase64Chars, True);
+    Result := EncodeBuffer(@aBytes[0], Length(aBytes), gcBase64Chars, True);
 end;
 
-function Base64Encode(const AText: AnsiString): string;
+function Base64Encode(const aText: AnsiString): string;
 begin
-  if AText = '' then
+  if aText = '' then
     Result := ''
   else
-    Result := EncodeBuffer(Pointer(AText), Length(AText), gcBase64Chars, True);
+    Result := EncodeBuffer(Pointer(aText), Length(aText), gcBase64Chars, True);
 end;
 
-function Base64UrlEncode(const AData; ASize: Integer): string;
+function Base64UrlEncode(const aData; aSize: Integer): string;
 begin
-  Result := EncodeBuffer(PByte(@AData), ASize, gcBase64UrlChars, False);
+  Result := EncodeBuffer(PByte(@aData), aSize, gcBase64UrlChars, False);
 end;
 
-function Base64UrlEncode(const ABytes: TBytes): string;
+function Base64UrlEncode(const aBytes: TBytes): string;
 begin
-  if Length(ABytes) = 0 then
+  if Length(aBytes) = 0 then
     Result := ''
   else
-    Result := EncodeBuffer(@ABytes[0], Length(ABytes), gcBase64UrlChars, False);
+    Result := EncodeBuffer(@aBytes[0], Length(aBytes), gcBase64UrlChars, False);
 end;
 
-function Base64UrlEncode(const AText: AnsiString): string;
+function Base64UrlEncode(const aText: AnsiString): string;
 begin
-  if AText = '' then
+  if aText = '' then
     Result := ''
   else
-    Result := EncodeBuffer(Pointer(AText), Length(AText), gcBase64UrlChars, False);
+    Result := EncodeBuffer(Pointer(aText), Length(aText), gcBase64UrlChars, False);
 end;
 
-function Base64Decode(const ABase64: string): TBytes;
+function Base64Decode(const aBase64: string): TBytes;
 var
   lvLen, lvOutPos, lvAccum, lvGroup, i: Integer;
   lvCode: ShortInt;
@@ -355,7 +355,7 @@ var
   lvSeenPad: Boolean;
 begin
   Result := nil;
-  lvLen := Length(ABase64);
+  lvLen := Length(aBase64);
   if lvLen = 0 then
     Exit;
   // upper bound, trimmed to the real size at the end
@@ -366,7 +366,7 @@ begin
   lvSeenPad := False;
   for i := 1 to lvLen do
   begin
-    lvCh := ABase64[i];
+    lvCh := aBase64[i];
     {$IF SizeOf(Char) > 1}
     if Ord(lvCh) > 255 then
       raise EbpBase64.CreateFmt('Invalid Base64 character at position %d', [i]);
@@ -413,12 +413,12 @@ begin
   SetLength(Result, lvOutPos);
 end;
 
-function Base64DecodeStr(const ABase64: string): AnsiString;
+function Base64DecodeStr(const aBase64: string): AnsiString;
 var
   lvBytes: TBytes;
 begin
   Result := '';
-  lvBytes := Base64Decode(ABase64);
+  lvBytes := Base64Decode(aBase64);
   if Length(lvBytes) = 0 then
     Exit;
   SetLength(Result, Length(lvBytes));
@@ -465,7 +465,7 @@ begin
   FillChar(FBuffer, SizeOf(FBuffer), 0);
 end;
 
-procedure TbpSHA256.Compress(AData: PByteArray);
+procedure TbpSHA256.Compress(aData: PByteArray);
 var
   lvW: array[0..63] of Cardinal;
   lvA, lvB, lvC, lvD, lvE, lvF, lvG, lvH: Cardinal;
@@ -474,8 +474,8 @@ var
 begin
   // message schedule: 16 big-endian input words expanded to 64
   for i := 0 to 15 do
-    lvW[i] := (Cardinal(AData[i * 4]) shl 24) or (Cardinal(AData[i * 4 + 1]) shl 16) or
-              (Cardinal(AData[i * 4 + 2]) shl 8) or Cardinal(AData[i * 4 + 3]);
+    lvW[i] := (Cardinal(aData[i * 4]) shl 24) or (Cardinal(aData[i * 4 + 1]) shl 16) or
+              (Cardinal(aData[i * 4 + 2]) shl 8) or Cardinal(aData[i * 4 + 3]);
   for i := 16 to 63 do
   begin
     lvX := lvW[i - 2];
@@ -518,58 +518,58 @@ begin
   Inc(FHash[7], lvH);
 end;
 
-procedure TbpSHA256.Update(const AData; ASize: Integer);
+procedure TbpSHA256.Update(const aData; aSize: Integer);
 var
   lvSource: PByte;
   lvFree: Integer;
 begin
-  if ASize <= 0 then
+  if aSize <= 0 then
     Exit;
-  lvSource := @AData;
-  Inc(FLenBits, Int64(ASize) * 8);
+  lvSource := @aData;
+  Inc(FLenBits, Int64(aSize) * 8);
   // top up a partially filled block first
   if FIndex > 0 then
   begin
     lvFree := 64 - FIndex;
-    if lvFree > ASize then
+    if lvFree > aSize then
     begin
-      Move(lvSource^, FBuffer[FIndex], ASize);
-      Inc(FIndex, ASize);
+      Move(lvSource^, FBuffer[FIndex], aSize);
+      Inc(FIndex, aSize);
       Exit;
     end;
     Move(lvSource^, FBuffer[FIndex], lvFree);
     Compress(@FBuffer);
     FIndex := 0;
     Inc(lvSource, lvFree);
-    Dec(ASize, lvFree);
+    Dec(aSize, lvFree);
   end;
   // full blocks compress straight from the source, no copy
-  while ASize >= 64 do
+  while aSize >= 64 do
   begin
     Compress(PByteArray(lvSource));
     Inc(lvSource, 64);
-    Dec(ASize, 64);
+    Dec(aSize, 64);
   end;
-  if ASize > 0 then
+  if aSize > 0 then
   begin
-    Move(lvSource^, FBuffer[0], ASize);
-    FIndex := ASize;
+    Move(lvSource^, FBuffer[0], aSize);
+    FIndex := aSize;
   end;
 end;
 
-procedure TbpSHA256.Update(const ABytes: TBytes);
+procedure TbpSHA256.Update(const aBytes: TBytes);
 begin
-  if Length(ABytes) > 0 then
-    Update(ABytes[0], Length(ABytes));
+  if Length(aBytes) > 0 then
+    Update(aBytes[0], Length(aBytes));
 end;
 
-procedure TbpSHA256.Update(const AText: AnsiString);
+procedure TbpSHA256.Update(const aText: AnsiString);
 begin
-  if AText <> '' then
-    Update(PAnsiChar(AText)^, Length(AText));
+  if aText <> '' then
+    Update(PAnsiChar(aText)^, Length(aText));
 end;
 
-procedure TbpSHA256.Final(out ADigest: TbpSHA256Digest);
+procedure TbpSHA256.Final(out aDigest: TbpSHA256Digest);
 var
   lvBits: Int64;
   i: Integer;
@@ -591,34 +591,34 @@ begin
   // digest is the hash words in big-endian byte order
   for i := 0 to 7 do
   begin
-    ADigest[i * 4] := Byte(FHash[i] shr 24);
-    ADigest[i * 4 + 1] := Byte(FHash[i] shr 16);
-    ADigest[i * 4 + 2] := Byte(FHash[i] shr 8);
-    ADigest[i * 4 + 3] := Byte(FHash[i]);
+    aDigest[i * 4] := Byte(FHash[i] shr 24);
+    aDigest[i * 4 + 1] := Byte(FHash[i] shr 16);
+    aDigest[i * 4 + 2] := Byte(FHash[i] shr 8);
+    aDigest[i * 4 + 3] := Byte(FHash[i]);
   end;
   // wipe the state, ready for the next message
   Init;
 end;
 
-class function TbpSHA256.HashBuffer(const AData; ASize: Integer): TbpSHA256Digest;
+class function TbpSHA256.HashBuffer(const aData; aSize: Integer): TbpSHA256Digest;
 var
   lvHasher: TbpSHA256;
 begin
   lvHasher := TbpSHA256.Create;
   try
-    lvHasher.Update(AData, ASize);
+    lvHasher.Update(aData, aSize);
     lvHasher.Final(Result);
   finally
     lvHasher.Free;
   end;
 end;
 
-class function TbpSHA256.HashBytes(const ABytes: TBytes): TbpSHA256Digest;
+class function TbpSHA256.HashBytes(const aBytes: TBytes): TbpSHA256Digest;
 var
   lvDummy: Byte;
 begin
-  if Length(ABytes) > 0 then
-    Result := HashBuffer(ABytes[0], Length(ABytes))
+  if Length(aBytes) > 0 then
+    Result := HashBuffer(aBytes[0], Length(aBytes))
   else
   begin
     lvDummy := 0;
@@ -626,19 +626,19 @@ begin
   end;
 end;
 
-class function TbpSHA256.HashStr(const AText: AnsiString): TbpSHA256Digest;
+class function TbpSHA256.HashStr(const aText: AnsiString): TbpSHA256Digest;
 begin
-  Result := HashBuffer(PAnsiChar(AText)^, Length(AText));
+  Result := HashBuffer(PAnsiChar(aText)^, Length(aText));
 end;
 
-class function TbpSHA256.HashFile(const AFileName: string): TbpSHA256Digest;
+class function TbpSHA256.HashFile(const aFileName: string): TbpSHA256Digest;
 var
   lvStream: TFileStream;
   lvHasher: TbpSHA256;
   lvChunk: TBytes;
   lvRead: Integer;
 begin
-  lvStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
+  lvStream := TFileStream.Create(aFileName, fmOpenRead or fmShareDenyWrite);
   try
     lvHasher := TbpSHA256.Create;
     try
@@ -657,31 +657,31 @@ begin
   end;
 end;
 
-class function TbpSHA256.HashStrHex(const AText: AnsiString): string;
+class function TbpSHA256.HashStrHex(const aText: AnsiString): string;
 begin
-  Result := DigestToHex(HashStr(AText));
+  Result := DigestToHex(HashStr(aText));
 end;
 
-class function TbpSHA256.HashFileHex(const AFileName: string): string;
+class function TbpSHA256.HashFileHex(const aFileName: string): string;
 begin
-  Result := DigestToHex(HashFile(AFileName));
+  Result := DigestToHex(HashFile(aFileName));
 end;
 
-class function TbpSHA256.DigestToHex(const ADigest: TbpSHA256Digest): string;
+class function TbpSHA256.DigestToHex(const aDigest: TbpSHA256Digest): string;
 var
   i: Integer;
 begin
-  SetLength(Result, SizeOf(ADigest) * 2);
-  for i := 0 to High(ADigest) do
+  SetLength(Result, SizeOf(aDigest) * 2);
+  for i := 0 to High(aDigest) do
   begin
-    Result[i * 2 + 1] := gcShaHexDigits[(ADigest[i] shr 4) + 1];
-    Result[i * 2 + 2] := gcShaHexDigits[(ADigest[i] and $0F) + 1];
+    Result[i * 2 + 1] := gcShaHexDigits[(aDigest[i] shr 4) + 1];
+    Result[i * 2 + 2] := gcShaHexDigits[(aDigest[i] and $0F) + 1];
   end;
 end;
 
-class function TbpSHA256.DigestToBase64(const ADigest: TbpSHA256Digest): string;
+class function TbpSHA256.DigestToBase64(const aDigest: TbpSHA256Digest): string;
 begin
-  Result := Base64Encode(ADigest, SizeOf(ADigest));
+  Result := Base64Encode(aDigest, SizeOf(aDigest));
 end;
 
 // ==================================================================
@@ -723,7 +723,7 @@ begin
   FillChar(FBuffer, SizeOf(FBuffer), 0);
 end;
 
-procedure TbpMD5.Compress(AData: PByteArray);
+procedure TbpMD5.Compress(aData: PByteArray);
 var
   lvW: array[0..15] of Cardinal;
   lvA, lvB, lvC, lvD, lvF, lvX, lvTemp: Cardinal;
@@ -731,8 +731,8 @@ var
 begin
   // 16 little-endian input words
   for i := 0 to 15 do
-    lvW[i] := Cardinal(AData[i * 4]) or (Cardinal(AData[i * 4 + 1]) shl 8) or
-              (Cardinal(AData[i * 4 + 2]) shl 16) or (Cardinal(AData[i * 4 + 3]) shl 24);
+    lvW[i] := Cardinal(aData[i * 4]) or (Cardinal(aData[i * 4 + 1]) shl 8) or
+              (Cardinal(aData[i * 4 + 2]) shl 16) or (Cardinal(aData[i * 4 + 3]) shl 24);
   lvA := FHash[0];
   lvB := FHash[1];
   lvC := FHash[2];
@@ -774,58 +774,58 @@ begin
   Inc(FHash[3], lvD);
 end;
 
-procedure TbpMD5.Update(const AData; ASize: Integer);
+procedure TbpMD5.Update(const aData; aSize: Integer);
 var
   lvSource: PByte;
   lvFree: Integer;
 begin
-  if ASize <= 0 then
+  if aSize <= 0 then
     Exit;
-  lvSource := @AData;
-  Inc(FLenBits, Int64(ASize) * 8);
+  lvSource := @aData;
+  Inc(FLenBits, Int64(aSize) * 8);
   // top up a partially filled block first
   if FIndex > 0 then
   begin
     lvFree := 64 - FIndex;
-    if lvFree > ASize then
+    if lvFree > aSize then
     begin
-      Move(lvSource^, FBuffer[FIndex], ASize);
-      Inc(FIndex, ASize);
+      Move(lvSource^, FBuffer[FIndex], aSize);
+      Inc(FIndex, aSize);
       Exit;
     end;
     Move(lvSource^, FBuffer[FIndex], lvFree);
     Compress(@FBuffer);
     FIndex := 0;
     Inc(lvSource, lvFree);
-    Dec(ASize, lvFree);
+    Dec(aSize, lvFree);
   end;
   // full blocks compress straight from the source, no copy
-  while ASize >= 64 do
+  while aSize >= 64 do
   begin
     Compress(PByteArray(lvSource));
     Inc(lvSource, 64);
-    Dec(ASize, 64);
+    Dec(aSize, 64);
   end;
-  if ASize > 0 then
+  if aSize > 0 then
   begin
-    Move(lvSource^, FBuffer[0], ASize);
-    FIndex := ASize;
+    Move(lvSource^, FBuffer[0], aSize);
+    FIndex := aSize;
   end;
 end;
 
-procedure TbpMD5.Update(const ABytes: TBytes);
+procedure TbpMD5.Update(const aBytes: TBytes);
 begin
-  if Length(ABytes) > 0 then
-    Update(ABytes[0], Length(ABytes));
+  if Length(aBytes) > 0 then
+    Update(aBytes[0], Length(aBytes));
 end;
 
-procedure TbpMD5.Update(const AText: AnsiString);
+procedure TbpMD5.Update(const aText: AnsiString);
 begin
-  if AText <> '' then
-    Update(PAnsiChar(AText)^, Length(AText));
+  if aText <> '' then
+    Update(PAnsiChar(aText)^, Length(aText));
 end;
 
-procedure TbpMD5.Final(out ADigest: TbpMD5Digest);
+procedure TbpMD5.Final(out aDigest: TbpMD5Digest);
 var
   lvBits: Int64;
   i: Integer;
@@ -847,34 +847,34 @@ begin
   // digest is the state words in little-endian byte order
   for i := 0 to 3 do
   begin
-    ADigest[i * 4] := Byte(FHash[i]);
-    ADigest[i * 4 + 1] := Byte(FHash[i] shr 8);
-    ADigest[i * 4 + 2] := Byte(FHash[i] shr 16);
-    ADigest[i * 4 + 3] := Byte(FHash[i] shr 24);
+    aDigest[i * 4] := Byte(FHash[i]);
+    aDigest[i * 4 + 1] := Byte(FHash[i] shr 8);
+    aDigest[i * 4 + 2] := Byte(FHash[i] shr 16);
+    aDigest[i * 4 + 3] := Byte(FHash[i] shr 24);
   end;
   // wipe the state, ready for the next message
   Init;
 end;
 
-class function TbpMD5.HashBuffer(const AData; ASize: Integer): TbpMD5Digest;
+class function TbpMD5.HashBuffer(const aData; aSize: Integer): TbpMD5Digest;
 var
   lvHasher: TbpMD5;
 begin
   lvHasher := TbpMD5.Create;
   try
-    lvHasher.Update(AData, ASize);
+    lvHasher.Update(aData, aSize);
     lvHasher.Final(Result);
   finally
     lvHasher.Free;
   end;
 end;
 
-class function TbpMD5.HashBytes(const ABytes: TBytes): TbpMD5Digest;
+class function TbpMD5.HashBytes(const aBytes: TBytes): TbpMD5Digest;
 var
   lvDummy: Byte;
 begin
-  if Length(ABytes) > 0 then
-    Result := HashBuffer(ABytes[0], Length(ABytes))
+  if Length(aBytes) > 0 then
+    Result := HashBuffer(aBytes[0], Length(aBytes))
   else
   begin
     lvDummy := 0;
@@ -882,19 +882,19 @@ begin
   end;
 end;
 
-class function TbpMD5.HashStr(const AText: AnsiString): TbpMD5Digest;
+class function TbpMD5.HashStr(const aText: AnsiString): TbpMD5Digest;
 begin
-  Result := HashBuffer(PAnsiChar(AText)^, Length(AText));
+  Result := HashBuffer(PAnsiChar(aText)^, Length(aText));
 end;
 
-class function TbpMD5.HashFile(const AFileName: string): TbpMD5Digest;
+class function TbpMD5.HashFile(const aFileName: string): TbpMD5Digest;
 var
   lvStream: TFileStream;
   lvHasher: TbpMD5;
   lvChunk: TBytes;
   lvRead: Integer;
 begin
-  lvStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
+  lvStream := TFileStream.Create(aFileName, fmOpenRead or fmShareDenyWrite);
   try
     lvHasher := TbpMD5.Create;
     try
@@ -913,49 +913,49 @@ begin
   end;
 end;
 
-class function TbpMD5.HashStrHex(const AText: AnsiString): string;
+class function TbpMD5.HashStrHex(const aText: AnsiString): string;
 begin
-  Result := DigestToHex(HashStr(AText));
+  Result := DigestToHex(HashStr(aText));
 end;
 
-class function TbpMD5.HashFileHex(const AFileName: string): string;
+class function TbpMD5.HashFileHex(const aFileName: string): string;
 begin
-  Result := DigestToHex(HashFile(AFileName));
+  Result := DigestToHex(HashFile(aFileName));
 end;
 
-class function TbpMD5.DigestToHex(const ADigest: TbpMD5Digest): string;
+class function TbpMD5.DigestToHex(const aDigest: TbpMD5Digest): string;
 var
   i: Integer;
 begin
-  SetLength(Result, SizeOf(ADigest) * 2);
-  for i := 0 to High(ADigest) do
+  SetLength(Result, SizeOf(aDigest) * 2);
+  for i := 0 to High(aDigest) do
   begin
-    Result[i * 2 + 1] := gcMd5HexDigits[(ADigest[i] shr 4) + 1];
-    Result[i * 2 + 2] := gcMd5HexDigits[(ADigest[i] and $0F) + 1];
+    Result[i * 2 + 1] := gcMd5HexDigits[(aDigest[i] shr 4) + 1];
+    Result[i * 2 + 2] := gcMd5HexDigits[(aDigest[i] and $0F) + 1];
   end;
 end;
 
-class function TbpMD5.DigestToBase64(const ADigest: TbpMD5Digest): string;
+class function TbpMD5.DigestToBase64(const aDigest: TbpMD5Digest): string;
 begin
-  Result := Base64Encode(ADigest, SizeOf(ADigest));
+  Result := Base64Encode(aDigest, SizeOf(aDigest));
 end;
 
 // ==================================================================
 // BpHMACSHA256.pas - implementation
 // ==================================================================
 
-procedure TbpHMACSHA256.SetKey(const AKey; AKeySize: Integer);
+procedure TbpHMACSHA256.SetKey(const aKey; aKeySize: Integer);
 var
   lvHashedKey: TbpSHA256Digest;
   lvKeyBytes: PByte;
   lvKeyLen, i: Integer;
 begin
-  lvKeyBytes := @AKey;
-  lvKeyLen := AKeySize;
+  lvKeyBytes := @aKey;
+  lvKeyLen := aKeySize;
   // a key longer than the block is replaced by its hash (RFC 2104)
   if lvKeyLen > 64 then
   begin
-    lvHashedKey := TbpSHA256.HashBuffer(AKey, AKeySize);
+    lvHashedKey := TbpSHA256.HashBuffer(aKey, aKeySize);
     lvKeyBytes := @lvHashedKey;
     lvKeyLen := SizeOf(lvHashedKey);
   end;
@@ -978,24 +978,24 @@ begin
   FHasher.Update(FInnerPad, SizeOf(FInnerPad));
 end;
 
-constructor TbpHMACSHA256.Create(const AKey; AKeySize: Integer);
+constructor TbpHMACSHA256.Create(const aKey; aKeySize: Integer);
 begin
   inherited Create;
   FHasher := TbpSHA256.Create;
-  SetKey(AKey, AKeySize);
+  SetKey(aKey, aKeySize);
 end;
 
-constructor TbpHMACSHA256.Create(const AKey: AnsiString);
+constructor TbpHMACSHA256.Create(const aKey: AnsiString);
 begin
-  Create(PAnsiChar(AKey)^, Length(AKey));
+  Create(PAnsiChar(aKey)^, Length(aKey));
 end;
 
-constructor TbpHMACSHA256.Create(const AKey: TBytes);
+constructor TbpHMACSHA256.Create(const aKey: TBytes);
 var
   lvDummy: Byte;
 begin
-  if Length(AKey) > 0 then
-    Create(AKey[0], Length(AKey))
+  if Length(aKey) > 0 then
+    Create(aKey[0], Length(aKey))
   else
   begin
     lvDummy := 0;
@@ -1012,22 +1012,22 @@ begin
   inherited Destroy;
 end;
 
-procedure TbpHMACSHA256.Update(const AData; ASize: Integer);
+procedure TbpHMACSHA256.Update(const aData; aSize: Integer);
 begin
-  FHasher.Update(AData, ASize);
+  FHasher.Update(aData, aSize);
 end;
 
-procedure TbpHMACSHA256.Update(const ABytes: TBytes);
+procedure TbpHMACSHA256.Update(const aBytes: TBytes);
 begin
-  FHasher.Update(ABytes);
+  FHasher.Update(aBytes);
 end;
 
-procedure TbpHMACSHA256.Update(const AText: AnsiString);
+procedure TbpHMACSHA256.Update(const aText: AnsiString);
 begin
-  FHasher.Update(AText);
+  FHasher.Update(aText);
 end;
 
-procedure TbpHMACSHA256.Final(out ADigest: TbpSHA256Digest);
+procedure TbpHMACSHA256.Final(out aDigest: TbpSHA256Digest);
 var
   lvInnerDigest: TbpSHA256Digest;
 begin
@@ -1035,45 +1035,45 @@ begin
   FHasher.Final(lvInnerDigest);
   FHasher.Update(FOuterPad, SizeOf(FOuterPad));
   FHasher.Update(lvInnerDigest, SizeOf(lvInnerDigest));
-  FHasher.Final(ADigest);
+  FHasher.Final(aDigest);
   // re-arm the inner hash for the next message with the same key
   FHasher.Update(FInnerPad, SizeOf(FInnerPad));
 end;
 
-class function TbpHMACSHA256.Compute(const AKey, AText: AnsiString): TbpSHA256Digest;
+class function TbpHMACSHA256.Compute(const aKey, aText: AnsiString): TbpSHA256Digest;
 var
   lvHmac: TbpHMACSHA256;
 begin
-  lvHmac := TbpHMACSHA256.Create(AKey);
+  lvHmac := TbpHMACSHA256.Create(aKey);
   try
-    lvHmac.Update(AText);
+    lvHmac.Update(aText);
     lvHmac.Final(Result);
   finally
     lvHmac.Free;
   end;
 end;
 
-class function TbpHMACSHA256.Compute(const AKey, AData: TBytes): TbpSHA256Digest;
+class function TbpHMACSHA256.Compute(const aKey, aData: TBytes): TbpSHA256Digest;
 var
   lvHmac: TbpHMACSHA256;
 begin
-  lvHmac := TbpHMACSHA256.Create(AKey);
+  lvHmac := TbpHMACSHA256.Create(aKey);
   try
-    lvHmac.Update(AData);
+    lvHmac.Update(aData);
     lvHmac.Final(Result);
   finally
     lvHmac.Free;
   end;
 end;
 
-class function TbpHMACSHA256.ComputeHex(const AKey, AText: AnsiString): string;
+class function TbpHMACSHA256.ComputeHex(const aKey, aText: AnsiString): string;
 begin
-  Result := TbpSHA256.DigestToHex(Compute(AKey, AText));
+  Result := TbpSHA256.DigestToHex(Compute(aKey, aText));
 end;
 
-class function TbpHMACSHA256.ComputeBase64(const AKey, AText: AnsiString): string;
+class function TbpHMACSHA256.ComputeBase64(const aKey, aText: AnsiString): string;
 begin
-  Result := TbpSHA256.DigestToBase64(Compute(AKey, AText));
+  Result := TbpSHA256.DigestToBase64(Compute(aKey, aText));
 end;
 
 // ==================================================================

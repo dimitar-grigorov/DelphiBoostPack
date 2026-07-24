@@ -4,7 +4,7 @@ unit BpJsonStandalone;
 // Single-file bundle amalgamated from the DelphiBoostPack modular units:
 //   src\Core\Classes\BpStringBuilder.pas
 //   src\Core\Classes\BpJson.pas
-// Source commit bad9a16, generated 2026-07-08 by tools\Amalgamate.ps1.
+// Source commit 2677e2a, generated 2026-07-24 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   powershell -ExecutionPolicy Bypass -File tools\Amalgamate.ps1
 // Notes:
@@ -47,35 +47,35 @@ type
     FBuffer: string;  // raw storage, logical content is the first FLength chars
     FData: PChar;     // cached Pointer(FBuffer), refreshed on every reallocation
     FLength: Integer;
-    procedure Grow(AMinCapacity: Integer);
-    procedure AppendBuffer(ASource: PChar; ACount: Integer);
+    procedure Grow(aMinCapacity: Integer);
+    procedure AppendBuffer(aSource: PChar; aCount: Integer);
     function GetCapacity: Integer;
-    procedure SetCapacity(AValue: Integer);
-    function GetChar(AIndex: Integer): Char;
-    procedure SetChar(AIndex: Integer; AValue: Char);
-    procedure SetLength(AValue: Integer);
+    procedure SetCapacity(aValue: Integer);
+    function GetChar(aIndex: Integer): Char;
+    procedure SetChar(aIndex: Integer; aValue: Char);
+    procedure SetLength(aValue: Integer);
   public
     constructor Create; overload;
-    constructor Create(ACapacity: Integer); overload;
-    constructor Create(const AValue: string); overload;
+    constructor Create(aCapacity: Integer); overload;
+    constructor Create(const aValue: string); overload;
     // all Append overloads return Self so calls can be chained
-    function Append(const AValue: string): TbpStringBuilder; overload;
-    function Append(AValue: Char): TbpStringBuilder; overload;
-    function Append(AValue: Char; ARepeatCount: Integer): TbpStringBuilder; overload;
-    function Append(AValue: Integer): TbpStringBuilder; overload;
-    function Append(AValue: Int64): TbpStringBuilder; overload;
-    function Append(AValue: Double): TbpStringBuilder; overload;
-    function Append(AValue: Boolean): TbpStringBuilder; overload;
+    function Append(const aValue: string): TbpStringBuilder; overload;
+    function Append(aValue: Char): TbpStringBuilder; overload;
+    function Append(aValue: Char; aRepeatCount: Integer): TbpStringBuilder; overload;
+    function Append(aValue: Integer): TbpStringBuilder; overload;
+    function Append(aValue: Int64): TbpStringBuilder; overload;
+    function Append(aValue: Double): TbpStringBuilder; overload;
+    function Append(aValue: Boolean): TbpStringBuilder; overload;
     function AppendLine: TbpStringBuilder; overload;
-    function AppendLine(const AValue: string): TbpStringBuilder; overload;
-    function AppendFormat(const AFormat: string; const AArgs: array of const): TbpStringBuilder;
-    function Insert(AIndex: Integer; const AValue: string): TbpStringBuilder;
+    function AppendLine(const aValue: string): TbpStringBuilder; overload;
+    function AppendFormat(const aFormat: string; const aArgs: array of const): TbpStringBuilder;
+    function Insert(aIndex: Integer; const aValue: string): TbpStringBuilder;
     procedure Clear;
     function ToString: string; {$IF CompilerVersion >= 20.0} override; {$IFEND}
     // Length is writable: shrinking truncates, extending pads with #0
     property Length: Integer read FLength write SetLength;
     property Capacity: Integer read GetCapacity write SetCapacity;
-    property Chars[AIndex: Integer]: Char read GetChar write SetChar; default;
+    property Chars[aIndex: Integer]: Char read GetChar write SetChar; default;
   end;
 
 // ==================================================================
@@ -124,32 +124,32 @@ type
     FItems: array of TbpJsonValue;  // array elements or object member values
     FNames: array of string;        // object member names, parallel to FItems
     FCount: Integer;
-    function GetItem(AIndex: Integer): TbpJsonValue;
-    function GetName(AIndex: Integer): string;
-    procedure RequireKind(AKind: TbpJsonKind);
-    function IndexOfName(const AName: string): Integer;
-    procedure InternalAdd(const AName: string; AChild: TbpJsonValue);
-    procedure InternalPut(const AName: string; AChild: TbpJsonValue);
-    function MemberOrFail(const AName: string): TbpJsonValue;
-    procedure WriteTo(ASb: TbpStringBuilder; AEscapeNonAscii: Boolean;
-      AIndentSize, ALevel: Integer);
+    function GetItem(aIndex: Integer): TbpJsonValue;
+    function GetName(aIndex: Integer): string;
+    procedure RequireKind(aKind: TbpJsonKind);
+    function IndexOfName(const aName: string): Integer;
+    procedure InternalAdd(const aName: string; aChild: TbpJsonValue);
+    procedure InternalPut(const aName: string; aChild: TbpJsonValue);
+    function MemberOrFail(const aName: string): TbpJsonValue;
+    procedure WriteTo(aSb: TbpStringBuilder; aEscapeNonAscii: Boolean;
+      aIndentSize, aLevel: Integer);
   public
     constructor Create;  // a null value
     destructor Destroy; override;
 
     // building blocks; add the result to a container or free it yourself
     class function CreateNull: TbpJsonValue;
-    class function CreateBool(AValue: Boolean): TbpJsonValue;
-    class function CreateInt(AValue: Int64): TbpJsonValue;
-    class function CreateFloat(AValue: Double): TbpJsonValue;
-    class function CreateStr(const AValue: string): TbpJsonValue;
+    class function CreateBool(aValue: Boolean): TbpJsonValue;
+    class function CreateInt(aValue: Int64): TbpJsonValue;
+    class function CreateFloat(aValue: Double): TbpJsonValue;
+    class function CreateStr(const aValue: string): TbpJsonValue;
     class function CreateArray: TbpJsonValue;
     class function CreateObject: TbpJsonValue;
 
     // Parse raises EbpJson with line/position, TryParse returns False
-    class function Parse(const AJson: string): TbpJsonValue;
-    class function TryParse(const AJson: string;
-      out AValue: TbpJsonValue): Boolean;
+    class function Parse(const aJson: string): TbpJsonValue;
+    class function TryParse(const aJson: string;
+      out aValue: TbpJsonValue): Boolean;
 
     function Clone: TbpJsonValue;  // deep copy, caller owns the result
     function KindName: string;
@@ -165,60 +165,60 @@ type
 
     // Count and Items serve both arrays and objects, Names only objects
     property Count: Integer read FCount;
-    property Items[AIndex: Integer]: TbpJsonValue read GetItem;
-    property Names[AIndex: Integer]: string read GetName;
-    procedure Delete(AIndex: Integer);
+    property Items[aIndex: Integer]: TbpJsonValue read GetItem;
+    property Names[aIndex: Integer]: string read GetName;
+    procedure Delete(aIndex: Integer);
     procedure Clear;
 
     // array building; the value must be an array,
     // AddArray and AddObject return the new empty container
     procedure AddNull;
-    procedure AddBool(AValue: Boolean);
-    procedure AddInt(AValue: Int64);
-    procedure AddFloat(AValue: Double);
-    procedure AddStr(const AValue: string);
+    procedure AddBool(aValue: Boolean);
+    procedure AddInt(aValue: Int64);
+    procedure AddFloat(aValue: Double);
+    procedure AddStr(const aValue: string);
     function AddArray: TbpJsonValue;
     function AddObject: TbpJsonValue;
 
     // object member access; the value must be an object
-    function Find(const AName: string): TbpJsonValue;  // nil when missing
-    function Contains(const AName: string): Boolean;
-    function Remove(const AName: string): Boolean;
+    function Find(const aName: string): TbpJsonValue;  // nil when missing
+    function Contains(const aName: string): Boolean;
+    function Remove(const aName: string): Boolean;
 
-    function GetBool(const AName: string): Boolean;
-    function GetBoolDef(const AName: string; ADefault: Boolean): Boolean;
-    function TryGetBool(const AName: string; out AValue: Boolean): Boolean;
-    function GetInt(const AName: string): Int64;
-    function GetIntDef(const AName: string; ADefault: Int64): Int64;
-    function TryGetInt(const AName: string; out AValue: Int64): Boolean;
-    function GetFloat(const AName: string): Double;
-    function GetFloatDef(const AName: string; ADefault: Double): Double;
-    function TryGetFloat(const AName: string; out AValue: Double): Boolean;
-    function GetStr(const AName: string): string;
-    function GetStrDef(const AName, ADefault: string): string;
-    function TryGetStr(const AName: string; out AValue: string): Boolean;
+    function GetBool(const aName: string): Boolean;
+    function GetBoolDef(const aName: string; aDefault: Boolean): Boolean;
+    function TryGetBool(const aName: string; out aValue: Boolean): Boolean;
+    function GetInt(const aName: string): Int64;
+    function GetIntDef(const aName: string; aDefault: Int64): Int64;
+    function TryGetInt(const aName: string; out aValue: Int64): Boolean;
+    function GetFloat(const aName: string): Double;
+    function GetFloatDef(const aName: string; aDefault: Double): Double;
+    function TryGetFloat(const aName: string; out aValue: Double): Boolean;
+    function GetStr(const aName: string): string;
+    function GetStrDef(const aName, aDefault: string): string;
+    function TryGetStr(const aName: string; out aValue: string): Boolean;
 
     // create-or-replace member; SetArray and SetObject return the container
-    procedure SetNull(const AName: string);
-    procedure SetBool(const AName: string; AValue: Boolean);
-    procedure SetInt(const AName: string; AValue: Int64);
-    procedure SetFloat(const AName: string; AValue: Double);
-    procedure SetStr(const AName, AValue: string);
-    function SetArray(const AName: string): TbpJsonValue;
-    function SetObject(const AName: string): TbpJsonValue;
+    procedure SetNull(const aName: string);
+    procedure SetBool(const aName: string; aValue: Boolean);
+    procedure SetInt(const aName: string; aValue: Int64);
+    procedure SetFloat(const aName: string; aValue: Double);
+    procedure SetStr(const aName, aValue: string);
+    function SetArray(const aName: string): TbpJsonValue;
+    function SetObject(const aName: string): TbpJsonValue;
 
     // dotted path with [n] indexing, e.g. 'data.items[0].name';
     // nil (or the default) when any step is missing or of the wrong kind
-    function FindPath(const APath: string): TbpJsonValue;
-    function PathBoolDef(const APath: string; ADefault: Boolean): Boolean;
-    function PathIntDef(const APath: string; ADefault: Int64): Int64;
-    function PathFloatDef(const APath: string; ADefault: Double): Double;
-    function PathStrDef(const APath, ADefault: string): string;
+    function FindPath(const aPath: string): TbpJsonValue;
+    function PathBoolDef(const aPath: string; aDefault: Boolean): Boolean;
+    function PathIntDef(const aPath: string; aDefault: Int64): Int64;
+    function PathFloatDef(const aPath: string; aDefault: Double): Double;
+    function PathStrDef(const aPath, aDefault: string): string;
 
-    // writers; AEscapeNonAscii escapes every char above #127 as \uXXXX
-    function ToJson(AEscapeNonAscii: Boolean = False): string;
-    function ToJsonPretty(AIndentSize: Integer = 2;
-      AEscapeNonAscii: Boolean = False): string;
+    // writers; aEscapeNonAscii escapes every char above #127 as \uXXXX
+    function ToJson(aEscapeNonAscii: Boolean = False): string;
+    function ToJsonPretty(aIndentSize: Integer = 2;
+      aEscapeNonAscii: Boolean = False): string;
   end;
 
 implementation
@@ -238,95 +238,95 @@ begin
   // no allocation here, the first append grows to gcDefaultCapacity
 end;
 
-constructor TbpStringBuilder.Create(ACapacity: Integer);
+constructor TbpStringBuilder.Create(aCapacity: Integer);
 begin
   inherited Create;
-  if ACapacity < 0 then
-    raise EbpStringBuilder.CreateFmt('Capacity cannot be negative (%d)', [ACapacity]);
-  if ACapacity > 0 then
-    SetCapacity(ACapacity);
+  if aCapacity < 0 then
+    raise EbpStringBuilder.CreateFmt('Capacity cannot be negative (%d)', [aCapacity]);
+  if aCapacity > 0 then
+    SetCapacity(aCapacity);
 end;
 
-constructor TbpStringBuilder.Create(const AValue: string);
+constructor TbpStringBuilder.Create(const aValue: string);
 begin
   inherited Create;
-  Append(AValue);
+  Append(aValue);
 end;
 
-procedure TbpStringBuilder.Grow(AMinCapacity: Integer);
+procedure TbpStringBuilder.Grow(aMinCapacity: Integer);
 var
   lvNewCapacity: Integer;
 begin
   lvNewCapacity := System.Length(FBuffer) * 2;
   if lvNewCapacity < gcDefaultCapacity then
     lvNewCapacity := gcDefaultCapacity;
-  if lvNewCapacity < AMinCapacity then
-    lvNewCapacity := AMinCapacity;
+  if lvNewCapacity < aMinCapacity then
+    lvNewCapacity := aMinCapacity;
   System.SetLength(FBuffer, lvNewCapacity);
   FData := Pointer(FBuffer);
 end;
 
-procedure TbpStringBuilder.AppendBuffer(ASource: PChar; ACount: Integer);
+procedure TbpStringBuilder.AppendBuffer(aSource: PChar; aCount: Integer);
 begin
-  if ACount <= 0 then
+  if aCount <= 0 then
     Exit;
-  if FLength + ACount > System.Length(FBuffer) then
-    Grow(FLength + ACount);
-  Move(ASource^, FData[FLength], ACount * SizeOf(Char));
-  Inc(FLength, ACount);
+  if FLength + aCount > System.Length(FBuffer) then
+    Grow(FLength + aCount);
+  Move(aSource^, FData[FLength], aCount * SizeOf(Char));
+  Inc(FLength, aCount);
 end;
 
-function TbpStringBuilder.Append(const AValue: string): TbpStringBuilder;
+function TbpStringBuilder.Append(const aValue: string): TbpStringBuilder;
 begin
-  AppendBuffer(Pointer(AValue), System.Length(AValue));
+  AppendBuffer(Pointer(aValue), System.Length(aValue));
   Result := Self;
 end;
 
-function TbpStringBuilder.Append(AValue: Char): TbpStringBuilder;
+function TbpStringBuilder.Append(aValue: Char): TbpStringBuilder;
 begin
   // single char fast path, direct store instead of a Move
   if FLength >= System.Length(FBuffer) then
     Grow(FLength + 1);
-  FData[FLength] := AValue;
+  FData[FLength] := aValue;
   Inc(FLength);
   Result := Self;
 end;
 
-function TbpStringBuilder.Append(AValue: Char; ARepeatCount: Integer): TbpStringBuilder;
+function TbpStringBuilder.Append(aValue: Char; aRepeatCount: Integer): TbpStringBuilder;
 var
   i: Integer;
 begin
-  if ARepeatCount < 0 then
-    raise EbpStringBuilder.CreateFmt('RepeatCount cannot be negative (%d)', [ARepeatCount]);
-  if ARepeatCount > 0 then
+  if aRepeatCount < 0 then
+    raise EbpStringBuilder.CreateFmt('RepeatCount cannot be negative (%d)', [aRepeatCount]);
+  if aRepeatCount > 0 then
   begin
-    if FLength + ARepeatCount > System.Length(FBuffer) then
-      Grow(FLength + ARepeatCount);
-    for i := 0 to ARepeatCount - 1 do
-      FData[FLength + i] := AValue;
-    Inc(FLength, ARepeatCount);
+    if FLength + aRepeatCount > System.Length(FBuffer) then
+      Grow(FLength + aRepeatCount);
+    for i := 0 to aRepeatCount - 1 do
+      FData[FLength + i] := aValue;
+    Inc(FLength, aRepeatCount);
   end;
   Result := Self;
 end;
 
-function TbpStringBuilder.Append(AValue: Integer): TbpStringBuilder;
+function TbpStringBuilder.Append(aValue: Integer): TbpStringBuilder;
 var
   lvBuf: array[0..11] of Char;
   lvPos: Integer;
   lvRemaining: Cardinal;
 begin
   // digits are written backward from the end of the stack buffer, no allocation
-  if AValue < 0 then
-    lvRemaining := Cardinal(-Int64(AValue)) // Int64 negation, -Low(Integer) overflows Integer
+  if aValue < 0 then
+    lvRemaining := Cardinal(-Int64(aValue)) // Int64 negation, -Low(Integer) overflows Integer
   else
-    lvRemaining := Cardinal(AValue);
+    lvRemaining := Cardinal(aValue);
   lvPos := High(lvBuf) + 1;
   repeat
     Dec(lvPos);
     lvBuf[lvPos] := Char(Ord('0') + lvRemaining mod 10);
     lvRemaining := lvRemaining div 10;
   until lvRemaining = 0;
-  if AValue < 0 then
+  if aValue < 0 then
   begin
     Dec(lvPos);
     lvBuf[lvPos] := '-';
@@ -335,18 +335,18 @@ begin
   Result := Self;
 end;
 
-function TbpStringBuilder.Append(AValue: Int64): TbpStringBuilder;
+function TbpStringBuilder.Append(aValue: Int64): TbpStringBuilder;
 var
   lvBuf: array[0..19] of Char;
   lvPos: Integer;
   lvRemaining: Int64;
 begin
-  if AValue = Low(Int64) then
+  if aValue = Low(Int64) then
   begin
     Result := Append(gcMinInt64Text);
     Exit;
   end;
-  lvRemaining := AValue;
+  lvRemaining := aValue;
   if lvRemaining < 0 then
     lvRemaining := -lvRemaining;
   lvPos := High(lvBuf) + 1;
@@ -355,7 +355,7 @@ begin
     lvBuf[lvPos] := Char(Ord('0') + lvRemaining mod 10);
     lvRemaining := lvRemaining div 10;
   until lvRemaining = 0;
-  if AValue < 0 then
+  if aValue < 0 then
   begin
     Dec(lvPos);
     lvBuf[lvPos] := '-';
@@ -364,14 +364,14 @@ begin
   Result := Self;
 end;
 
-function TbpStringBuilder.Append(AValue: Double): TbpStringBuilder;
+function TbpStringBuilder.Append(aValue: Double): TbpStringBuilder;
 begin
-  Result := Append(FloatToStr(AValue));
+  Result := Append(FloatToStr(aValue));
 end;
 
-function TbpStringBuilder.Append(AValue: Boolean): TbpStringBuilder;
+function TbpStringBuilder.Append(aValue: Boolean): TbpStringBuilder;
 begin
-  if AValue then
+  if aValue then
     Result := Append('True')
   else
     Result := Append('False');
@@ -382,33 +382,33 @@ begin
   Result := Append(sLineBreak);
 end;
 
-function TbpStringBuilder.AppendLine(const AValue: string): TbpStringBuilder;
+function TbpStringBuilder.AppendLine(const aValue: string): TbpStringBuilder;
 begin
-  Append(AValue);
+  Append(aValue);
   Result := Append(sLineBreak);
 end;
 
-function TbpStringBuilder.AppendFormat(const AFormat: string;
-  const AArgs: array of const): TbpStringBuilder;
+function TbpStringBuilder.AppendFormat(const aFormat: string;
+  const aArgs: array of const): TbpStringBuilder;
 begin
-  Result := Append(Format(AFormat, AArgs));
+  Result := Append(Format(aFormat, aArgs));
 end;
 
-function TbpStringBuilder.Insert(AIndex: Integer; const AValue: string): TbpStringBuilder;
+function TbpStringBuilder.Insert(aIndex: Integer; const aValue: string): TbpStringBuilder;
 var
   lvLen: Integer;
 begin
-  if (AIndex < 0) or (AIndex > FLength) then
+  if (aIndex < 0) or (aIndex > FLength) then
     raise EbpStringBuilder.CreateFmt('Insert index %d out of bounds (0..%d)',
-      [AIndex, FLength]);
-  lvLen := System.Length(AValue);
+      [aIndex, FLength]);
+  lvLen := System.Length(aValue);
   if lvLen > 0 then
   begin
     if FLength + lvLen > System.Length(FBuffer) then
       Grow(FLength + lvLen);
-    if AIndex < FLength then
-      Move(FData[AIndex], FData[AIndex + lvLen], (FLength - AIndex) * SizeOf(Char));
-    Move(Pointer(AValue)^, FData[AIndex], lvLen * SizeOf(Char));
+    if aIndex < FLength then
+      Move(FData[aIndex], FData[aIndex + lvLen], (FLength - aIndex) * SizeOf(Char));
+    Move(Pointer(aValue)^, FData[aIndex], lvLen * SizeOf(Char));
     Inc(FLength, lvLen);
   end;
   Result := Self;
@@ -430,43 +430,43 @@ begin
   Result := System.Length(FBuffer);
 end;
 
-procedure TbpStringBuilder.SetCapacity(AValue: Integer);
+procedure TbpStringBuilder.SetCapacity(aValue: Integer);
 begin
-  if (AValue < 0) or (AValue < FLength) then
+  if (aValue < 0) or (aValue < FLength) then
     raise EbpStringBuilder.CreateFmt('Capacity %d is invalid (current length %d)',
-      [AValue, FLength]);
-  System.SetLength(FBuffer, AValue);
+      [aValue, FLength]);
+  System.SetLength(FBuffer, aValue);
   FData := Pointer(FBuffer);
 end;
 
-function TbpStringBuilder.GetChar(AIndex: Integer): Char;
+function TbpStringBuilder.GetChar(aIndex: Integer): Char;
 begin
-  if (AIndex < 0) or (AIndex >= FLength) then
+  if (aIndex < 0) or (aIndex >= FLength) then
     raise EbpStringBuilder.CreateFmt('Index %d out of bounds (0..%d)',
-      [AIndex, FLength - 1]);
-  Result := FData[AIndex];
+      [aIndex, FLength - 1]);
+  Result := FData[aIndex];
 end;
 
-procedure TbpStringBuilder.SetChar(AIndex: Integer; AValue: Char);
+procedure TbpStringBuilder.SetChar(aIndex: Integer; aValue: Char);
 begin
-  if (AIndex < 0) or (AIndex >= FLength) then
+  if (aIndex < 0) or (aIndex >= FLength) then
     raise EbpStringBuilder.CreateFmt('Index %d out of bounds (0..%d)',
-      [AIndex, FLength - 1]);
-  FData[AIndex] := AValue;
+      [aIndex, FLength - 1]);
+  FData[aIndex] := aValue;
 end;
 
-procedure TbpStringBuilder.SetLength(AValue: Integer);
+procedure TbpStringBuilder.SetLength(aValue: Integer);
 var
   i: Integer;
 begin
-  if AValue < 0 then
-    raise EbpStringBuilder.CreateFmt('Length cannot be negative (%d)', [AValue]);
-  if AValue > System.Length(FBuffer) then
-    Grow(AValue);
+  if aValue < 0 then
+    raise EbpStringBuilder.CreateFmt('Length cannot be negative (%d)', [aValue]);
+  if aValue > System.Length(FBuffer) then
+    Grow(aValue);
   // extending pads with #0 so the new region is deterministic
-  for i := FLength to AValue - 1 do
+  for i := FLength to aValue - 1 do
     FData[i] := #0;
-  FLength := AValue;
+  FLength := aValue;
 end;
 
 // ==================================================================
@@ -486,15 +486,15 @@ type
     Depth: Integer;
   end;
 
-procedure BpJsonFail(const AReader: TbpJsonReader; const AMsg: string);
+procedure BpJsonFail(const aReader: TbpJsonReader; const aMsg: string);
 var
   lvP: PChar;
   lvLine, lvPos: Integer;
 begin
   lvLine := 1;
   lvPos := 1;
-  lvP := AReader.Start;
-  while lvP < AReader.Cur do
+  lvP := aReader.Start;
+  while lvP < aReader.Cur do
   begin
     if lvP^ = #10 then
     begin
@@ -505,21 +505,21 @@ begin
       Inc(lvPos);
     Inc(lvP);
   end;
-  raise EbpJson.CreateFmt('%s at line %d, position %d', [AMsg, lvLine, lvPos]);
+  raise EbpJson.CreateFmt('%s at line %d, position %d', [aMsg, lvLine, lvPos]);
 end;
 
-procedure BpJsonSkipWhite(var AReader: TbpJsonReader);
+procedure BpJsonSkipWhite(var aReader: TbpJsonReader);
 begin
   while True do
-    case AReader.Cur^ of
-      #9, #10, #13, ' ': Inc(AReader.Cur);
+    case aReader.Cur^ of
+      #9, #10, #13, ' ': Inc(aReader.Cur);
     else
       Break;
     end;
 end;
 
 // parses exactly four hex digits, the XXXX of a \uXXXX escape
-function BpJsonHexQuad(var AReader: TbpJsonReader): Integer;
+function BpJsonHexQuad(var aReader: TbpJsonReader): Integer;
 var
   lvI, lvDigit: Integer;
 begin
@@ -527,19 +527,19 @@ begin
   lvDigit := 0;
   for lvI := 1 to 4 do
   begin
-    case AReader.Cur^ of
-      '0'..'9': lvDigit := Ord(AReader.Cur^) - Ord('0');
-      'a'..'f': lvDigit := Ord(AReader.Cur^) - Ord('a') + 10;
-      'A'..'F': lvDigit := Ord(AReader.Cur^) - Ord('A') + 10;
+    case aReader.Cur^ of
+      '0'..'9': lvDigit := Ord(aReader.Cur^) - Ord('0');
+      'a'..'f': lvDigit := Ord(aReader.Cur^) - Ord('a') + 10;
+      'A'..'F': lvDigit := Ord(aReader.Cur^) - Ord('A') + 10;
     else
-      BpJsonFail(AReader, 'Invalid \u escape');
+      BpJsonFail(aReader, 'Invalid \u escape');
     end;
     Result := Result * 16 + lvDigit;
-    Inc(AReader.Cur);
+    Inc(aReader.Cur);
   end;
 end;
 
-function BpJsonParseString(var AReader: TbpJsonReader): string;
+function BpJsonParseString(var aReader: TbpJsonReader): string;
 var
   lvSb: TbpStringBuilder;
   lvSeg: PChar;
@@ -548,127 +548,127 @@ var
   lvWide: WideString;
 {$IFEND}
 
-  procedure FlushSeg(AUpTo: PChar);
+  procedure FlushSeg(aUpTo: PChar);
   var
     lvChunk: string;
   begin
-    if AUpTo > lvSeg then
+    if aUpTo > lvSeg then
     begin
-      SetString(lvChunk, lvSeg, AUpTo - lvSeg);
+      SetString(lvChunk, lvSeg, aUpTo - lvSeg);
       lvSb.Append(lvChunk);
     end;
   end;
 
-  procedure AppendWideChar(AOrd: Integer);
+  procedure AppendWideChar(aOrd: Integer);
   begin
 {$IF CompilerVersion >= 20.0}
-    lvSb.Append(Char(AOrd));
+    lvSb.Append(Char(aOrd));
 {$ELSE}
     SetLength(lvWide, 1);
-    lvWide[1] := WideChar(AOrd);
+    lvWide[1] := WideChar(aOrd);
     lvSb.Append(string(lvWide));
 {$IFEND}
   end;
 
-  procedure AppendSurrogatePair(AHi, ALo: Integer);
+  procedure AppendSurrogatePair(aHi, aLo: Integer);
   begin
 {$IF CompilerVersion >= 20.0}
-    lvSb.Append(Char(AHi));
-    lvSb.Append(Char(ALo));
+    lvSb.Append(Char(aHi));
+    lvSb.Append(Char(aLo));
 {$ELSE}
     SetLength(lvWide, 2);
-    lvWide[1] := WideChar(AHi);
-    lvWide[2] := WideChar(ALo);
+    lvWide[1] := WideChar(aHi);
+    lvWide[2] := WideChar(aLo);
     lvSb.Append(string(lvWide));
 {$IFEND}
   end;
 
 begin
   Result := '';
-  // AReader.Cur is on the opening quote
-  Inc(AReader.Cur);
-  lvSeg := AReader.Cur;
+  // aReader.Cur is on the opening quote
+  Inc(aReader.Cur);
+  lvSeg := aReader.Cur;
   // fast path: a string without escapes is one SetString
   while True do
-    case AReader.Cur^ of
+    case aReader.Cur^ of
       '"':
         begin
-          SetString(Result, lvSeg, AReader.Cur - lvSeg);
-          Inc(AReader.Cur);
+          SetString(Result, lvSeg, aReader.Cur - lvSeg);
+          Inc(aReader.Cur);
           Exit;
         end;
       '\': Break;
-      #0: BpJsonFail(AReader, 'Unterminated string');
-      #1..#31: BpJsonFail(AReader, 'Unescaped control character in string');
+      #0: BpJsonFail(aReader, 'Unterminated string');
+      #1..#31: BpJsonFail(aReader, 'Unescaped control character in string');
     else
-      Inc(AReader.Cur);
+      Inc(aReader.Cur);
     end;
   // slow path: copy segments between escapes and decode the escapes
   lvSb := TbpStringBuilder.Create(64);
   try
     while True do
-      case AReader.Cur^ of
+      case aReader.Cur^ of
         '"':
           begin
-            FlushSeg(AReader.Cur);
-            Inc(AReader.Cur);
+            FlushSeg(aReader.Cur);
+            Inc(aReader.Cur);
             Result := lvSb.ToString;
             Exit;
           end;
         '\':
           begin
-            FlushSeg(AReader.Cur);
-            Inc(AReader.Cur);
-            case AReader.Cur^ of
+            FlushSeg(aReader.Cur);
+            Inc(aReader.Cur);
+            case aReader.Cur^ of
               '"', '\', '/':
                 begin
-                  lvSb.Append(Char(AReader.Cur^));
-                  Inc(AReader.Cur);
+                  lvSb.Append(Char(aReader.Cur^));
+                  Inc(aReader.Cur);
                 end;
-              'b': begin lvSb.Append(#8); Inc(AReader.Cur); end;
-              't': begin lvSb.Append(#9); Inc(AReader.Cur); end;
-              'n': begin lvSb.Append(#10); Inc(AReader.Cur); end;
-              'f': begin lvSb.Append(#12); Inc(AReader.Cur); end;
-              'r': begin lvSb.Append(#13); Inc(AReader.Cur); end;
+              'b': begin lvSb.Append(#8); Inc(aReader.Cur); end;
+              't': begin lvSb.Append(#9); Inc(aReader.Cur); end;
+              'n': begin lvSb.Append(#10); Inc(aReader.Cur); end;
+              'f': begin lvSb.Append(#12); Inc(aReader.Cur); end;
+              'r': begin lvSb.Append(#13); Inc(aReader.Cur); end;
               'u':
                 begin
-                  Inc(AReader.Cur);
-                  lvW1 := BpJsonHexQuad(AReader);
+                  Inc(aReader.Cur);
+                  lvW1 := BpJsonHexQuad(aReader);
                   if (lvW1 >= $D800) and (lvW1 <= $DBFF) then
                   begin
                     // a high surrogate must be followed by an escaped low one
-                    if (AReader.Cur^ = '\') and (AReader.Cur[1] = 'u') then
+                    if (aReader.Cur^ = '\') and (aReader.Cur[1] = 'u') then
                     begin
-                      Inc(AReader.Cur, 2);
-                      lvW2 := BpJsonHexQuad(AReader);
+                      Inc(aReader.Cur, 2);
+                      lvW2 := BpJsonHexQuad(aReader);
                       if (lvW2 < $DC00) or (lvW2 > $DFFF) then
-                        BpJsonFail(AReader, 'Invalid surrogate pair');
+                        BpJsonFail(aReader, 'Invalid surrogate pair');
                       AppendSurrogatePair(lvW1, lvW2);
                     end
                     else
-                      BpJsonFail(AReader, 'Unpaired high surrogate');
+                      BpJsonFail(aReader, 'Unpaired high surrogate');
                   end
                   else if (lvW1 >= $DC00) and (lvW1 <= $DFFF) then
-                    BpJsonFail(AReader, 'Unpaired low surrogate')
+                    BpJsonFail(aReader, 'Unpaired low surrogate')
                   else
                     AppendWideChar(lvW1);
                 end;
             else
-              BpJsonFail(AReader, 'Invalid escape sequence');
+              BpJsonFail(aReader, 'Invalid escape sequence');
             end;
-            lvSeg := AReader.Cur;
+            lvSeg := aReader.Cur;
           end;
-        #0: BpJsonFail(AReader, 'Unterminated string');
-        #1..#31: BpJsonFail(AReader, 'Unescaped control character in string');
+        #0: BpJsonFail(aReader, 'Unterminated string');
+        #1..#31: BpJsonFail(aReader, 'Unescaped control character in string');
       else
-        Inc(AReader.Cur);
+        Inc(aReader.Cur);
       end;
   finally
     lvSb.Free;
   end;
 end;
 
-function BpJsonParseNumber(var AReader: TbpJsonReader): TbpJsonValue;
+function BpJsonParseNumber(var aReader: TbpJsonReader): TbpJsonValue;
 var
   lvStart: PChar;
   lvToken: string;
@@ -677,44 +677,44 @@ var
   lvFloat: Double;
   lvErr: Integer;
 begin
-  lvStart := AReader.Cur;
-  if AReader.Cur^ = '-' then
-    Inc(AReader.Cur);
-  case AReader.Cur^ of
+  lvStart := aReader.Cur;
+  if aReader.Cur^ = '-' then
+    Inc(aReader.Cur);
+  case aReader.Cur^ of
     '0':
       begin
-        Inc(AReader.Cur);
-        if (AReader.Cur^ >= '0') and (AReader.Cur^ <= '9') then
-          BpJsonFail(AReader, 'Leading zeros are not allowed');
+        Inc(aReader.Cur);
+        if (aReader.Cur^ >= '0') and (aReader.Cur^ <= '9') then
+          BpJsonFail(aReader, 'Leading zeros are not allowed');
       end;
     '1'..'9':
-      while (AReader.Cur^ >= '0') and (AReader.Cur^ <= '9') do
-        Inc(AReader.Cur);
+      while (aReader.Cur^ >= '0') and (aReader.Cur^ <= '9') do
+        Inc(aReader.Cur);
   else
-    BpJsonFail(AReader, 'Invalid number');
+    BpJsonFail(aReader, 'Invalid number');
   end;
   lvIsFloat := False;
-  if AReader.Cur^ = '.' then
+  if aReader.Cur^ = '.' then
   begin
-    Inc(AReader.Cur);
-    if (AReader.Cur^ < '0') or (AReader.Cur^ > '9') then
-      BpJsonFail(AReader, 'Digit expected after decimal point');
-    while (AReader.Cur^ >= '0') and (AReader.Cur^ <= '9') do
-      Inc(AReader.Cur);
+    Inc(aReader.Cur);
+    if (aReader.Cur^ < '0') or (aReader.Cur^ > '9') then
+      BpJsonFail(aReader, 'Digit expected after decimal point');
+    while (aReader.Cur^ >= '0') and (aReader.Cur^ <= '9') do
+      Inc(aReader.Cur);
     lvIsFloat := True;
   end;
-  if (AReader.Cur^ = 'e') or (AReader.Cur^ = 'E') then
+  if (aReader.Cur^ = 'e') or (aReader.Cur^ = 'E') then
   begin
-    Inc(AReader.Cur);
-    if (AReader.Cur^ = '+') or (AReader.Cur^ = '-') then
-      Inc(AReader.Cur);
-    if (AReader.Cur^ < '0') or (AReader.Cur^ > '9') then
-      BpJsonFail(AReader, 'Digit expected in exponent');
-    while (AReader.Cur^ >= '0') and (AReader.Cur^ <= '9') do
-      Inc(AReader.Cur);
+    Inc(aReader.Cur);
+    if (aReader.Cur^ = '+') or (aReader.Cur^ = '-') then
+      Inc(aReader.Cur);
+    if (aReader.Cur^ < '0') or (aReader.Cur^ > '9') then
+      BpJsonFail(aReader, 'Digit expected in exponent');
+    while (aReader.Cur^ >= '0') and (aReader.Cur^ <= '9') do
+      Inc(aReader.Cur);
     lvIsFloat := True;
   end;
-  SetString(lvToken, lvStart, AReader.Cur - lvStart);
+  SetString(lvToken, lvStart, aReader.Cur - lvStart);
   if not lvIsFloat then
   begin
     Val(lvToken, lvInt, lvErr);
@@ -727,140 +727,140 @@ begin
   end;
   Val(lvToken, lvFloat, lvErr);
   if lvErr <> 0 then
-    BpJsonFail(AReader, 'Number out of range');
+    BpJsonFail(aReader, 'Number out of range');
   Result := TbpJsonValue.CreateFloat(lvFloat);
 end;
 
-procedure BpJsonExpectWord(var AReader: TbpJsonReader; const AWord: string);
+procedure BpJsonExpectWord(var aReader: TbpJsonReader; const aWord: string);
 var
   lvI: Integer;
 begin
-  for lvI := 1 to Length(AWord) do
+  for lvI := 1 to Length(aWord) do
   begin
-    if AReader.Cur^ <> AWord[lvI] then
-      BpJsonFail(AReader, 'Invalid JSON value');
-    Inc(AReader.Cur);
+    if aReader.Cur^ <> aWord[lvI] then
+      BpJsonFail(aReader, 'Invalid JSON value');
+    Inc(aReader.Cur);
   end;
 end;
 
-function BpJsonParseValue(var AReader: TbpJsonReader): TbpJsonValue; forward;
+function BpJsonParseValue(var aReader: TbpJsonReader): TbpJsonValue; forward;
 
-function BpJsonParseObject(var AReader: TbpJsonReader): TbpJsonValue;
+function BpJsonParseObject(var aReader: TbpJsonReader): TbpJsonValue;
 var
   lvName: string;
 begin
-  // AReader.Cur is on the '{'
-  Inc(AReader.Cur);
-  Inc(AReader.Depth);
-  if AReader.Depth > gcBpJsonMaxDepth then
-    BpJsonFail(AReader, 'JSON nested too deeply');
+  // aReader.Cur is on the '{'
+  Inc(aReader.Cur);
+  Inc(aReader.Depth);
+  if aReader.Depth > gcBpJsonMaxDepth then
+    BpJsonFail(aReader, 'JSON nested too deeply');
   Result := TbpJsonValue.CreateObject;
   try
-    BpJsonSkipWhite(AReader);
-    if AReader.Cur^ = '}' then
-      Inc(AReader.Cur)
+    BpJsonSkipWhite(aReader);
+    if aReader.Cur^ = '}' then
+      Inc(aReader.Cur)
     else
       while True do
       begin
-        BpJsonSkipWhite(AReader);
-        if AReader.Cur^ <> '"' then
-          BpJsonFail(AReader, 'Member name expected');
-        lvName := BpJsonParseString(AReader);
-        BpJsonSkipWhite(AReader);
-        if AReader.Cur^ <> ':' then
-          BpJsonFail(AReader, '":" expected');
-        Inc(AReader.Cur);
-        Result.InternalPut(lvName, BpJsonParseValue(AReader));
-        BpJsonSkipWhite(AReader);
-        case AReader.Cur^ of
-          ',': Inc(AReader.Cur);
-          '}': begin Inc(AReader.Cur); Break; end;
+        BpJsonSkipWhite(aReader);
+        if aReader.Cur^ <> '"' then
+          BpJsonFail(aReader, 'Member name expected');
+        lvName := BpJsonParseString(aReader);
+        BpJsonSkipWhite(aReader);
+        if aReader.Cur^ <> ':' then
+          BpJsonFail(aReader, '":" expected');
+        Inc(aReader.Cur);
+        Result.InternalPut(lvName, BpJsonParseValue(aReader));
+        BpJsonSkipWhite(aReader);
+        case aReader.Cur^ of
+          ',': Inc(aReader.Cur);
+          '}': begin Inc(aReader.Cur); Break; end;
         else
-          BpJsonFail(AReader, '"," or "}" expected');
+          BpJsonFail(aReader, '"," or "}" expected');
         end;
       end;
-    Dec(AReader.Depth);
+    Dec(aReader.Depth);
   except
     Result.Free;
     raise;
   end;
 end;
 
-function BpJsonParseArray(var AReader: TbpJsonReader): TbpJsonValue;
+function BpJsonParseArray(var aReader: TbpJsonReader): TbpJsonValue;
 begin
-  // AReader.Cur is on the '['
-  Inc(AReader.Cur);
-  Inc(AReader.Depth);
-  if AReader.Depth > gcBpJsonMaxDepth then
-    BpJsonFail(AReader, 'JSON nested too deeply');
+  // aReader.Cur is on the '['
+  Inc(aReader.Cur);
+  Inc(aReader.Depth);
+  if aReader.Depth > gcBpJsonMaxDepth then
+    BpJsonFail(aReader, 'JSON nested too deeply');
   Result := TbpJsonValue.CreateArray;
   try
-    BpJsonSkipWhite(AReader);
-    if AReader.Cur^ = ']' then
-      Inc(AReader.Cur)
+    BpJsonSkipWhite(aReader);
+    if aReader.Cur^ = ']' then
+      Inc(aReader.Cur)
     else
       while True do
       begin
-        Result.InternalAdd('', BpJsonParseValue(AReader));
-        BpJsonSkipWhite(AReader);
-        case AReader.Cur^ of
-          ',': Inc(AReader.Cur);
-          ']': begin Inc(AReader.Cur); Break; end;
+        Result.InternalAdd('', BpJsonParseValue(aReader));
+        BpJsonSkipWhite(aReader);
+        case aReader.Cur^ of
+          ',': Inc(aReader.Cur);
+          ']': begin Inc(aReader.Cur); Break; end;
         else
-          BpJsonFail(AReader, '"," or "]" expected');
+          BpJsonFail(aReader, '"," or "]" expected');
         end;
       end;
-    Dec(AReader.Depth);
+    Dec(aReader.Depth);
   except
     Result.Free;
     raise;
   end;
 end;
 
-function BpJsonParseValue(var AReader: TbpJsonReader): TbpJsonValue;
+function BpJsonParseValue(var aReader: TbpJsonReader): TbpJsonValue;
 begin
   Result := nil;
-  BpJsonSkipWhite(AReader);
-  case AReader.Cur^ of
-    '{': Result := BpJsonParseObject(AReader);
-    '[': Result := BpJsonParseArray(AReader);
-    '"': Result := TbpJsonValue.CreateStr(BpJsonParseString(AReader));
+  BpJsonSkipWhite(aReader);
+  case aReader.Cur^ of
+    '{': Result := BpJsonParseObject(aReader);
+    '[': Result := BpJsonParseArray(aReader);
+    '"': Result := TbpJsonValue.CreateStr(BpJsonParseString(aReader));
     't':
       begin
-        BpJsonExpectWord(AReader, 'true');
+        BpJsonExpectWord(aReader, 'true');
         Result := TbpJsonValue.CreateBool(True);
       end;
     'f':
       begin
-        BpJsonExpectWord(AReader, 'false');
+        BpJsonExpectWord(aReader, 'false');
         Result := TbpJsonValue.CreateBool(False);
       end;
     'n':
       begin
-        BpJsonExpectWord(AReader, 'null');
+        BpJsonExpectWord(aReader, 'null');
         Result := TbpJsonValue.CreateNull;
       end;
-    '-', '0'..'9': Result := BpJsonParseNumber(AReader);
-    #0: BpJsonFail(AReader, 'Unexpected end of JSON');
+    '-', '0'..'9': Result := BpJsonParseNumber(aReader);
+    #0: BpJsonFail(aReader, 'Unexpected end of JSON');
   else
-    BpJsonFail(AReader, 'Unexpected character');
+    BpJsonFail(aReader, 'Unexpected character');
   end;
 end;
 
 // JSON floats always use '.' no matter what the locale says
-function BpJsonFloatToStr(const AValue: Double): string;
+function BpJsonFloatToStr(const aValue: Double): string;
 var
   lvFs: TFormatSettings;
 begin
-  if IsNan(AValue) or IsInfinite(AValue) then
+  if IsNan(aValue) or IsInfinite(aValue) then
     raise EbpJson.Create('NaN and Infinity cannot be written as JSON');
   FillChar(lvFs, SizeOf(lvFs), 0);
   lvFs.DecimalSeparator := '.';
-  Result := FloatToStr(AValue, lvFs);
+  Result := FloatToStr(aValue, lvFs);
 end;
 
-procedure BpJsonAppendQuoted(ASb: TbpStringBuilder; const AValue: string;
-  AEscapeNonAscii: Boolean);
+procedure BpJsonAppendQuoted(aSb: TbpStringBuilder; const aValue: string;
+  aEscapeNonAscii: Boolean);
 var
   lvI, lvLen, lvRun: Integer;
   lvC: Char;
@@ -869,42 +869,42 @@ var
   lvWC: WideChar;
 {$IFEND}
 
-  procedure AppendEscape(AOrd: Integer);
+  procedure AppendEscape(aOrd: Integer);
   begin
-    case AOrd of
-      Ord('"'): ASb.Append('\"');
-      Ord('\'): ASb.Append('\\');
-      8: ASb.Append('\b');
-      9: ASb.Append('\t');
-      10: ASb.Append('\n');
-      12: ASb.Append('\f');
-      13: ASb.Append('\r');
+    case aOrd of
+      Ord('"'): aSb.Append('\"');
+      Ord('\'): aSb.Append('\\');
+      8: aSb.Append('\b');
+      9: aSb.Append('\t');
+      10: aSb.Append('\n');
+      12: aSb.Append('\f');
+      13: aSb.Append('\r');
     else
-      ASb.Append('\u').Append(IntToHex(AOrd, 4));
+      aSb.Append('\u').Append(IntToHex(aOrd, 4));
     end;
   end;
 
 begin
-  ASb.Append('"');
-  if AEscapeNonAscii then
+  aSb.Append('"');
+  if aEscapeNonAscii then
   begin
     // escape everything outside printable ASCII, output needs no codepage
 {$IF CompilerVersion >= 20.0}
-    for lvI := 1 to Length(AValue) do
+    for lvI := 1 to Length(aValue) do
     begin
-      lvC := AValue[lvI];
+      lvC := aValue[lvI];
       if (lvC >= #32) and (lvC < #127) and (lvC <> '"') and (lvC <> '\') then
-        ASb.Append(lvC)
+        aSb.Append(lvC)
       else
         AppendEscape(Ord(lvC));
     end;
 {$ELSE}
-    lvWide := WideString(AValue);
+    lvWide := WideString(aValue);
     for lvI := 1 to Length(lvWide) do
     begin
       lvWC := lvWide[lvI];
       if (lvWC >= #32) and (lvWC < #127) and (lvWC <> '"') and (lvWC <> '\') then
-        ASb.Append(Char(lvWC))
+        aSb.Append(Char(lvWC))
       else
         AppendEscape(Ord(lvWC));
     end;
@@ -913,23 +913,23 @@ begin
   else
   begin
     // copy runs of plain chars, escape only what RFC 8259 requires
-    lvLen := Length(AValue);
+    lvLen := Length(aValue);
     lvRun := 1;
     for lvI := 1 to lvLen do
     begin
-      lvC := AValue[lvI];
+      lvC := aValue[lvI];
       if (lvC < #32) or (lvC = '"') or (lvC = '\') then
       begin
         if lvI > lvRun then
-          ASb.Append(Copy(AValue, lvRun, lvI - lvRun));
+          aSb.Append(Copy(aValue, lvRun, lvI - lvRun));
         AppendEscape(Ord(lvC));
         lvRun := lvI + 1;
       end;
     end;
     if lvLen >= lvRun then
-      ASb.Append(Copy(AValue, lvRun, lvLen - lvRun + 1));
+      aSb.Append(Copy(aValue, lvRun, lvLen - lvRun + 1));
   end;
-  ASb.Append('"');
+  aSb.Append('"');
 end;
 
 { TbpJsonValue }
@@ -951,32 +951,32 @@ begin
   Result := TbpJsonValue.Create;
 end;
 
-class function TbpJsonValue.CreateBool(AValue: Boolean): TbpJsonValue;
+class function TbpJsonValue.CreateBool(aValue: Boolean): TbpJsonValue;
 begin
   Result := TbpJsonValue.Create;
   Result.FKind := bjkBool;
-  Result.FBool := AValue;
+  Result.FBool := aValue;
 end;
 
-class function TbpJsonValue.CreateInt(AValue: Int64): TbpJsonValue;
+class function TbpJsonValue.CreateInt(aValue: Int64): TbpJsonValue;
 begin
   Result := TbpJsonValue.Create;
   Result.FKind := bjkInt;
-  Result.FInt := AValue;
+  Result.FInt := aValue;
 end;
 
-class function TbpJsonValue.CreateFloat(AValue: Double): TbpJsonValue;
+class function TbpJsonValue.CreateFloat(aValue: Double): TbpJsonValue;
 begin
   Result := TbpJsonValue.Create;
   Result.FKind := bjkFloat;
-  Result.FFloat := AValue;
+  Result.FFloat := aValue;
 end;
 
-class function TbpJsonValue.CreateStr(const AValue: string): TbpJsonValue;
+class function TbpJsonValue.CreateStr(const aValue: string): TbpJsonValue;
 begin
   Result := TbpJsonValue.Create;
   Result.FKind := bjkString;
-  Result.FStr := AValue;
+  Result.FStr := aValue;
 end;
 
 class function TbpJsonValue.CreateArray: TbpJsonValue;
@@ -991,11 +991,11 @@ begin
   Result.FKind := bjkObject;
 end;
 
-class function TbpJsonValue.Parse(const AJson: string): TbpJsonValue;
+class function TbpJsonValue.Parse(const aJson: string): TbpJsonValue;
 var
   lvReader: TbpJsonReader;
 begin
-  lvReader.Start := PChar(AJson);
+  lvReader.Start := PChar(aJson);
   lvReader.Cur := lvReader.Start;
   lvReader.Depth := 0;
   // tolerate a leading BOM
@@ -1018,16 +1018,16 @@ begin
   end;
 end;
 
-class function TbpJsonValue.TryParse(const AJson: string;
-  out AValue: TbpJsonValue): Boolean;
+class function TbpJsonValue.TryParse(const aJson: string;
+  out aValue: TbpJsonValue): Boolean;
 begin
   try
-    AValue := Parse(AJson);
+    aValue := Parse(aJson);
     Result := True;
   except
     on EbpJson do
     begin
-      AValue := nil;
+      aValue := nil;
       Result := False;
     end;
   end;
@@ -1065,11 +1065,11 @@ begin
   Result := FKind = bjkNull;
 end;
 
-procedure TbpJsonValue.RequireKind(AKind: TbpJsonKind);
+procedure TbpJsonValue.RequireKind(aKind: TbpJsonKind);
 begin
-  if FKind <> AKind then
+  if FKind <> aKind then
     raise EbpJson.CreateFmt('Value is %s, %s expected',
-      [gcBpJsonKindNames[FKind], gcBpJsonKindNames[AKind]]);
+      [gcBpJsonKindNames[FKind], gcBpJsonKindNames[aKind]]);
 end;
 
 function TbpJsonValue.AsBool: Boolean;
@@ -1101,32 +1101,32 @@ begin
   Result := FStr;
 end;
 
-function TbpJsonValue.GetItem(AIndex: Integer): TbpJsonValue;
+function TbpJsonValue.GetItem(aIndex: Integer): TbpJsonValue;
 begin
-  if (AIndex < 0) or (AIndex >= FCount) then
+  if (aIndex < 0) or (aIndex >= FCount) then
     raise EbpJson.CreateFmt('Index %d out of range (count %d)',
-      [AIndex, FCount]);
-  Result := FItems[AIndex];
+      [aIndex, FCount]);
+  Result := FItems[aIndex];
 end;
 
-function TbpJsonValue.GetName(AIndex: Integer): string;
+function TbpJsonValue.GetName(aIndex: Integer): string;
 begin
   RequireKind(bjkObject);
-  if (AIndex < 0) or (AIndex >= FCount) then
+  if (aIndex < 0) or (aIndex >= FCount) then
     raise EbpJson.CreateFmt('Index %d out of range (count %d)',
-      [AIndex, FCount]);
-  Result := FNames[AIndex];
+      [aIndex, FCount]);
+  Result := FNames[aIndex];
 end;
 
-function TbpJsonValue.IndexOfName(const AName: string): Integer;
+function TbpJsonValue.IndexOfName(const aName: string): Integer;
 begin
   for Result := 0 to FCount - 1 do
-    if FNames[Result] = AName then
+    if FNames[Result] = aName then
       Exit;
   Result := -1;
 end;
 
-procedure TbpJsonValue.InternalAdd(const AName: string; AChild: TbpJsonValue);
+procedure TbpJsonValue.InternalAdd(const aName: string; aChild: TbpJsonValue);
 var
   lvCap: Integer;
 begin
@@ -1139,42 +1139,42 @@ begin
     if FKind = bjkObject then
       SetLength(FNames, lvCap);
   end;
-  FItems[FCount] := AChild;
+  FItems[FCount] := aChild;
   if FKind = bjkObject then
-    FNames[FCount] := AName;
+    FNames[FCount] := aName;
   Inc(FCount);
 end;
 
-procedure TbpJsonValue.InternalPut(const AName: string; AChild: TbpJsonValue);
+procedure TbpJsonValue.InternalPut(const aName: string; aChild: TbpJsonValue);
 var
   lvIdx: Integer;
 begin
-  lvIdx := IndexOfName(AName);
+  lvIdx := IndexOfName(aName);
   if lvIdx >= 0 then
   begin
     FItems[lvIdx].Free;
-    FItems[lvIdx] := AChild;
+    FItems[lvIdx] := aChild;
   end
   else
-    InternalAdd(AName, AChild);
+    InternalAdd(aName, aChild);
 end;
 
-function TbpJsonValue.MemberOrFail(const AName: string): TbpJsonValue;
+function TbpJsonValue.MemberOrFail(const aName: string): TbpJsonValue;
 begin
-  Result := Find(AName);
+  Result := Find(aName);
   if Result = nil then
-    raise EbpJson.CreateFmt('Member "%s" not found', [AName]);
+    raise EbpJson.CreateFmt('Member "%s" not found', [aName]);
 end;
 
-procedure TbpJsonValue.Delete(AIndex: Integer);
+procedure TbpJsonValue.Delete(aIndex: Integer);
 var
   lvI: Integer;
 begin
-  if (AIndex < 0) or (AIndex >= FCount) then
+  if (aIndex < 0) or (aIndex >= FCount) then
     raise EbpJson.CreateFmt('Index %d out of range (count %d)',
-      [AIndex, FCount]);
-  FItems[AIndex].Free;
-  for lvI := AIndex to FCount - 2 do
+      [aIndex, FCount]);
+  FItems[aIndex].Free;
+  for lvI := aIndex to FCount - 2 do
   begin
     FItems[lvI] := FItems[lvI + 1];
     if FKind = bjkObject then
@@ -1203,28 +1203,28 @@ begin
   InternalAdd('', CreateNull);
 end;
 
-procedure TbpJsonValue.AddBool(AValue: Boolean);
+procedure TbpJsonValue.AddBool(aValue: Boolean);
 begin
   RequireKind(bjkArray);
-  InternalAdd('', CreateBool(AValue));
+  InternalAdd('', CreateBool(aValue));
 end;
 
-procedure TbpJsonValue.AddInt(AValue: Int64);
+procedure TbpJsonValue.AddInt(aValue: Int64);
 begin
   RequireKind(bjkArray);
-  InternalAdd('', CreateInt(AValue));
+  InternalAdd('', CreateInt(aValue));
 end;
 
-procedure TbpJsonValue.AddFloat(AValue: Double);
+procedure TbpJsonValue.AddFloat(aValue: Double);
 begin
   RequireKind(bjkArray);
-  InternalAdd('', CreateFloat(AValue));
+  InternalAdd('', CreateFloat(aValue));
 end;
 
-procedure TbpJsonValue.AddStr(const AValue: string);
+procedure TbpJsonValue.AddStr(const aValue: string);
 begin
   RequireKind(bjkArray);
-  InternalAdd('', CreateStr(AValue));
+  InternalAdd('', CreateStr(aValue));
 end;
 
 function TbpJsonValue.AddArray: TbpJsonValue;
@@ -1241,185 +1241,185 @@ begin
   InternalAdd('', Result);
 end;
 
-function TbpJsonValue.Find(const AName: string): TbpJsonValue;
+function TbpJsonValue.Find(const aName: string): TbpJsonValue;
 var
   lvIdx: Integer;
 begin
   RequireKind(bjkObject);
-  lvIdx := IndexOfName(AName);
+  lvIdx := IndexOfName(aName);
   if lvIdx >= 0 then
     Result := FItems[lvIdx]
   else
     Result := nil;
 end;
 
-function TbpJsonValue.Contains(const AName: string): Boolean;
+function TbpJsonValue.Contains(const aName: string): Boolean;
 begin
   RequireKind(bjkObject);
-  Result := IndexOfName(AName) >= 0;
+  Result := IndexOfName(aName) >= 0;
 end;
 
-function TbpJsonValue.Remove(const AName: string): Boolean;
+function TbpJsonValue.Remove(const aName: string): Boolean;
 var
   lvIdx: Integer;
 begin
   RequireKind(bjkObject);
-  lvIdx := IndexOfName(AName);
+  lvIdx := IndexOfName(aName);
   Result := lvIdx >= 0;
   if Result then
     Delete(lvIdx);
 end;
 
-function TbpJsonValue.GetBool(const AName: string): Boolean;
+function TbpJsonValue.GetBool(const aName: string): Boolean;
 begin
-  Result := MemberOrFail(AName).AsBool;
+  Result := MemberOrFail(aName).AsBool;
 end;
 
-function TbpJsonValue.GetBoolDef(const AName: string;
-  ADefault: Boolean): Boolean;
+function TbpJsonValue.GetBoolDef(const aName: string;
+  aDefault: Boolean): Boolean;
 begin
-  if not TryGetBool(AName, Result) then
-    Result := ADefault;
+  if not TryGetBool(aName, Result) then
+    Result := aDefault;
 end;
 
-function TbpJsonValue.TryGetBool(const AName: string;
-  out AValue: Boolean): Boolean;
+function TbpJsonValue.TryGetBool(const aName: string;
+  out aValue: Boolean): Boolean;
 var
   lvValue: TbpJsonValue;
 begin
-  lvValue := Find(AName);
+  lvValue := Find(aName);
   Result := (lvValue <> nil) and (lvValue.FKind = bjkBool);
   if Result then
-    AValue := lvValue.FBool
+    aValue := lvValue.FBool
   else
-    AValue := False;
+    aValue := False;
 end;
 
-function TbpJsonValue.GetInt(const AName: string): Int64;
+function TbpJsonValue.GetInt(const aName: string): Int64;
 begin
-  Result := MemberOrFail(AName).AsInt;
+  Result := MemberOrFail(aName).AsInt;
 end;
 
-function TbpJsonValue.GetIntDef(const AName: string; ADefault: Int64): Int64;
+function TbpJsonValue.GetIntDef(const aName: string; aDefault: Int64): Int64;
 begin
-  if not TryGetInt(AName, Result) then
-    Result := ADefault;
+  if not TryGetInt(aName, Result) then
+    Result := aDefault;
 end;
 
-function TbpJsonValue.TryGetInt(const AName: string;
-  out AValue: Int64): Boolean;
+function TbpJsonValue.TryGetInt(const aName: string;
+  out aValue: Int64): Boolean;
 var
   lvValue: TbpJsonValue;
 begin
-  lvValue := Find(AName);
+  lvValue := Find(aName);
   Result := (lvValue <> nil) and (lvValue.FKind = bjkInt);
   if Result then
-    AValue := lvValue.FInt
+    aValue := lvValue.FInt
   else
-    AValue := 0;
+    aValue := 0;
 end;
 
-function TbpJsonValue.GetFloat(const AName: string): Double;
+function TbpJsonValue.GetFloat(const aName: string): Double;
 begin
-  Result := MemberOrFail(AName).AsFloat;
+  Result := MemberOrFail(aName).AsFloat;
 end;
 
-function TbpJsonValue.GetFloatDef(const AName: string;
-  ADefault: Double): Double;
+function TbpJsonValue.GetFloatDef(const aName: string;
+  aDefault: Double): Double;
 begin
-  if not TryGetFloat(AName, Result) then
-    Result := ADefault;
+  if not TryGetFloat(aName, Result) then
+    Result := aDefault;
 end;
 
-function TbpJsonValue.TryGetFloat(const AName: string;
-  out AValue: Double): Boolean;
+function TbpJsonValue.TryGetFloat(const aName: string;
+  out aValue: Double): Boolean;
 var
   lvValue: TbpJsonValue;
 begin
-  lvValue := Find(AName);
+  lvValue := Find(aName);
   Result := (lvValue <> nil) and
     ((lvValue.FKind = bjkFloat) or (lvValue.FKind = bjkInt));
   if Result then
-    AValue := lvValue.AsFloat
+    aValue := lvValue.AsFloat
   else
-    AValue := 0;
+    aValue := 0;
 end;
 
-function TbpJsonValue.GetStr(const AName: string): string;
+function TbpJsonValue.GetStr(const aName: string): string;
 begin
-  Result := MemberOrFail(AName).AsStr;
+  Result := MemberOrFail(aName).AsStr;
 end;
 
-function TbpJsonValue.GetStrDef(const AName, ADefault: string): string;
+function TbpJsonValue.GetStrDef(const aName, aDefault: string): string;
 begin
-  if not TryGetStr(AName, Result) then
-    Result := ADefault;
+  if not TryGetStr(aName, Result) then
+    Result := aDefault;
 end;
 
-function TbpJsonValue.TryGetStr(const AName: string;
-  out AValue: string): Boolean;
+function TbpJsonValue.TryGetStr(const aName: string;
+  out aValue: string): Boolean;
 var
   lvValue: TbpJsonValue;
 begin
-  lvValue := Find(AName);
+  lvValue := Find(aName);
   Result := (lvValue <> nil) and (lvValue.FKind = bjkString);
   if Result then
-    AValue := lvValue.FStr
+    aValue := lvValue.FStr
   else
-    AValue := '';
+    aValue := '';
 end;
 
-procedure TbpJsonValue.SetNull(const AName: string);
+procedure TbpJsonValue.SetNull(const aName: string);
 begin
   RequireKind(bjkObject);
-  InternalPut(AName, CreateNull);
+  InternalPut(aName, CreateNull);
 end;
 
-procedure TbpJsonValue.SetBool(const AName: string; AValue: Boolean);
+procedure TbpJsonValue.SetBool(const aName: string; aValue: Boolean);
 begin
   RequireKind(bjkObject);
-  InternalPut(AName, CreateBool(AValue));
+  InternalPut(aName, CreateBool(aValue));
 end;
 
-procedure TbpJsonValue.SetInt(const AName: string; AValue: Int64);
+procedure TbpJsonValue.SetInt(const aName: string; aValue: Int64);
 begin
   RequireKind(bjkObject);
-  InternalPut(AName, CreateInt(AValue));
+  InternalPut(aName, CreateInt(aValue));
 end;
 
-procedure TbpJsonValue.SetFloat(const AName: string; AValue: Double);
+procedure TbpJsonValue.SetFloat(const aName: string; aValue: Double);
 begin
   RequireKind(bjkObject);
-  InternalPut(AName, CreateFloat(AValue));
+  InternalPut(aName, CreateFloat(aValue));
 end;
 
-procedure TbpJsonValue.SetStr(const AName, AValue: string);
+procedure TbpJsonValue.SetStr(const aName, aValue: string);
 begin
   RequireKind(bjkObject);
-  InternalPut(AName, CreateStr(AValue));
+  InternalPut(aName, CreateStr(aValue));
 end;
 
-function TbpJsonValue.SetArray(const AName: string): TbpJsonValue;
+function TbpJsonValue.SetArray(const aName: string): TbpJsonValue;
 begin
   RequireKind(bjkObject);
   Result := CreateArray;
-  InternalPut(AName, Result);
+  InternalPut(aName, Result);
 end;
 
-function TbpJsonValue.SetObject(const AName: string): TbpJsonValue;
+function TbpJsonValue.SetObject(const aName: string): TbpJsonValue;
 begin
   RequireKind(bjkObject);
   Result := CreateObject;
-  InternalPut(AName, Result);
+  InternalPut(aName, Result);
 end;
 
-function TbpJsonValue.FindPath(const APath: string): TbpJsonValue;
+function TbpJsonValue.FindPath(const aPath: string): TbpJsonValue;
 var
   lvPos, lvLen, lvStart, lvIdx: Integer;
   lvName: string;
 begin
   Result := Self;
-  lvLen := Length(APath);
+  lvLen := Length(aPath);
   if lvLen = 0 then
   begin
     Result := nil;
@@ -1427,7 +1427,7 @@ begin
   end;
   lvPos := 1;
   while (lvPos <= lvLen) and (Result <> nil) do
-    case APath[lvPos] of
+    case aPath[lvPos] of
       '.': Inc(lvPos);
       '[':
         begin
@@ -1435,13 +1435,13 @@ begin
           Inc(lvPos);
           lvStart := lvPos;
           lvIdx := 0;
-          while (lvPos <= lvLen) and (APath[lvPos] >= '0') and
-            (APath[lvPos] <= '9') do
+          while (lvPos <= lvLen) and (aPath[lvPos] >= '0') and
+            (aPath[lvPos] <= '9') do
           begin
-            lvIdx := lvIdx * 10 + Ord(APath[lvPos]) - Ord('0');
+            lvIdx := lvIdx * 10 + Ord(aPath[lvPos]) - Ord('0');
             Inc(lvPos);
           end;
-          if (lvPos > lvLen) or (APath[lvPos] <> ']') or (lvPos = lvStart) then
+          if (lvPos > lvLen) or (aPath[lvPos] <> ']') or (lvPos = lvStart) then
           begin
             Result := nil;
             Exit;
@@ -1456,10 +1456,10 @@ begin
       begin
         // member name up to the next '.' or '['
         lvStart := lvPos;
-        while (lvPos <= lvLen) and (APath[lvPos] <> '.') and
-          (APath[lvPos] <> '[') do
+        while (lvPos <= lvLen) and (aPath[lvPos] <> '.') and
+          (aPath[lvPos] <> '[') do
           Inc(lvPos);
-        lvName := Copy(APath, lvStart, lvPos - lvStart);
+        lvName := Copy(aPath, lvStart, lvPos - lvStart);
         if Result.FKind = bjkObject then
         begin
           lvIdx := Result.IndexOfName(lvName);
@@ -1474,144 +1474,144 @@ begin
     end;
 end;
 
-function TbpJsonValue.PathBoolDef(const APath: string;
-  ADefault: Boolean): Boolean;
+function TbpJsonValue.PathBoolDef(const aPath: string;
+  aDefault: Boolean): Boolean;
 var
   lvValue: TbpJsonValue;
 begin
-  lvValue := FindPath(APath);
+  lvValue := FindPath(aPath);
   if (lvValue <> nil) and (lvValue.FKind = bjkBool) then
     Result := lvValue.FBool
   else
-    Result := ADefault;
+    Result := aDefault;
 end;
 
-function TbpJsonValue.PathIntDef(const APath: string; ADefault: Int64): Int64;
+function TbpJsonValue.PathIntDef(const aPath: string; aDefault: Int64): Int64;
 var
   lvValue: TbpJsonValue;
 begin
-  lvValue := FindPath(APath);
+  lvValue := FindPath(aPath);
   if (lvValue <> nil) and (lvValue.FKind = bjkInt) then
     Result := lvValue.FInt
   else
-    Result := ADefault;
+    Result := aDefault;
 end;
 
-function TbpJsonValue.PathFloatDef(const APath: string;
-  ADefault: Double): Double;
+function TbpJsonValue.PathFloatDef(const aPath: string;
+  aDefault: Double): Double;
 var
   lvValue: TbpJsonValue;
 begin
-  lvValue := FindPath(APath);
+  lvValue := FindPath(aPath);
   if (lvValue <> nil) and
     ((lvValue.FKind = bjkFloat) or (lvValue.FKind = bjkInt)) then
     Result := lvValue.AsFloat
   else
-    Result := ADefault;
+    Result := aDefault;
 end;
 
-function TbpJsonValue.PathStrDef(const APath, ADefault: string): string;
+function TbpJsonValue.PathStrDef(const aPath, aDefault: string): string;
 var
   lvValue: TbpJsonValue;
 begin
-  lvValue := FindPath(APath);
+  lvValue := FindPath(aPath);
   if (lvValue <> nil) and (lvValue.FKind = bjkString) then
     Result := lvValue.FStr
   else
-    Result := ADefault;
+    Result := aDefault;
 end;
 
-procedure TbpJsonValue.WriteTo(ASb: TbpStringBuilder;
-  AEscapeNonAscii: Boolean; AIndentSize, ALevel: Integer);
+procedure TbpJsonValue.WriteTo(aSb: TbpStringBuilder;
+  aEscapeNonAscii: Boolean; aIndentSize, aLevel: Integer);
 var
   lvI: Integer;
   lvPretty: Boolean;
 
-  procedure Indent(ADepth: Integer);
+  procedure Indent(aDepth: Integer);
   begin
-    ASb.Append(#13#10);
-    if ADepth * AIndentSize > 0 then
-      ASb.Append(' ', ADepth * AIndentSize);
+    aSb.Append(#13#10);
+    if aDepth * aIndentSize > 0 then
+      aSb.Append(' ', aDepth * aIndentSize);
   end;
 
 begin
-  lvPretty := AIndentSize >= 0;
+  lvPretty := aIndentSize >= 0;
   case FKind of
-    bjkNull: ASb.Append('null');
+    bjkNull: aSb.Append('null');
     bjkBool:
       if FBool then
-        ASb.Append('true')
+        aSb.Append('true')
       else
-        ASb.Append('false');
-    bjkInt: ASb.Append(FInt);
-    bjkFloat: ASb.Append(BpJsonFloatToStr(FFloat));
-    bjkString: BpJsonAppendQuoted(ASb, FStr, AEscapeNonAscii);
+        aSb.Append('false');
+    bjkInt: aSb.Append(FInt);
+    bjkFloat: aSb.Append(BpJsonFloatToStr(FFloat));
+    bjkString: BpJsonAppendQuoted(aSb, FStr, aEscapeNonAscii);
     bjkArray:
       if FCount = 0 then
-        ASb.Append('[]')
+        aSb.Append('[]')
       else
       begin
-        ASb.Append('[');
+        aSb.Append('[');
         for lvI := 0 to FCount - 1 do
         begin
           if lvI > 0 then
-            ASb.Append(',');
+            aSb.Append(',');
           if lvPretty then
-            Indent(ALevel + 1);
-          FItems[lvI].WriteTo(ASb, AEscapeNonAscii, AIndentSize, ALevel + 1);
+            Indent(aLevel + 1);
+          FItems[lvI].WriteTo(aSb, aEscapeNonAscii, aIndentSize, aLevel + 1);
         end;
         if lvPretty then
-          Indent(ALevel);
-        ASb.Append(']');
+          Indent(aLevel);
+        aSb.Append(']');
       end;
     bjkObject:
       if FCount = 0 then
-        ASb.Append('{}')
+        aSb.Append('{}')
       else
       begin
-        ASb.Append('{');
+        aSb.Append('{');
         for lvI := 0 to FCount - 1 do
         begin
           if lvI > 0 then
-            ASb.Append(',');
+            aSb.Append(',');
           if lvPretty then
-            Indent(ALevel + 1);
-          BpJsonAppendQuoted(ASb, FNames[lvI], AEscapeNonAscii);
-          ASb.Append(':');
+            Indent(aLevel + 1);
+          BpJsonAppendQuoted(aSb, FNames[lvI], aEscapeNonAscii);
+          aSb.Append(':');
           if lvPretty then
-            ASb.Append(' ');
-          FItems[lvI].WriteTo(ASb, AEscapeNonAscii, AIndentSize, ALevel + 1);
+            aSb.Append(' ');
+          FItems[lvI].WriteTo(aSb, aEscapeNonAscii, aIndentSize, aLevel + 1);
         end;
         if lvPretty then
-          Indent(ALevel);
-        ASb.Append('}');
+          Indent(aLevel);
+        aSb.Append('}');
       end;
   end;
 end;
 
-function TbpJsonValue.ToJson(AEscapeNonAscii: Boolean): string;
+function TbpJsonValue.ToJson(aEscapeNonAscii: Boolean): string;
 var
   lvSb: TbpStringBuilder;
 begin
   lvSb := TbpStringBuilder.Create(256);
   try
-    WriteTo(lvSb, AEscapeNonAscii, -1, 0);
+    WriteTo(lvSb, aEscapeNonAscii, -1, 0);
     Result := lvSb.ToString;
   finally
     lvSb.Free;
   end;
 end;
 
-function TbpJsonValue.ToJsonPretty(AIndentSize: Integer;
-  AEscapeNonAscii: Boolean): string;
+function TbpJsonValue.ToJsonPretty(aIndentSize: Integer;
+  aEscapeNonAscii: Boolean): string;
 var
   lvSb: TbpStringBuilder;
 begin
-  if AIndentSize < 0 then
-    AIndentSize := 0;
+  if aIndentSize < 0 then
+    aIndentSize := 0;
   lvSb := TbpStringBuilder.Create(256);
   try
-    WriteTo(lvSb, AEscapeNonAscii, AIndentSize, 0);
+    WriteTo(lvSb, aEscapeNonAscii, aIndentSize, 0);
     Result := lvSb.ToString;
   finally
     lvSb.Free;

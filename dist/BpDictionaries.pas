@@ -6,7 +6,7 @@ unit BpDictionaries;
 //   src\Core\Units\BpVariantUtils.pas
 //   src\Core\Classes\BpStrDictionary.pas
 //   src\Core\Classes\BpIntDictionary.pas
-// Source commit 0b8d571, generated 2026-07-08 by tools\Amalgamate.ps1.
+// Source commit 2677e2a, generated 2026-07-24 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   powershell -ExecutionPolicy Bypass -File tools\Amalgamate.ps1
 // Notes:
@@ -57,20 +57,20 @@ type
       {$IFDEF Delphi_2007_UP} static; {$ENDIF}
   public
     constructor Create;
-    procedure Reset(AInitialValue: Integer = 0);
-    procedure Update(const AData; ALength: Cardinal); overload;
-    procedure Update(const AData: TBytes; ALength: Cardinal = 0); overload;
+    procedure Reset(aInitialValue: Integer = 0);
+    procedure Update(const aData; aLength: Cardinal); overload;
+    procedure Update(const aData: TBytes; aLength: Cardinal = 0); overload;
     procedure Update(const Input: string); overload;
     function HashAsBytes: TBytes;
     function HashAsInteger: Integer;
     function HashAsString: string;
-    class function GetHashBytes(const AData: string): TBytes;
+    class function GetHashBytes(const aData: string): TBytes;
       {$IFDEF Delphi_2007_UP} static; {$ENDIF}
-    class function GetHashString(const AString: string): string;
+    class function GetHashString(const aString: string): string;
       {$IFDEF Delphi_2007_UP} static; {$ENDIF}
-    class function GetHashValue(const AData: string): Integer; overload;
+    class function GetHashValue(const aData: string): Integer; overload;
       {$IFDEF Delphi_2007_UP} static; inline; {$ENDIF}
-    class function GetHashValue(const AData; ALength: Integer; AInitialValue: Integer = 0): Integer; overload;
+    class function GetHashValue(const aData; aLength: Integer; aInitialValue: Integer = 0): Integer; overload;
       {$IFDEF Delphi_2007_UP} static; inline; {$ENDIF}
   end;
 
@@ -88,12 +88,12 @@ type
 type
   TbpIntegerDynArray = array of Integer;
 
-function BpTryVarToInt(const AValue: Variant; out AResult: Integer): Boolean;
-function BpTryVarToInt64(const AValue: Variant; out AResult: Int64): Boolean;
-function BpTryVarToStr(const AValue: Variant; out AResult: string): Boolean;
-function BpTryVarToBool(const AValue: Variant; out AResult: Boolean): Boolean;
-function BpTryVarToFloat(const AValue: Variant; out AResult: Double): Boolean;
-function BpTryVarToIntArray(const AValue: Variant; out AResult: TbpIntegerDynArray): Boolean;
+function BpTryVarToInt(const aValue: Variant; out aResult: Integer): Boolean;
+function BpTryVarToInt64(const aValue: Variant; out aResult: Int64): Boolean;
+function BpTryVarToStr(const aValue: Variant; out aResult: string): Boolean;
+function BpTryVarToBool(const aValue: Variant; out aResult: Boolean): Boolean;
+function BpTryVarToFloat(const aValue: Variant; out aResult: Double): Boolean;
+function BpTryVarToIntArray(const aValue: Variant; out aResult: TbpIntegerDynArray): Boolean;
 
 // ==================================================================
 // BpStrDictionary.pas - interface
@@ -118,9 +118,9 @@ type
   // raised for missing keys, duplicate keys and failed typed conversions
   EbpStrDictionary = class(Exception);
 
-  // ForEach callback; set AStop to True to break the iteration
-  TbpStrDictForEach = procedure(const AKey: string; const AValue: Variant;
-    var AStop: Boolean) of object;
+  // ForEach callback; set aStop to True to break the iteration
+  TbpStrDictForEach = procedure(const aKey: string; const aValue: Variant;
+    var aStop: Boolean) of object;
 
   TbpStrDictItem = record
     HashCode: Integer;
@@ -135,61 +135,61 @@ type
     FCount: Integer;
     FGrowThreshold: Integer;
     FCaseInsensitive: Boolean;
-    function HashOf(const AKey: string): Integer;
-    function KeysEqual(const AKey1, AKey2: string): Boolean;
+    function HashOf(const aKey: string): Integer;
+    function KeysEqual(const aKey1, aKey2: string): Boolean;
     // returns the slot index (>= 0) when found, otherwise the bitwise
     // complement of the first empty slot (always negative), XE6-style
-    function GetBucketIndex(const AKey: string; AHashCode: Integer): Integer;
-    procedure DoAdd(AHashCode, AIndex: Integer; const AKey: string; const AValue: Variant);
+    function GetBucketIndex(const aKey: string; aHashCode: Integer): Integer;
+    procedure DoAdd(aHashCode, aIndex: Integer; const aKey: string; const aValue: Variant);
     procedure Grow;
-    procedure Rehash(ANewCapacity: Integer);
+    procedure Rehash(aNewCapacity: Integer);
     function GetCapacity: Integer;
-    function GetItem(const AKey: string): Variant;
-    procedure SetItem(const AKey: string; const AValue: Variant);
+    function GetItem(const aKey: string): Variant;
+    procedure SetItem(const aKey: string; const aValue: Variant);
   public
-    constructor Create(ACaseInsensitive: Boolean = False; AInitialCapacity: Integer = 0);
+    constructor Create(aCaseInsensitive: Boolean = False; aInitialCapacity: Integer = 0);
     // core operations
-    procedure Add(const AKey: string; const AValue: Variant);
-    procedure AddOrSet(const AKey: string; const AValue: Variant);
-    function TryGetValue(const AKey: string; out AValue: Variant): Boolean;
-    function ContainsKey(const AKey: string): Boolean;
-    function Remove(const AKey: string): Boolean;
+    procedure Add(const aKey: string; const aValue: Variant);
+    procedure AddOrSet(const aKey: string; const aValue: Variant);
+    function TryGetValue(const aKey: string; out aValue: Variant): Boolean;
+    function ContainsKey(const aKey: string): Boolean;
+    function Remove(const aKey: string): Boolean;
     procedure Clear;
-    procedure SetCapacity(ACapacity: Integer);
-    procedure ForEach(ACallback: TbpStrDictForEach);
-    procedure GetKeys(AList: TStrings);
+    procedure SetCapacity(aCapacity: Integer);
+    procedure ForEach(aCallback: TbpStrDictForEach);
+    procedure GetKeys(aList: TStrings);
     // typed accessors with validation. GetX raises on a missing key or a
-    // wrong stored type, GetXDef returns ADefault instead, TryGetX never
+    // wrong stored type, GetXDef returns aDefault instead, TryGetX never
     // raises. Conversion is strict: no boolean-to-int, no numeric strings,
     // no float-to-int truncation
-    procedure SetInt(const AKey: string; AValue: Integer);
-    function GetInt(const AKey: string): Integer;
-    function GetIntDef(const AKey: string; ADefault: Integer): Integer;
-    function TryGetInt(const AKey: string; out AValue: Integer): Boolean;
-    procedure SetInt64(const AKey: string; AValue: Int64);
-    function GetInt64(const AKey: string): Int64;
-    function GetInt64Def(const AKey: string; ADefault: Int64): Int64;
-    function TryGetInt64(const AKey: string; out AValue: Int64): Boolean;
-    procedure SetStr(const AKey, AValue: string);
-    function GetStr(const AKey: string): string;
-    function GetStrDef(const AKey, ADefault: string): string;
-    function TryGetStr(const AKey: string; out AValue: string): Boolean;
-    procedure SetBool(const AKey: string; AValue: Boolean);
-    function GetBool(const AKey: string): Boolean;
-    function GetBoolDef(const AKey: string; ADefault: Boolean): Boolean;
-    function TryGetBool(const AKey: string; out AValue: Boolean): Boolean;
-    procedure SetFloat(const AKey: string; AValue: Double);
-    function GetFloat(const AKey: string): Double;
-    function GetFloatDef(const AKey: string; ADefault: Double): Double;
-    function TryGetFloat(const AKey: string; out AValue: Double): Boolean;
-    procedure SetIntArray(const AKey: string; const AValues: array of Integer);
-    function GetIntArray(const AKey: string): TbpIntegerDynArray;
-    function TryGetIntArray(const AKey: string; out AValues: TbpIntegerDynArray): Boolean;
+    procedure SetInt(const aKey: string; aValue: Integer);
+    function GetInt(const aKey: string): Integer;
+    function GetIntDef(const aKey: string; aDefault: Integer): Integer;
+    function TryGetInt(const aKey: string; out aValue: Integer): Boolean;
+    procedure SetInt64(const aKey: string; aValue: Int64);
+    function GetInt64(const aKey: string): Int64;
+    function GetInt64Def(const aKey: string; aDefault: Int64): Int64;
+    function TryGetInt64(const aKey: string; out aValue: Int64): Boolean;
+    procedure SetStr(const aKey, aValue: string);
+    function GetStr(const aKey: string): string;
+    function GetStrDef(const aKey, aDefault: string): string;
+    function TryGetStr(const aKey: string; out aValue: string): Boolean;
+    procedure SetBool(const aKey: string; aValue: Boolean);
+    function GetBool(const aKey: string): Boolean;
+    function GetBoolDef(const aKey: string; aDefault: Boolean): Boolean;
+    function TryGetBool(const aKey: string; out aValue: Boolean): Boolean;
+    procedure SetFloat(const aKey: string; aValue: Double);
+    function GetFloat(const aKey: string): Double;
+    function GetFloatDef(const aKey: string; aDefault: Double): Double;
+    function TryGetFloat(const aKey: string; out aValue: Double): Boolean;
+    procedure SetIntArray(const aKey: string; const aValues: array of Integer);
+    function GetIntArray(const aKey: string): TbpIntegerDynArray;
+    function TryGetIntArray(const aKey: string; out aValues: TbpIntegerDynArray): Boolean;
     property Count: Integer read FCount;
     property Capacity: Integer read GetCapacity;
     property CaseInsensitive: Boolean read FCaseInsensitive;
     // raises EbpStrDictionary on read of a missing key; write acts as AddOrSet
-    property Items[const AKey: string]: Variant read GetItem write SetItem; default;
+    property Items[const aKey: string]: Variant read GetItem write SetItem; default;
   end;
 
 // ==================================================================
@@ -218,9 +218,9 @@ type
 
   TbpInt64DynArray = array of Int64;
 
-  // ForEach callback; set AStop to True to break the iteration
-  TbpIntDictForEach = procedure(AKey: Int64; const AValue: Variant;
-    var AStop: Boolean) of object;
+  // ForEach callback; set aStop to True to break the iteration
+  TbpIntDictForEach = procedure(aKey: Int64; const aValue: Variant;
+    var aStop: Boolean) of object;
 
   TbpIntDictItem = record
     HashCode: Integer;
@@ -236,57 +236,57 @@ type
     FGrowThreshold: Integer;
     // returns the slot index (>= 0) when found, otherwise the bitwise
     // complement of the first empty slot (always negative), XE6-style
-    function GetBucketIndex(AKey: Int64; AHashCode: Integer): Integer;
-    procedure DoAdd(AHashCode, AIndex: Integer; AKey: Int64; const AValue: Variant);
+    function GetBucketIndex(aKey: Int64; aHashCode: Integer): Integer;
+    procedure DoAdd(aHashCode, aIndex: Integer; aKey: Int64; const aValue: Variant);
     procedure Grow;
-    procedure Rehash(ANewCapacity: Integer);
+    procedure Rehash(aNewCapacity: Integer);
     function GetCapacity: Integer;
-    function GetItem(AKey: Int64): Variant;
-    procedure SetItem(AKey: Int64; const AValue: Variant);
+    function GetItem(aKey: Int64): Variant;
+    procedure SetItem(aKey: Int64; const aValue: Variant);
   public
-    constructor Create(AInitialCapacity: Integer = 0);
+    constructor Create(aInitialCapacity: Integer = 0);
     // core operations
-    procedure Add(AKey: Int64; const AValue: Variant);
-    procedure AddOrSet(AKey: Int64; const AValue: Variant);
-    function TryGetValue(AKey: Int64; out AValue: Variant): Boolean;
-    function ContainsKey(AKey: Int64): Boolean;
-    function Remove(AKey: Int64): Boolean;
+    procedure Add(aKey: Int64; const aValue: Variant);
+    procedure AddOrSet(aKey: Int64; const aValue: Variant);
+    function TryGetValue(aKey: Int64; out aValue: Variant): Boolean;
+    function ContainsKey(aKey: Int64): Boolean;
+    function Remove(aKey: Int64): Boolean;
     procedure Clear;
-    procedure SetCapacity(ACapacity: Integer);
-    procedure ForEach(ACallback: TbpIntDictForEach);
+    procedure SetCapacity(aCapacity: Integer);
+    procedure ForEach(aCallback: TbpIntDictForEach);
     function GetKeys: TbpInt64DynArray;
     // typed accessors with validation. GetX raises on a missing key or a
-    // wrong stored type, GetXDef returns ADefault instead, TryGetX never
+    // wrong stored type, GetXDef returns aDefault instead, TryGetX never
     // raises. Conversion is strict: no boolean-to-int, no numeric strings,
     // no float-to-int truncation
-    procedure SetInt(AKey: Int64; AValue: Integer);
-    function GetInt(AKey: Int64): Integer;
-    function GetIntDef(AKey: Int64; ADefault: Integer): Integer;
-    function TryGetInt(AKey: Int64; out AValue: Integer): Boolean;
-    procedure SetInt64(AKey: Int64; AValue: Int64);
-    function GetInt64(AKey: Int64): Int64;
-    function GetInt64Def(AKey: Int64; ADefault: Int64): Int64;
-    function TryGetInt64(AKey: Int64; out AValue: Int64): Boolean;
-    procedure SetStr(AKey: Int64; const AValue: string);
-    function GetStr(AKey: Int64): string;
-    function GetStrDef(AKey: Int64; const ADefault: string): string;
-    function TryGetStr(AKey: Int64; out AValue: string): Boolean;
-    procedure SetBool(AKey: Int64; AValue: Boolean);
-    function GetBool(AKey: Int64): Boolean;
-    function GetBoolDef(AKey: Int64; ADefault: Boolean): Boolean;
-    function TryGetBool(AKey: Int64; out AValue: Boolean): Boolean;
-    procedure SetFloat(AKey: Int64; AValue: Double);
-    function GetFloat(AKey: Int64): Double;
-    function GetFloatDef(AKey: Int64; ADefault: Double): Double;
-    function TryGetFloat(AKey: Int64; out AValue: Double): Boolean;
+    procedure SetInt(aKey: Int64; aValue: Integer);
+    function GetInt(aKey: Int64): Integer;
+    function GetIntDef(aKey: Int64; aDefault: Integer): Integer;
+    function TryGetInt(aKey: Int64; out aValue: Integer): Boolean;
+    procedure SetInt64(aKey: Int64; aValue: Int64);
+    function GetInt64(aKey: Int64): Int64;
+    function GetInt64Def(aKey: Int64; aDefault: Int64): Int64;
+    function TryGetInt64(aKey: Int64; out aValue: Int64): Boolean;
+    procedure SetStr(aKey: Int64; const aValue: string);
+    function GetStr(aKey: Int64): string;
+    function GetStrDef(aKey: Int64; const aDefault: string): string;
+    function TryGetStr(aKey: Int64; out aValue: string): Boolean;
+    procedure SetBool(aKey: Int64; aValue: Boolean);
+    function GetBool(aKey: Int64): Boolean;
+    function GetBoolDef(aKey: Int64; aDefault: Boolean): Boolean;
+    function TryGetBool(aKey: Int64; out aValue: Boolean): Boolean;
+    procedure SetFloat(aKey: Int64; aValue: Double);
+    function GetFloat(aKey: Int64): Double;
+    function GetFloatDef(aKey: Int64; aDefault: Double): Double;
+    function TryGetFloat(aKey: Int64; out aValue: Double): Boolean;
     property Count: Integer read FCount;
     property Capacity: Integer read GetCapacity;
     // raises EbpIntDictionary on read of a missing key; write acts as AddOrSet
-    property Items[AKey: Int64]: Variant read GetItem write SetItem; default;
+    property Items[aKey: Int64]: Variant read GetItem write SetItem; default;
   end;
 
 // Thomas Wang 64-bit to 32-bit hash, exposed for reuse and benchmarking
-function BpHashInt64(AKey: Int64): Integer;
+function BpHashInt64(aKey: Int64): Integer;
 
 implementation
 
@@ -331,21 +331,21 @@ begin
   FHash := 0;
 end;
 
-procedure TbpHashBobJenkins.Reset(AInitialValue: Integer = 0);
+procedure TbpHashBobJenkins.Reset(aInitialValue: Integer = 0);
 begin
-  FHash := AInitialValue;
+  FHash := aInitialValue;
 end;
 
-procedure TbpHashBobJenkins.Update(const AData; ALength: Cardinal);
+procedure TbpHashBobJenkins.Update(const aData; aLength: Cardinal);
 begin
-  FHash := HashLittle(AData, ALength, FHash);
+  FHash := HashLittle(aData, aLength, FHash);
 end;
 
-procedure TbpHashBobJenkins.Update(const AData: TBytes; ALength: Cardinal);
+procedure TbpHashBobJenkins.Update(const aData: TBytes; aLength: Cardinal);
 begin
-  if ALength = 0 then
-    ALength := Length(AData);
-  Update(Pointer(AData)^, ALength);
+  if aLength = 0 then
+    aLength := Length(aData);
+  Update(Pointer(aData)^, aLength);
 end;
 
 procedure TbpHashBobJenkins.Update(const Input: string);
@@ -368,25 +368,25 @@ begin
   Result := IntToHex(FHash, 8);
 end;
 
-class function TbpHashBobJenkins.GetHashBytes(const AData: string): TBytes;
+class function TbpHashBobJenkins.GetHashBytes(const aData: string): TBytes;
 begin
   SetLength(Result, 4);
-  PCardinal(@Result[0])^ := Cardinal(GetHashValue(AData));
+  PCardinal(@Result[0])^ := Cardinal(GetHashValue(aData));
 end;
 
-class function TbpHashBobJenkins.GetHashString(const AString: string): string;
+class function TbpHashBobJenkins.GetHashString(const aString: string): string;
 begin
-  Result := IntToHex(GetHashValue(AString), 8);
+  Result := IntToHex(GetHashValue(aString), 8);
 end;
 
-class function TbpHashBobJenkins.GetHashValue(const AData: string): Integer;
+class function TbpHashBobJenkins.GetHashValue(const aData: string): Integer;
 begin
-  Result := HashLittle(Pointer(AData)^, Length(AData) * SizeOf(Char), 0);
+  Result := HashLittle(Pointer(aData)^, Length(aData) * SizeOf(Char), 0);
 end;
 
-class function TbpHashBobJenkins.GetHashValue(const AData; ALength: Integer; AInitialValue: Integer): Integer;
+class function TbpHashBobJenkins.GetHashValue(const aData; aLength: Integer; aInitialValue: Integer): Integer;
 begin
-  Result := HashLittle(AData, ALength, AInitialValue);
+  Result := HashLittle(aData, aLength, aInitialValue);
 end;
 
 function TbpHashBobJenkins.GetDigest: TBytes;
@@ -534,86 +534,86 @@ const
 const
   gcVarWord64 = $0015; // UInt64 variant type (varWord64/varUInt64, missing in D2007)
 
-function BpTryVarToInt64(const AValue: Variant; out AResult: Int64): Boolean;
+function BpTryVarToInt64(const aValue: Variant; out aResult: Int64): Boolean;
 begin
-  case VarType(AValue) of
+  case VarType(aValue) of
     varShortInt, varSmallint, varInteger, varByte, varWord, varLongWord,
     varInt64, gcVarWord64:
     begin
-      AResult := AValue;
+      aResult := aValue;
       Result := True;
     end;
   else
-    AResult := 0;
+    aResult := 0;
     Result := False;
   end;
 end;
 
-function BpTryVarToInt(const AValue: Variant; out AResult: Integer): Boolean;
+function BpTryVarToInt(const aValue: Variant; out aResult: Integer): Boolean;
 var
   lvInt64: Int64;
 begin
-  Result := BpTryVarToInt64(AValue, lvInt64) and
+  Result := BpTryVarToInt64(aValue, lvInt64) and
     (lvInt64 >= Low(Integer)) and (lvInt64 <= High(Integer));
   if Result then
-    AResult := Integer(lvInt64)
+    aResult := Integer(lvInt64)
   else
-    AResult := 0;
+    aResult := 0;
 end;
 
-function BpTryVarToStr(const AValue: Variant; out AResult: string): Boolean;
+function BpTryVarToStr(const aValue: Variant; out aResult: string): Boolean;
 begin
-  case VarType(AValue) of
+  case VarType(aValue) of
     varOleStr, varString, varUString:
     begin
-      AResult := AValue;
+      aResult := aValue;
       Result := True;
     end;
   else
-    AResult := '';
+    aResult := '';
     Result := False;
   end;
 end;
 
-function BpTryVarToBool(const AValue: Variant; out AResult: Boolean): Boolean;
+function BpTryVarToBool(const aValue: Variant; out aResult: Boolean): Boolean;
 begin
-  Result := VarType(AValue) = varBoolean;
+  Result := VarType(aValue) = varBoolean;
   if Result then
-    AResult := AValue
+    aResult := aValue
   else
-    AResult := False;
+    aResult := False;
 end;
 
-function BpTryVarToFloat(const AValue: Variant; out AResult: Double): Boolean;
+function BpTryVarToFloat(const aValue: Variant; out aResult: Double): Boolean;
 begin
-  case VarType(AValue) of
+  case VarType(aValue) of
     varShortInt, varSmallint, varInteger, varByte, varWord, varLongWord,
     varInt64, gcVarWord64, varSingle, varDouble, varCurrency:
     begin
-      AResult := AValue;
+      aResult := aValue;
       Result := True;
     end;
   else
-    AResult := 0;
+    aResult := 0;
     Result := False;
   end;
 end;
 
-function BpTryVarToIntArray(const AValue: Variant; out AResult: TbpIntegerDynArray): Boolean;
+function BpTryVarToIntArray(const aValue: Variant; out aResult: TbpIntegerDynArray): Boolean;
 var
   lvLow, lvHigh, i: Integer;
 begin
   Result := False;
-  AResult := nil;
-  if (not VarIsArray(AValue)) or (VarArrayDimCount(AValue) <> 1) then
+  aResult := nil;
+  if (not VarIsArray(aValue)) or (VarArrayDimCount(aValue) <> 1) then
     Exit;
-  lvLow := VarArrayLowBound(AValue, 1);
-  lvHigh := VarArrayHighBound(AValue, 1);
-  SetLength(AResult, lvHigh - lvLow + 1);
+  lvLow := VarArrayLowBound(aValue, 1);
+  lvHigh := VarArrayHighBound(aValue, 1);
+  SetLength(aResult, lvHigh - lvLow + 1);
   for i := lvLow to lvHigh do
-    if not BpTryVarToInt(AValue[i], AResult[i - lvLow]) then
+    if not BpTryVarToInt(aValue[i], aResult[i - lvLow]) then
     begin
-      AResult := nil;
+      aResult := nil;
       Exit;
     end;
   Result := True;
@@ -628,41 +628,41 @@ const
   gcStrEmptyHash = -1;                         // sentinel: slot is free
   gcStrPositiveMask = not Integer($80000000);  // $7FFFFFFF
 
-constructor TbpStrDictionary.Create(ACaseInsensitive: Boolean; AInitialCapacity: Integer);
+constructor TbpStrDictionary.Create(aCaseInsensitive: Boolean; aInitialCapacity: Integer);
 begin
   inherited Create;
-  FCaseInsensitive := ACaseInsensitive;
-  if AInitialCapacity < 0 then
+  FCaseInsensitive := aCaseInsensitive;
+  if aInitialCapacity < 0 then
     raise EbpStrDictionary.Create('Initial capacity must not be negative');
-  if AInitialCapacity > 0 then
-    SetCapacity(AInitialCapacity);
+  if aInitialCapacity > 0 then
+    SetCapacity(aInitialCapacity);
   // with capacity 0 the grow threshold is 0, so the first Add grows to 4
 end;
 
-function TbpStrDictionary.HashOf(const AKey: string): Integer;
+function TbpStrDictionary.HashOf(const aKey: string): Integer;
 var
   lvFolded: string;
 begin
   if FCaseInsensitive then
   begin
-    lvFolded := AnsiUpperCase(AKey);
+    lvFolded := AnsiUpperCase(aKey);
     Result := TbpHashBobJenkins.GetHashValue(Pointer(lvFolded)^, Length(lvFolded) * SizeOf(Char), 0);
   end
   else
-    Result := TbpHashBobJenkins.GetHashValue(Pointer(AKey)^, Length(AKey) * SizeOf(Char), 0);
+    Result := TbpHashBobJenkins.GetHashValue(Pointer(aKey)^, Length(aKey) * SizeOf(Char), 0);
   // force the hash into 0..MaxInt so it can never collide with gcStrEmptyHash
   Result := gcStrPositiveMask and ((gcStrPositiveMask and Result) + 1);
 end;
 
-function TbpStrDictionary.KeysEqual(const AKey1, AKey2: string): Boolean;
+function TbpStrDictionary.KeysEqual(const aKey1, aKey2: string): Boolean;
 begin
   if FCaseInsensitive then
-    Result := AnsiSameText(AKey1, AKey2)
+    Result := AnsiSameText(aKey1, aKey2)
   else
-    Result := AKey1 = AKey2;
+    Result := aKey1 = aKey2;
 end;
 
-function TbpStrDictionary.GetBucketIndex(const AKey: string; AHashCode: Integer): Integer;
+function TbpStrDictionary.GetBucketIndex(const aKey: string; aHashCode: Integer): Integer;
 var
   lvLen, lvIndex, lvHC: Integer;
 begin
@@ -672,7 +672,7 @@ begin
     Result := not High(Integer);
     Exit;
   end;
-  lvIndex := AHashCode and (lvLen - 1);
+  lvIndex := aHashCode and (lvLen - 1);
   while True do
   begin
     lvHC := FItems[lvIndex].HashCode;
@@ -682,7 +682,7 @@ begin
       Exit;
     end;
     // cached hash comparison first, string compare only on hash match
-    if (lvHC = AHashCode) and KeysEqual(FItems[lvIndex].Key, AKey) then
+    if (lvHC = aHashCode) and KeysEqual(FItems[lvIndex].Key, aKey) then
     begin
       Result := lvIndex;
       Exit;
@@ -691,31 +691,31 @@ begin
   end;
 end;
 
-procedure TbpStrDictionary.DoAdd(AHashCode, AIndex: Integer; const AKey: string; const AValue: Variant);
+procedure TbpStrDictionary.DoAdd(aHashCode, aIndex: Integer; const aKey: string; const aValue: Variant);
 begin
-  FItems[AIndex].HashCode := AHashCode;
-  FItems[AIndex].Key := AKey;
-  FItems[AIndex].Value := AValue;
+  FItems[aIndex].HashCode := aHashCode;
+  FItems[aIndex].Key := aKey;
+  FItems[aIndex].Value := aValue;
   Inc(FCount);
 end;
 
-procedure TbpStrDictionary.Rehash(ANewCapacity: Integer);
+procedure TbpStrDictionary.Rehash(aNewCapacity: Integer);
 var
   lvOldItems: TbpStrDictItemArray;
   lvIndex: Integer;
   i: Integer;
 begin
-  if ANewCapacity = Length(FItems) then
+  if aNewCapacity = Length(FItems) then
     Exit;
-  if ANewCapacity < 0 then
+  if aNewCapacity < 0 then
     OutOfMemoryError;
   lvOldItems := FItems;
   FItems := nil;
-  SetLength(FItems, ANewCapacity);
-  for i := 0 to ANewCapacity - 1 do
+  SetLength(FItems, aNewCapacity);
+  for i := 0 to aNewCapacity - 1 do
     FItems[i].HashCode := gcStrEmptyHash;
   // grow at 75% load; guarantees at least one always-empty slot
-  FGrowThreshold := ANewCapacity shr 1 + ANewCapacity shr 2;
+  FGrowThreshold := aNewCapacity shr 1 + aNewCapacity shr 2;
   // reinsert using the cached hash codes, no rehashing of the keys
   for i := 0 to Length(lvOldItems) - 1 do
     if lvOldItems[i].HashCode <> gcStrEmptyHash then
@@ -737,19 +737,19 @@ begin
   Rehash(lvNewCapacity);
 end;
 
-procedure TbpStrDictionary.SetCapacity(ACapacity: Integer);
+procedure TbpStrDictionary.SetCapacity(aCapacity: Integer);
 var
   lvNewCapacity: Integer;
 begin
-  if ACapacity < FCount then
+  if aCapacity < FCount then
     raise EbpStrDictionary.Create('Capacity cannot be less than Count');
-  if ACapacity = 0 then
+  if aCapacity = 0 then
     Rehash(0)
   else
   begin
     // round up to a power of two, minimum 4
     lvNewCapacity := 4;
-    while lvNewCapacity < ACapacity do
+    while lvNewCapacity < aCapacity do
       lvNewCapacity := lvNewCapacity shl 1;
     Rehash(lvNewCapacity);
   end;
@@ -760,72 +760,72 @@ begin
   Result := Length(FItems);
 end;
 
-procedure TbpStrDictionary.Add(const AKey: string; const AValue: Variant);
+procedure TbpStrDictionary.Add(const aKey: string; const aValue: Variant);
 var
   lvHashCode, lvIndex: Integer;
 begin
   if FCount >= FGrowThreshold then
     Grow;
-  lvHashCode := HashOf(AKey);
-  lvIndex := GetBucketIndex(AKey, lvHashCode);
+  lvHashCode := HashOf(aKey);
+  lvIndex := GetBucketIndex(aKey, lvHashCode);
   if lvIndex >= 0 then
-    raise EbpStrDictionary.CreateFmt('Duplicate key: "%s"', [AKey]);
-  DoAdd(lvHashCode, not lvIndex, AKey, AValue);
+    raise EbpStrDictionary.CreateFmt('Duplicate key: "%s"', [aKey]);
+  DoAdd(lvHashCode, not lvIndex, aKey, aValue);
 end;
 
-procedure TbpStrDictionary.AddOrSet(const AKey: string; const AValue: Variant);
+procedure TbpStrDictionary.AddOrSet(const aKey: string; const aValue: Variant);
 var
   lvHashCode, lvIndex: Integer;
 begin
-  lvHashCode := HashOf(AKey);
-  lvIndex := GetBucketIndex(AKey, lvHashCode);
+  lvHashCode := HashOf(aKey);
+  lvIndex := GetBucketIndex(aKey, lvHashCode);
   if lvIndex >= 0 then
   begin
-    FItems[lvIndex].Value := AValue;
+    FItems[lvIndex].Value := aValue;
     Exit;
   end;
   // grow only on a genuine new insert; the array moves, so probe again
   if FCount >= FGrowThreshold then
   begin
     Grow;
-    lvIndex := GetBucketIndex(AKey, lvHashCode);
+    lvIndex := GetBucketIndex(aKey, lvHashCode);
   end;
-  DoAdd(lvHashCode, not lvIndex, AKey, AValue);
+  DoAdd(lvHashCode, not lvIndex, aKey, aValue);
 end;
 
-function TbpStrDictionary.TryGetValue(const AKey: string; out AValue: Variant): Boolean;
+function TbpStrDictionary.TryGetValue(const aKey: string; out aValue: Variant): Boolean;
 var
   lvIndex: Integer;
 begin
-  lvIndex := GetBucketIndex(AKey, HashOf(AKey));
+  lvIndex := GetBucketIndex(aKey, HashOf(aKey));
   Result := lvIndex >= 0;
   if Result then
-    AValue := FItems[lvIndex].Value
+    aValue := FItems[lvIndex].Value
   else
-    AValue := Unassigned;
+    aValue := Unassigned;
 end;
 
-function TbpStrDictionary.ContainsKey(const AKey: string): Boolean;
+function TbpStrDictionary.ContainsKey(const aKey: string): Boolean;
 begin
-  Result := GetBucketIndex(AKey, HashOf(AKey)) >= 0;
+  Result := GetBucketIndex(aKey, HashOf(aKey)) >= 0;
 end;
 
-function TbpStrDictionary.Remove(const AKey: string): Boolean;
+function TbpStrDictionary.Remove(const aKey: string): Boolean;
 var
   lvGap, lvIndex, lvHC, lvBucket, lvLen: Integer;
 
-  // wrap-aware test whether AItem's home bucket lies in (ABottom, ATopInc],
+  // wrap-aware test whether aItem's home bucket lies in (aBottom, aTopInc],
   // decides if an entry may slide back into the gap; nested (not unit-level)
   // so amalgamated bundles can embed both dictionaries without a name clash
-  function InCircularRange(ABottom, AItem, ATopInc: Integer): Boolean;
+  function InCircularRange(aBottom, aItem, aTopInc: Integer): Boolean;
   begin
-    Result := ((ABottom < AItem) and (AItem <= ATopInc)) or
-      ((ATopInc < ABottom) and (AItem > ABottom)) or
-      ((ATopInc < ABottom) and (AItem <= ATopInc));
+    Result := ((aBottom < aItem) and (aItem <= aTopInc)) or
+      ((aTopInc < aBottom) and (aItem > aBottom)) or
+      ((aTopInc < aBottom) and (aItem <= aTopInc));
   end;
 
 begin
-  lvIndex := GetBucketIndex(AKey, HashOf(AKey));
+  lvIndex := GetBucketIndex(aKey, HashOf(aKey));
   Result := lvIndex >= 0;
   if not Result then
     Exit;
@@ -859,232 +859,232 @@ begin
   FGrowThreshold := 0;
 end;
 
-procedure TbpStrDictionary.ForEach(ACallback: TbpStrDictForEach);
+procedure TbpStrDictionary.ForEach(aCallback: TbpStrDictForEach);
 var
   i: Integer;
   lvStop: Boolean;
 begin
-  if not Assigned(ACallback) then
+  if not Assigned(aCallback) then
     Exit;
   lvStop := False;
   for i := 0 to Length(FItems) - 1 do
     if FItems[i].HashCode <> gcStrEmptyHash then
     begin
-      ACallback(FItems[i].Key, FItems[i].Value, lvStop);
+      aCallback(FItems[i].Key, FItems[i].Value, lvStop);
       if lvStop then
         Exit;
     end;
 end;
 
-procedure TbpStrDictionary.GetKeys(AList: TStrings);
+procedure TbpStrDictionary.GetKeys(aList: TStrings);
 var
   i: Integer;
 begin
-  AList.BeginUpdate;
+  aList.BeginUpdate;
   try
-    AList.Clear;
+    aList.Clear;
     for i := 0 to Length(FItems) - 1 do
       if FItems[i].HashCode <> gcStrEmptyHash then
-        AList.Add(FItems[i].Key);
+        aList.Add(FItems[i].Key);
   finally
-    AList.EndUpdate;
+    aList.EndUpdate;
   end;
 end;
 
-function TbpStrDictionary.GetItem(const AKey: string): Variant;
+function TbpStrDictionary.GetItem(const aKey: string): Variant;
 var
   lvIndex: Integer;
 begin
-  lvIndex := GetBucketIndex(AKey, HashOf(AKey));
+  lvIndex := GetBucketIndex(aKey, HashOf(aKey));
   if lvIndex < 0 then
-    raise EbpStrDictionary.CreateFmt('Key not found: "%s"', [AKey]);
+    raise EbpStrDictionary.CreateFmt('Key not found: "%s"', [aKey]);
   Result := FItems[lvIndex].Value;
 end;
 
-procedure TbpStrDictionary.SetItem(const AKey: string; const AValue: Variant);
+procedure TbpStrDictionary.SetItem(const aKey: string; const aValue: Variant);
 begin
-  AddOrSet(AKey, AValue);
+  AddOrSet(aKey, aValue);
 end;
 
 // raises a descriptive conversion error naming the key and the stored type
-procedure RaiseStrTypeError(const AKey, AExpected: string; const AValue: Variant);
+procedure RaiseStrTypeError(const aKey, aExpected: string; const aValue: Variant);
 begin
   raise EbpStrDictionary.CreateFmt('Value for key "%s" is not %s (stored type: %s)',
-    [AKey, AExpected, VarTypeAsText(VarType(AValue))]);
+    [aKey, aExpected, VarTypeAsText(VarType(aValue))]);
 end;
 
-procedure TbpStrDictionary.SetInt(const AKey: string; AValue: Integer);
+procedure TbpStrDictionary.SetInt(const aKey: string; aValue: Integer);
 begin
-  AddOrSet(AKey, AValue);
+  AddOrSet(aKey, aValue);
 end;
 
-function TbpStrDictionary.GetInt(const AKey: string): Integer;
+function TbpStrDictionary.GetInt(const aKey: string): Integer;
 var
   lvValue: Variant;
 begin
-  lvValue := GetItem(AKey);
+  lvValue := GetItem(aKey);
   if not BpTryVarToInt(lvValue, Result) then
-    RaiseStrTypeError(AKey, 'an Integer', lvValue);
+    RaiseStrTypeError(aKey, 'an Integer', lvValue);
 end;
 
-function TbpStrDictionary.GetIntDef(const AKey: string; ADefault: Integer): Integer;
+function TbpStrDictionary.GetIntDef(const aKey: string; aDefault: Integer): Integer;
 begin
-  if not TryGetInt(AKey, Result) then
-    Result := ADefault;
+  if not TryGetInt(aKey, Result) then
+    Result := aDefault;
 end;
 
-function TbpStrDictionary.TryGetInt(const AKey: string; out AValue: Integer): Boolean;
+function TbpStrDictionary.TryGetInt(const aKey: string; out aValue: Integer): Boolean;
 var
   lvValue: Variant;
 begin
-  Result := TryGetValue(AKey, lvValue) and BpTryVarToInt(lvValue, AValue);
+  Result := TryGetValue(aKey, lvValue) and BpTryVarToInt(lvValue, aValue);
   if not Result then
-    AValue := 0;
+    aValue := 0;
 end;
 
-procedure TbpStrDictionary.SetInt64(const AKey: string; AValue: Int64);
+procedure TbpStrDictionary.SetInt64(const aKey: string; aValue: Int64);
 begin
-  AddOrSet(AKey, AValue);
+  AddOrSet(aKey, aValue);
 end;
 
-function TbpStrDictionary.GetInt64(const AKey: string): Int64;
+function TbpStrDictionary.GetInt64(const aKey: string): Int64;
 var
   lvValue: Variant;
 begin
-  lvValue := GetItem(AKey);
+  lvValue := GetItem(aKey);
   if not BpTryVarToInt64(lvValue, Result) then
-    RaiseStrTypeError(AKey, 'an Int64', lvValue);
+    RaiseStrTypeError(aKey, 'an Int64', lvValue);
 end;
 
-function TbpStrDictionary.GetInt64Def(const AKey: string; ADefault: Int64): Int64;
+function TbpStrDictionary.GetInt64Def(const aKey: string; aDefault: Int64): Int64;
 begin
-  if not TryGetInt64(AKey, Result) then
-    Result := ADefault;
+  if not TryGetInt64(aKey, Result) then
+    Result := aDefault;
 end;
 
-function TbpStrDictionary.TryGetInt64(const AKey: string; out AValue: Int64): Boolean;
+function TbpStrDictionary.TryGetInt64(const aKey: string; out aValue: Int64): Boolean;
 var
   lvValue: Variant;
 begin
-  Result := TryGetValue(AKey, lvValue) and BpTryVarToInt64(lvValue, AValue);
+  Result := TryGetValue(aKey, lvValue) and BpTryVarToInt64(lvValue, aValue);
   if not Result then
-    AValue := 0;
+    aValue := 0;
 end;
 
-procedure TbpStrDictionary.SetStr(const AKey, AValue: string);
+procedure TbpStrDictionary.SetStr(const aKey, aValue: string);
 begin
-  AddOrSet(AKey, AValue);
+  AddOrSet(aKey, aValue);
 end;
 
-function TbpStrDictionary.GetStr(const AKey: string): string;
+function TbpStrDictionary.GetStr(const aKey: string): string;
 var
   lvValue: Variant;
 begin
-  lvValue := GetItem(AKey);
+  lvValue := GetItem(aKey);
   if not BpTryVarToStr(lvValue, Result) then
-    RaiseStrTypeError(AKey, 'a string', lvValue);
+    RaiseStrTypeError(aKey, 'a string', lvValue);
 end;
 
-function TbpStrDictionary.GetStrDef(const AKey, ADefault: string): string;
+function TbpStrDictionary.GetStrDef(const aKey, aDefault: string): string;
 begin
-  if not TryGetStr(AKey, Result) then
-    Result := ADefault;
+  if not TryGetStr(aKey, Result) then
+    Result := aDefault;
 end;
 
-function TbpStrDictionary.TryGetStr(const AKey: string; out AValue: string): Boolean;
+function TbpStrDictionary.TryGetStr(const aKey: string; out aValue: string): Boolean;
 var
   lvValue: Variant;
 begin
-  Result := TryGetValue(AKey, lvValue) and BpTryVarToStr(lvValue, AValue);
+  Result := TryGetValue(aKey, lvValue) and BpTryVarToStr(lvValue, aValue);
   if not Result then
-    AValue := '';
+    aValue := '';
 end;
 
-procedure TbpStrDictionary.SetBool(const AKey: string; AValue: Boolean);
+procedure TbpStrDictionary.SetBool(const aKey: string; aValue: Boolean);
 begin
-  AddOrSet(AKey, AValue);
+  AddOrSet(aKey, aValue);
 end;
 
-function TbpStrDictionary.GetBool(const AKey: string): Boolean;
+function TbpStrDictionary.GetBool(const aKey: string): Boolean;
 var
   lvValue: Variant;
 begin
-  lvValue := GetItem(AKey);
+  lvValue := GetItem(aKey);
   if not BpTryVarToBool(lvValue, Result) then
-    RaiseStrTypeError(AKey, 'a Boolean', lvValue);
+    RaiseStrTypeError(aKey, 'a Boolean', lvValue);
 end;
 
-function TbpStrDictionary.GetBoolDef(const AKey: string; ADefault: Boolean): Boolean;
+function TbpStrDictionary.GetBoolDef(const aKey: string; aDefault: Boolean): Boolean;
 begin
-  if not TryGetBool(AKey, Result) then
-    Result := ADefault;
+  if not TryGetBool(aKey, Result) then
+    Result := aDefault;
 end;
 
-function TbpStrDictionary.TryGetBool(const AKey: string; out AValue: Boolean): Boolean;
+function TbpStrDictionary.TryGetBool(const aKey: string; out aValue: Boolean): Boolean;
 var
   lvValue: Variant;
 begin
-  Result := TryGetValue(AKey, lvValue) and BpTryVarToBool(lvValue, AValue);
+  Result := TryGetValue(aKey, lvValue) and BpTryVarToBool(lvValue, aValue);
   if not Result then
-    AValue := False;
+    aValue := False;
 end;
 
-procedure TbpStrDictionary.SetFloat(const AKey: string; AValue: Double);
+procedure TbpStrDictionary.SetFloat(const aKey: string; aValue: Double);
 begin
-  AddOrSet(AKey, AValue);
+  AddOrSet(aKey, aValue);
 end;
 
-function TbpStrDictionary.GetFloat(const AKey: string): Double;
+function TbpStrDictionary.GetFloat(const aKey: string): Double;
 var
   lvValue: Variant;
 begin
-  lvValue := GetItem(AKey);
+  lvValue := GetItem(aKey);
   if not BpTryVarToFloat(lvValue, Result) then
-    RaiseStrTypeError(AKey, 'a Float', lvValue);
+    RaiseStrTypeError(aKey, 'a Float', lvValue);
 end;
 
-function TbpStrDictionary.GetFloatDef(const AKey: string; ADefault: Double): Double;
+function TbpStrDictionary.GetFloatDef(const aKey: string; aDefault: Double): Double;
 begin
-  if not TryGetFloat(AKey, Result) then
-    Result := ADefault;
+  if not TryGetFloat(aKey, Result) then
+    Result := aDefault;
 end;
 
-function TbpStrDictionary.TryGetFloat(const AKey: string; out AValue: Double): Boolean;
+function TbpStrDictionary.TryGetFloat(const aKey: string; out aValue: Double): Boolean;
 var
   lvValue: Variant;
 begin
-  Result := TryGetValue(AKey, lvValue) and BpTryVarToFloat(lvValue, AValue);
+  Result := TryGetValue(aKey, lvValue) and BpTryVarToFloat(lvValue, aValue);
   if not Result then
-    AValue := 0;
+    aValue := 0;
 end;
 
-procedure TbpStrDictionary.SetIntArray(const AKey: string; const AValues: array of Integer);
+procedure TbpStrDictionary.SetIntArray(const aKey: string; const aValues: array of Integer);
 var
   lvArray: Variant;
   i: Integer;
 begin
-  lvArray := VarArrayCreate([0, Length(AValues) - 1], varInteger);
-  for i := 0 to Length(AValues) - 1 do
-    lvArray[i] := AValues[i];
-  AddOrSet(AKey, lvArray);
+  lvArray := VarArrayCreate([0, Length(aValues) - 1], varInteger);
+  for i := 0 to Length(aValues) - 1 do
+    lvArray[i] := aValues[i];
+  AddOrSet(aKey, lvArray);
 end;
 
-function TbpStrDictionary.GetIntArray(const AKey: string): TbpIntegerDynArray;
+function TbpStrDictionary.GetIntArray(const aKey: string): TbpIntegerDynArray;
 var
   lvValue: Variant;
 begin
-  lvValue := GetItem(AKey);
+  lvValue := GetItem(aKey);
   if not BpTryVarToIntArray(lvValue, Result) then
-    RaiseStrTypeError(AKey, 'an Integer array', lvValue);
+    RaiseStrTypeError(aKey, 'an Integer array', lvValue);
 end;
 
-function TbpStrDictionary.TryGetIntArray(const AKey: string; out AValues: TbpIntegerDynArray): Boolean;
+function TbpStrDictionary.TryGetIntArray(const aKey: string; out aValues: TbpIntegerDynArray): Boolean;
 var
   lvValue: Variant;
 begin
-  Result := TryGetValue(AKey, lvValue) and BpTryVarToIntArray(lvValue, AValues);
+  Result := TryGetValue(aKey, lvValue) and BpTryVarToIntArray(lvValue, aValues);
   if not Result then
-    AValues := nil;
+    aValues := nil;
 end;
 
 // ==================================================================
@@ -1097,36 +1097,36 @@ const
   gcIntPositiveMask = not Integer($80000000);  // $7FFFFFFF
 
 {$Q-} // the hash mix relies on wrapping 64-bit arithmetic
-function BpHashInt64(AKey: Int64): Integer;
+function BpHashInt64(aKey: Int64): Integer;
 begin
   // Thomas Wang's hash64shift: avalanche mix of all 64 key bits.
   // masks guard against sign-fill quirks of shr on Int64 in older compilers
-  AKey := (not AKey) + (AKey shl 18);
-  AKey := AKey xor ((AKey shr 31) and $00000001FFFFFFFF);
-  AKey := AKey * 21;
-  AKey := AKey xor ((AKey shr 11) and $001FFFFFFFFFFFFF);
-  AKey := AKey + (AKey shl 6);
-  AKey := AKey xor ((AKey shr 22) and $000003FFFFFFFFFF);
-  Result := Integer(AKey);
+  aKey := (not aKey) + (aKey shl 18);
+  aKey := aKey xor ((aKey shr 31) and $00000001FFFFFFFF);
+  aKey := aKey * 21;
+  aKey := aKey xor ((aKey shr 11) and $001FFFFFFFFFFFFF);
+  aKey := aKey + (aKey shl 6);
+  aKey := aKey xor ((aKey shr 22) and $000003FFFFFFFFFF);
+  Result := Integer(aKey);
 end;
 
 // forces a hash into 0..MaxInt so it can never collide with gcIntEmptyHash
-function PositiveHashOf(AKey: Int64): Integer;
+function PositiveHashOf(aKey: Int64): Integer;
 begin
-  Result := gcIntPositiveMask and ((gcIntPositiveMask and BpHashInt64(AKey)) + 1);
+  Result := gcIntPositiveMask and ((gcIntPositiveMask and BpHashInt64(aKey)) + 1);
 end;
 
-constructor TbpIntDictionary.Create(AInitialCapacity: Integer);
+constructor TbpIntDictionary.Create(aInitialCapacity: Integer);
 begin
   inherited Create;
-  if AInitialCapacity < 0 then
+  if aInitialCapacity < 0 then
     raise EbpIntDictionary.Create('Initial capacity must not be negative');
-  if AInitialCapacity > 0 then
-    SetCapacity(AInitialCapacity);
+  if aInitialCapacity > 0 then
+    SetCapacity(aInitialCapacity);
   // with capacity 0 the grow threshold is 0, so the first Add grows to 4
 end;
 
-function TbpIntDictionary.GetBucketIndex(AKey: Int64; AHashCode: Integer): Integer;
+function TbpIntDictionary.GetBucketIndex(aKey: Int64; aHashCode: Integer): Integer;
 var
   lvLen, lvIndex, lvHC: Integer;
 begin
@@ -1136,7 +1136,7 @@ begin
     Result := not High(Integer);
     Exit;
   end;
-  lvIndex := AHashCode and (lvLen - 1);
+  lvIndex := aHashCode and (lvLen - 1);
   while True do
   begin
     lvHC := FItems[lvIndex].HashCode;
@@ -1146,7 +1146,7 @@ begin
       Exit;
     end;
     // cached hash comparison first, key compare only on hash match
-    if (lvHC = AHashCode) and (FItems[lvIndex].Key = AKey) then
+    if (lvHC = aHashCode) and (FItems[lvIndex].Key = aKey) then
     begin
       Result := lvIndex;
       Exit;
@@ -1155,31 +1155,31 @@ begin
   end;
 end;
 
-procedure TbpIntDictionary.DoAdd(AHashCode, AIndex: Integer; AKey: Int64; const AValue: Variant);
+procedure TbpIntDictionary.DoAdd(aHashCode, aIndex: Integer; aKey: Int64; const aValue: Variant);
 begin
-  FItems[AIndex].HashCode := AHashCode;
-  FItems[AIndex].Key := AKey;
-  FItems[AIndex].Value := AValue;
+  FItems[aIndex].HashCode := aHashCode;
+  FItems[aIndex].Key := aKey;
+  FItems[aIndex].Value := aValue;
   Inc(FCount);
 end;
 
-procedure TbpIntDictionary.Rehash(ANewCapacity: Integer);
+procedure TbpIntDictionary.Rehash(aNewCapacity: Integer);
 var
   lvOldItems: TbpIntDictItemArray;
   lvIndex: Integer;
   i: Integer;
 begin
-  if ANewCapacity = Length(FItems) then
+  if aNewCapacity = Length(FItems) then
     Exit;
-  if ANewCapacity < 0 then
+  if aNewCapacity < 0 then
     OutOfMemoryError;
   lvOldItems := FItems;
   FItems := nil;
-  SetLength(FItems, ANewCapacity);
-  for i := 0 to ANewCapacity - 1 do
+  SetLength(FItems, aNewCapacity);
+  for i := 0 to aNewCapacity - 1 do
     FItems[i].HashCode := gcIntEmptyHash;
   // grow at 75% load; guarantees at least one always-empty slot
-  FGrowThreshold := ANewCapacity shr 1 + ANewCapacity shr 2;
+  FGrowThreshold := aNewCapacity shr 1 + aNewCapacity shr 2;
   // reinsert using the cached hash codes, no rehashing of the keys
   for i := 0 to Length(lvOldItems) - 1 do
     if lvOldItems[i].HashCode <> gcIntEmptyHash then
@@ -1201,19 +1201,19 @@ begin
   Rehash(lvNewCapacity);
 end;
 
-procedure TbpIntDictionary.SetCapacity(ACapacity: Integer);
+procedure TbpIntDictionary.SetCapacity(aCapacity: Integer);
 var
   lvNewCapacity: Integer;
 begin
-  if ACapacity < FCount then
+  if aCapacity < FCount then
     raise EbpIntDictionary.Create('Capacity cannot be less than Count');
-  if ACapacity = 0 then
+  if aCapacity = 0 then
     Rehash(0)
   else
   begin
     // round up to a power of two, minimum 4
     lvNewCapacity := 4;
-    while lvNewCapacity < ACapacity do
+    while lvNewCapacity < aCapacity do
       lvNewCapacity := lvNewCapacity shl 1;
     Rehash(lvNewCapacity);
   end;
@@ -1224,72 +1224,72 @@ begin
   Result := Length(FItems);
 end;
 
-procedure TbpIntDictionary.Add(AKey: Int64; const AValue: Variant);
+procedure TbpIntDictionary.Add(aKey: Int64; const aValue: Variant);
 var
   lvHashCode, lvIndex: Integer;
 begin
   if FCount >= FGrowThreshold then
     Grow;
-  lvHashCode := PositiveHashOf(AKey);
-  lvIndex := GetBucketIndex(AKey, lvHashCode);
+  lvHashCode := PositiveHashOf(aKey);
+  lvIndex := GetBucketIndex(aKey, lvHashCode);
   if lvIndex >= 0 then
-    raise EbpIntDictionary.CreateFmt('Duplicate key: %d', [AKey]);
-  DoAdd(lvHashCode, not lvIndex, AKey, AValue);
+    raise EbpIntDictionary.CreateFmt('Duplicate key: %d', [aKey]);
+  DoAdd(lvHashCode, not lvIndex, aKey, aValue);
 end;
 
-procedure TbpIntDictionary.AddOrSet(AKey: Int64; const AValue: Variant);
+procedure TbpIntDictionary.AddOrSet(aKey: Int64; const aValue: Variant);
 var
   lvHashCode, lvIndex: Integer;
 begin
-  lvHashCode := PositiveHashOf(AKey);
-  lvIndex := GetBucketIndex(AKey, lvHashCode);
+  lvHashCode := PositiveHashOf(aKey);
+  lvIndex := GetBucketIndex(aKey, lvHashCode);
   if lvIndex >= 0 then
   begin
-    FItems[lvIndex].Value := AValue;
+    FItems[lvIndex].Value := aValue;
     Exit;
   end;
   // grow only on a genuine new insert; the array moves, so probe again
   if FCount >= FGrowThreshold then
   begin
     Grow;
-    lvIndex := GetBucketIndex(AKey, lvHashCode);
+    lvIndex := GetBucketIndex(aKey, lvHashCode);
   end;
-  DoAdd(lvHashCode, not lvIndex, AKey, AValue);
+  DoAdd(lvHashCode, not lvIndex, aKey, aValue);
 end;
 
-function TbpIntDictionary.TryGetValue(AKey: Int64; out AValue: Variant): Boolean;
+function TbpIntDictionary.TryGetValue(aKey: Int64; out aValue: Variant): Boolean;
 var
   lvIndex: Integer;
 begin
-  lvIndex := GetBucketIndex(AKey, PositiveHashOf(AKey));
+  lvIndex := GetBucketIndex(aKey, PositiveHashOf(aKey));
   Result := lvIndex >= 0;
   if Result then
-    AValue := FItems[lvIndex].Value
+    aValue := FItems[lvIndex].Value
   else
-    AValue := Unassigned;
+    aValue := Unassigned;
 end;
 
-function TbpIntDictionary.ContainsKey(AKey: Int64): Boolean;
+function TbpIntDictionary.ContainsKey(aKey: Int64): Boolean;
 begin
-  Result := GetBucketIndex(AKey, PositiveHashOf(AKey)) >= 0;
+  Result := GetBucketIndex(aKey, PositiveHashOf(aKey)) >= 0;
 end;
 
-function TbpIntDictionary.Remove(AKey: Int64): Boolean;
+function TbpIntDictionary.Remove(aKey: Int64): Boolean;
 var
   lvGap, lvIndex, lvHC, lvBucket, lvLen: Integer;
 
-  // wrap-aware test whether AItem's home bucket lies in (ABottom, ATopInc],
+  // wrap-aware test whether aItem's home bucket lies in (aBottom, aTopInc],
   // decides if an entry may slide back into the gap; nested (not unit-level)
   // so amalgamated bundles can embed both dictionaries without a name clash
-  function InCircularRange(ABottom, AItem, ATopInc: Integer): Boolean;
+  function InCircularRange(aBottom, aItem, aTopInc: Integer): Boolean;
   begin
-    Result := ((ABottom < AItem) and (AItem <= ATopInc)) or
-      ((ATopInc < ABottom) and (AItem > ABottom)) or
-      ((ATopInc < ABottom) and (AItem <= ATopInc));
+    Result := ((aBottom < aItem) and (aItem <= aTopInc)) or
+      ((aTopInc < aBottom) and (aItem > aBottom)) or
+      ((aTopInc < aBottom) and (aItem <= aTopInc));
   end;
 
 begin
-  lvIndex := GetBucketIndex(AKey, PositiveHashOf(AKey));
+  lvIndex := GetBucketIndex(aKey, PositiveHashOf(aKey));
   Result := lvIndex >= 0;
   if not Result then
     Exit;
@@ -1323,18 +1323,18 @@ begin
   FGrowThreshold := 0;
 end;
 
-procedure TbpIntDictionary.ForEach(ACallback: TbpIntDictForEach);
+procedure TbpIntDictionary.ForEach(aCallback: TbpIntDictForEach);
 var
   i: Integer;
   lvStop: Boolean;
 begin
-  if not Assigned(ACallback) then
+  if not Assigned(aCallback) then
     Exit;
   lvStop := False;
   for i := 0 to Length(FItems) - 1 do
     if FItems[i].HashCode <> gcIntEmptyHash then
     begin
-      ACallback(FItems[i].Key, FItems[i].Value, lvStop);
+      aCallback(FItems[i].Key, FItems[i].Value, lvStop);
       if lvStop then
         Exit;
     end;
@@ -1354,171 +1354,171 @@ begin
     end;
 end;
 
-function TbpIntDictionary.GetItem(AKey: Int64): Variant;
+function TbpIntDictionary.GetItem(aKey: Int64): Variant;
 var
   lvIndex: Integer;
 begin
-  lvIndex := GetBucketIndex(AKey, PositiveHashOf(AKey));
+  lvIndex := GetBucketIndex(aKey, PositiveHashOf(aKey));
   if lvIndex < 0 then
-    raise EbpIntDictionary.CreateFmt('Key not found: %d', [AKey]);
+    raise EbpIntDictionary.CreateFmt('Key not found: %d', [aKey]);
   Result := FItems[lvIndex].Value;
 end;
 
-procedure TbpIntDictionary.SetItem(AKey: Int64; const AValue: Variant);
+procedure TbpIntDictionary.SetItem(aKey: Int64; const aValue: Variant);
 begin
-  AddOrSet(AKey, AValue);
+  AddOrSet(aKey, aValue);
 end;
 
 // raises a descriptive conversion error naming the key and the stored type
-procedure RaiseIntTypeError(AKey: Int64; const AExpected: string; const AValue: Variant);
+procedure RaiseIntTypeError(aKey: Int64; const aExpected: string; const aValue: Variant);
 begin
   raise EbpIntDictionary.CreateFmt('Value for key %d is not %s (stored type: %s)',
-    [AKey, AExpected, VarTypeAsText(VarType(AValue))]);
+    [aKey, aExpected, VarTypeAsText(VarType(aValue))]);
 end;
 
-procedure TbpIntDictionary.SetInt(AKey: Int64; AValue: Integer);
+procedure TbpIntDictionary.SetInt(aKey: Int64; aValue: Integer);
 begin
-  AddOrSet(AKey, AValue);
+  AddOrSet(aKey, aValue);
 end;
 
-function TbpIntDictionary.GetInt(AKey: Int64): Integer;
+function TbpIntDictionary.GetInt(aKey: Int64): Integer;
 var
   lvValue: Variant;
 begin
-  lvValue := GetItem(AKey);
+  lvValue := GetItem(aKey);
   if not BpTryVarToInt(lvValue, Result) then
-    RaiseIntTypeError(AKey, 'an Integer', lvValue);
+    RaiseIntTypeError(aKey, 'an Integer', lvValue);
 end;
 
-function TbpIntDictionary.GetIntDef(AKey: Int64; ADefault: Integer): Integer;
+function TbpIntDictionary.GetIntDef(aKey: Int64; aDefault: Integer): Integer;
 begin
-  if not TryGetInt(AKey, Result) then
-    Result := ADefault;
+  if not TryGetInt(aKey, Result) then
+    Result := aDefault;
 end;
 
-function TbpIntDictionary.TryGetInt(AKey: Int64; out AValue: Integer): Boolean;
+function TbpIntDictionary.TryGetInt(aKey: Int64; out aValue: Integer): Boolean;
 var
   lvValue: Variant;
 begin
-  Result := TryGetValue(AKey, lvValue) and BpTryVarToInt(lvValue, AValue);
+  Result := TryGetValue(aKey, lvValue) and BpTryVarToInt(lvValue, aValue);
   if not Result then
-    AValue := 0;
+    aValue := 0;
 end;
 
-procedure TbpIntDictionary.SetInt64(AKey: Int64; AValue: Int64);
+procedure TbpIntDictionary.SetInt64(aKey: Int64; aValue: Int64);
 begin
-  AddOrSet(AKey, AValue);
+  AddOrSet(aKey, aValue);
 end;
 
-function TbpIntDictionary.GetInt64(AKey: Int64): Int64;
+function TbpIntDictionary.GetInt64(aKey: Int64): Int64;
 var
   lvValue: Variant;
 begin
-  lvValue := GetItem(AKey);
+  lvValue := GetItem(aKey);
   if not BpTryVarToInt64(lvValue, Result) then
-    RaiseIntTypeError(AKey, 'an Int64', lvValue);
+    RaiseIntTypeError(aKey, 'an Int64', lvValue);
 end;
 
-function TbpIntDictionary.GetInt64Def(AKey: Int64; ADefault: Int64): Int64;
+function TbpIntDictionary.GetInt64Def(aKey: Int64; aDefault: Int64): Int64;
 begin
-  if not TryGetInt64(AKey, Result) then
-    Result := ADefault;
+  if not TryGetInt64(aKey, Result) then
+    Result := aDefault;
 end;
 
-function TbpIntDictionary.TryGetInt64(AKey: Int64; out AValue: Int64): Boolean;
+function TbpIntDictionary.TryGetInt64(aKey: Int64; out aValue: Int64): Boolean;
 var
   lvValue: Variant;
 begin
-  Result := TryGetValue(AKey, lvValue) and BpTryVarToInt64(lvValue, AValue);
+  Result := TryGetValue(aKey, lvValue) and BpTryVarToInt64(lvValue, aValue);
   if not Result then
-    AValue := 0;
+    aValue := 0;
 end;
 
-procedure TbpIntDictionary.SetStr(AKey: Int64; const AValue: string);
+procedure TbpIntDictionary.SetStr(aKey: Int64; const aValue: string);
 begin
-  AddOrSet(AKey, AValue);
+  AddOrSet(aKey, aValue);
 end;
 
-function TbpIntDictionary.GetStr(AKey: Int64): string;
+function TbpIntDictionary.GetStr(aKey: Int64): string;
 var
   lvValue: Variant;
 begin
-  lvValue := GetItem(AKey);
+  lvValue := GetItem(aKey);
   if not BpTryVarToStr(lvValue, Result) then
-    RaiseIntTypeError(AKey, 'a string', lvValue);
+    RaiseIntTypeError(aKey, 'a string', lvValue);
 end;
 
-function TbpIntDictionary.GetStrDef(AKey: Int64; const ADefault: string): string;
+function TbpIntDictionary.GetStrDef(aKey: Int64; const aDefault: string): string;
 begin
-  if not TryGetStr(AKey, Result) then
-    Result := ADefault;
+  if not TryGetStr(aKey, Result) then
+    Result := aDefault;
 end;
 
-function TbpIntDictionary.TryGetStr(AKey: Int64; out AValue: string): Boolean;
+function TbpIntDictionary.TryGetStr(aKey: Int64; out aValue: string): Boolean;
 var
   lvValue: Variant;
 begin
-  Result := TryGetValue(AKey, lvValue) and BpTryVarToStr(lvValue, AValue);
+  Result := TryGetValue(aKey, lvValue) and BpTryVarToStr(lvValue, aValue);
   if not Result then
-    AValue := '';
+    aValue := '';
 end;
 
-procedure TbpIntDictionary.SetBool(AKey: Int64; AValue: Boolean);
+procedure TbpIntDictionary.SetBool(aKey: Int64; aValue: Boolean);
 begin
-  AddOrSet(AKey, AValue);
+  AddOrSet(aKey, aValue);
 end;
 
-function TbpIntDictionary.GetBool(AKey: Int64): Boolean;
+function TbpIntDictionary.GetBool(aKey: Int64): Boolean;
 var
   lvValue: Variant;
 begin
-  lvValue := GetItem(AKey);
+  lvValue := GetItem(aKey);
   if not BpTryVarToBool(lvValue, Result) then
-    RaiseIntTypeError(AKey, 'a Boolean', lvValue);
+    RaiseIntTypeError(aKey, 'a Boolean', lvValue);
 end;
 
-function TbpIntDictionary.GetBoolDef(AKey: Int64; ADefault: Boolean): Boolean;
+function TbpIntDictionary.GetBoolDef(aKey: Int64; aDefault: Boolean): Boolean;
 begin
-  if not TryGetBool(AKey, Result) then
-    Result := ADefault;
+  if not TryGetBool(aKey, Result) then
+    Result := aDefault;
 end;
 
-function TbpIntDictionary.TryGetBool(AKey: Int64; out AValue: Boolean): Boolean;
+function TbpIntDictionary.TryGetBool(aKey: Int64; out aValue: Boolean): Boolean;
 var
   lvValue: Variant;
 begin
-  Result := TryGetValue(AKey, lvValue) and BpTryVarToBool(lvValue, AValue);
+  Result := TryGetValue(aKey, lvValue) and BpTryVarToBool(lvValue, aValue);
   if not Result then
-    AValue := False;
+    aValue := False;
 end;
 
-procedure TbpIntDictionary.SetFloat(AKey: Int64; AValue: Double);
+procedure TbpIntDictionary.SetFloat(aKey: Int64; aValue: Double);
 begin
-  AddOrSet(AKey, AValue);
+  AddOrSet(aKey, aValue);
 end;
 
-function TbpIntDictionary.GetFloat(AKey: Int64): Double;
+function TbpIntDictionary.GetFloat(aKey: Int64): Double;
 var
   lvValue: Variant;
 begin
-  lvValue := GetItem(AKey);
+  lvValue := GetItem(aKey);
   if not BpTryVarToFloat(lvValue, Result) then
-    RaiseIntTypeError(AKey, 'a Float', lvValue);
+    RaiseIntTypeError(aKey, 'a Float', lvValue);
 end;
 
-function TbpIntDictionary.GetFloatDef(AKey: Int64; ADefault: Double): Double;
+function TbpIntDictionary.GetFloatDef(aKey: Int64; aDefault: Double): Double;
 begin
-  if not TryGetFloat(AKey, Result) then
-    Result := ADefault;
+  if not TryGetFloat(aKey, Result) then
+    Result := aDefault;
 end;
 
-function TbpIntDictionary.TryGetFloat(AKey: Int64; out AValue: Double): Boolean;
+function TbpIntDictionary.TryGetFloat(aKey: Int64; out aValue: Double): Boolean;
 var
   lvValue: Variant;
 begin
-  Result := TryGetValue(AKey, lvValue) and BpTryVarToFloat(lvValue, AValue);
+  Result := TryGetValue(aKey, lvValue) and BpTryVarToFloat(lvValue, aValue);
   if not Result then
-    AValue := 0;
+    aValue := 0;
 end;
 
 end.
