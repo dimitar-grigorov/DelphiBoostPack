@@ -11,7 +11,7 @@ type
   TBpStrUtilsTests = class(TTestCase)
   private
     // both results must match for every flag combination
-    procedure CheckReplaceParity(const AText, AOld, ANew: string);
+    procedure CheckReplaceParity(const aText, aOld, aNew: string);
   published
     // Split with a Char delimiter
     procedure TestSplitCharBasic;
@@ -59,16 +59,16 @@ type
 
 implementation
 
-procedure TBpStrUtilsTests.CheckReplaceParity(const AText, AOld, ANew: string);
+procedure TBpStrUtilsTests.CheckReplaceParity(const aText, aOld, aNew: string);
 begin
-  CheckEquals(StringReplace(AText, AOld, ANew, []),
-    FastStringReplace(AText, AOld, ANew, []), 'flags []');
-  CheckEquals(StringReplace(AText, AOld, ANew, [rfReplaceAll]),
-    FastStringReplace(AText, AOld, ANew, [rfReplaceAll]), 'flags [rfReplaceAll]');
-  CheckEquals(StringReplace(AText, AOld, ANew, [rfIgnoreCase]),
-    FastStringReplace(AText, AOld, ANew, [rfIgnoreCase]), 'flags [rfIgnoreCase]');
-  CheckEquals(StringReplace(AText, AOld, ANew, [rfReplaceAll, rfIgnoreCase]),
-    FastStringReplace(AText, AOld, ANew, [rfReplaceAll, rfIgnoreCase]),
+  CheckEquals(StringReplace(aText, aOld, aNew, []),
+    FastStringReplace(aText, aOld, aNew, []), 'flags []');
+  CheckEquals(StringReplace(aText, aOld, aNew, [rfReplaceAll]),
+    FastStringReplace(aText, aOld, aNew, [rfReplaceAll]), 'flags [rfReplaceAll]');
+  CheckEquals(StringReplace(aText, aOld, aNew, [rfIgnoreCase]),
+    FastStringReplace(aText, aOld, aNew, [rfIgnoreCase]), 'flags [rfIgnoreCase]');
+  CheckEquals(StringReplace(aText, aOld, aNew, [rfReplaceAll, rfIgnoreCase]),
+    FastStringReplace(aText, aOld, aNew, [rfReplaceAll, rfIgnoreCase]),
     'flags [rfReplaceAll, rfIgnoreCase]');
 end;
 
@@ -343,11 +343,11 @@ var
   lvText, lvOld, lvNew: string;
   lvCase: Integer;
 
-  function RandomText(AMaxLen: Integer): string;
+  function RandomText(aMaxLen: Integer): string;
   var
     lvLen, j: Integer;
   begin
-    lvLen := Random(AMaxLen + 1);
+    lvLen := Random(aMaxLen + 1);
     SetLength(Result, lvLen);
     for j := 1 to lvLen do
       Result[j] := lcAlphabet[Random(Length(lcAlphabet)) + 1];

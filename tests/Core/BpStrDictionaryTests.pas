@@ -14,7 +14,7 @@ type
     FVisitCount: Integer;
     FStopAfter: Integer;
     FVisitedKeys: TStringList;
-    procedure VisitCallback(const AKey: string; const AValue: Variant; var AStop: Boolean);
+    procedure VisitCallback(const aKey: string; const aValue: Variant; var aStop: Boolean);
     procedure CallGetMissing;
     procedure CallAddDuplicate;
     procedure CallGetIntOnString;
@@ -77,12 +77,12 @@ begin
   FreeAndNil(FDict);
 end;
 
-procedure TBpStrDictionaryTests.VisitCallback(const AKey: string; const AValue: Variant; var AStop: Boolean);
+procedure TBpStrDictionaryTests.VisitCallback(const aKey: string; const aValue: Variant; var aStop: Boolean);
 begin
   Inc(FVisitCount);
-  FVisitedKeys.Add(AKey);
+  FVisitedKeys.Add(aKey);
   if (FStopAfter > 0) and (FVisitCount >= FStopAfter) then
-    AStop := True;
+    aStop := True;
 end;
 
 procedure TBpStrDictionaryTests.TestAddAndGet;
@@ -335,7 +335,7 @@ begin
     FDict.Add('k' + IntToStr(i), i);
   FStopAfter := 10;
   FDict.ForEach(VisitCallback);
-  CheckEquals(10, FVisitCount, 'ForEach must stop when AStop is set');
+  CheckEquals(10, FVisitCount, 'ForEach must stop when aStop is set');
 end;
 
 procedure TBpStrDictionaryTests.TestGetKeys;

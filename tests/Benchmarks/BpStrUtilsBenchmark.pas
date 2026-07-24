@@ -14,7 +14,7 @@ type
   // result with a single allocation.
   TBpStrUtilsBenchmark = class(TBpBaseBenchmarkTestCase)
   private
-    function BuildText(const AChunk: string; ACount: Integer): string;
+    function BuildText(const aChunk: string; aCount: Integer): string;
   published
     procedure TestReplaceAllFast;
     procedure TestReplaceAllRtl;
@@ -31,17 +31,17 @@ const
   CHUNK = '0123456789ab';      // 'ab' is the pattern to replace
   CHUNK_COMMA = '0123456789,'; // single char pattern text
 
-function TBpStrUtilsBenchmark.BuildText(const AChunk: string; ACount: Integer): string;
+function TBpStrUtilsBenchmark.BuildText(const aChunk: string; aCount: Integer): string;
 var
   i, lvChunkLen: Integer;
   lvDest: PChar;
 begin
-  lvChunkLen := Length(AChunk);
-  SetLength(Result, lvChunkLen * ACount);
+  lvChunkLen := Length(aChunk);
+  SetLength(Result, lvChunkLen * aCount);
   lvDest := Pointer(Result);
-  for i := 1 to ACount do
+  for i := 1 to aCount do
   begin
-    Move(Pointer(AChunk)^, lvDest^, lvChunkLen * SizeOf(Char));
+    Move(Pointer(aChunk)^, lvDest^, lvChunkLen * SizeOf(Char));
     Inc(lvDest, lvChunkLen);
   end;
 end;

@@ -8,7 +8,7 @@ uses
   TestFramework, SysUtils, Classes, Windows, BpTasks;
 
 type
-  // all offline, all console mode (AMarshalToMainThread=False): a test
+  // all offline, all console mode (aMarshalToMainThread=False): a test
   // runner has no message loop, so events fire on the worker thread
   TBpTasksTests = class(TTestCase)
   private
@@ -18,12 +18,12 @@ type
     FErrorCount: Integer;
     FLastErrorMessage: string;
     FStateInComplete: TbpTaskState;
-    procedure WorkQuick(ASender: TObject; AToken: TbpTaskToken);
-    procedure WorkRaise(ASender: TObject; AToken: TbpTaskToken);
-    procedure WorkLoopUntilCancelled(ASender: TObject; AToken: TbpTaskToken);
-    procedure HandleComplete(ASender: TObject);
-    procedure HandleError(ASender: TObject; const AErrorMessage: string);
-    function WaitForFlag(var AFlag: Boolean; ATimeoutMs: Cardinal): Boolean;
+    procedure WorkQuick(aSender: TObject; aToken: TbpTaskToken);
+    procedure WorkRaise(aSender: TObject; aToken: TbpTaskToken);
+    procedure WorkLoopUntilCancelled(aSender: TObject; aToken: TbpTaskToken);
+    procedure HandleComplete(aSender: TObject);
+    procedure HandleError(aSender: TObject; const aErrorMessage: string);
+    function WaitForFlag(var aFlag: Boolean; aTimeoutMs: Cardinal): Boolean;
   protected
     procedure SetUp; override;
   published
@@ -61,19 +61,19 @@ begin
   FStateInComplete := tskPending;
 end;
 
-procedure TBpTasksTests.WorkQuick(ASender: TObject; AToken: TbpTaskToken);
+procedure TBpTasksTests.WorkQuick(aSender: TObject; aToken: TbpTaskToken);
 begin
   FWorkRan := True;
 end;
 
-procedure TBpTasksTests.WorkRaise(ASender: TObject; AToken: TbpTaskToken);
+procedure TBpTasksTests.WorkRaise(aSender: TObject; aToken: TbpTaskToken);
 begin
   FWorkRan := True;
   raise EbpTasksTestError.Create('boom');
 end;
 
-procedure TBpTasksTests.WorkLoopUntilCancelled(ASender: TObject;
-  AToken: TbpTaskToken);
+procedure TBpTasksTests.WorkLoopUntilCancelled(aSender: TObject;
+  aToken: TbpTaskToken);
 var
   lvDeadline: Cardinal;
 begin
@@ -81,34 +81,34 @@ begin
   // cooperative worker: polls the token, gives up after 10 s so a broken
   // cancel cannot hang the suite
   lvDeadline := GetTickCount + 10000;
-  while not AToken.IsCancellationRequested and (GetTickCount < lvDeadline) do
+  while not aToken.IsCancellationRequested and (GetTickCount < lvDeadline) do
     Sleep(10);
   FWorkExited := True;
 end;
 
-procedure TBpTasksTests.HandleComplete(ASender: TObject);
+procedure TBpTasksTests.HandleComplete(aSender: TObject);
 begin
   Inc(FCompleteCount);
-  FStateInComplete := TbpTask(ASender).State;
+  FStateInComplete := TbpTask(aSender).State;
 end;
 
-procedure TBpTasksTests.HandleError(ASender: TObject;
-  const AErrorMessage: string);
+procedure TBpTasksTests.HandleError(aSender: TObject;
+  const aErrorMessage: string);
 begin
   Inc(FErrorCount);
-  FLastErrorMessage := AErrorMessage;
+  FLastErrorMessage := aErrorMessage;
 end;
 
 // polls a worker-written flag from this thread; True when it turned on in time
-function TBpTasksTests.WaitForFlag(var AFlag: Boolean;
-  ATimeoutMs: Cardinal): Boolean;
+function TBpTasksTests.WaitForFlag(var aFlag: Boolean;
+  aTimeoutMs: Cardinal): Boolean;
 var
   lvDeadline: Cardinal;
 begin
-  lvDeadline := GetTickCount + ATimeoutMs;
-  while not AFlag and (GetTickCount < lvDeadline) do
+  lvDeadline := GetTickCount + aTimeoutMs;
+  while not aFlag and (GetTickCount < lvDeadline) do
     Sleep(10);
-  Result := AFlag;
+  Result := aFlag;
 end;
 
 procedure TBpTasksTests.TestTokenCancelIsSticky;

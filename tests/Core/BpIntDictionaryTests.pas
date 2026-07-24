@@ -14,7 +14,7 @@ type
     FForEachSum: Int64;
     FForEachCalls: Integer;
     FForEachStopAfter: Integer;
-    procedure SumCallback(AKey: Int64; const AValue: Variant; var AStop: Boolean);
+    procedure SumCallback(aKey: Int64; const aValue: Variant; var aStop: Boolean);
     procedure AddDuplicateKey;
     procedure GetMissingKey;
     procedure GetStrOnIntValue;
@@ -282,12 +282,12 @@ begin
   CheckEquals(30, lvKeys[2]);
 end;
 
-procedure TBpIntDictionaryTests.SumCallback(AKey: Int64; const AValue: Variant;
-  var AStop: Boolean);
+procedure TBpIntDictionaryTests.SumCallback(aKey: Int64; const aValue: Variant;
+  var aStop: Boolean);
 begin
-  FForEachSum := FForEachSum + AKey;
+  FForEachSum := FForEachSum + aKey;
   Inc(FForEachCalls);
-  AStop := FForEachCalls = FForEachStopAfter;
+  aStop := FForEachCalls = FForEachStopAfter;
 end;
 
 procedure TBpIntDictionaryTests.TestForEach;

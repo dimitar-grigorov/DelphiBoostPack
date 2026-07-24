@@ -13,7 +13,7 @@ type
   // output size and encodes in one pass.
   TBpBase64Benchmark = class(TBpBaseBenchmarkTestCase)
   private
-    function BuildPayload(ASize: Integer): AnsiString;
+    function BuildPayload(aSize: Integer): AnsiString;
   published
     procedure TestEncodeBpBase64;
     procedure TestEncodeRtlEncdDecd;
@@ -29,12 +29,12 @@ uses
 const
   PAYLOAD_SIZE = 3 * 1024 * 1024; // 3 MB of binary data, 4 MB encoded
 
-function TBpBase64Benchmark.BuildPayload(ASize: Integer): AnsiString;
+function TBpBase64Benchmark.BuildPayload(aSize: Integer): AnsiString;
 var
   i: Integer;
 begin
-  SetLength(Result, ASize);
-  for i := 1 to ASize do
+  SetLength(Result, aSize);
+  for i := 1 to aSize do
     Result[i] := AnsiChar(i and $FF);
 end;
 

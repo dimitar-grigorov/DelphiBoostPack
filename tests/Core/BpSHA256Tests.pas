@@ -10,7 +10,7 @@ uses
 type
   TBpSHA256Tests = class(TTestCase)
   private
-    procedure CheckHashStr(const AExpectedHex: string; const AText: AnsiString);
+    procedure CheckHashStr(const aExpectedHex: string; const aText: AnsiString);
   published
     procedure TestFipsVectors;
     procedure TestMillionA;
@@ -29,9 +29,9 @@ implementation
 uses
   BpBase64, BpCryptoApiHash;
 
-procedure TBpSHA256Tests.CheckHashStr(const AExpectedHex: string; const AText: AnsiString);
+procedure TBpSHA256Tests.CheckHashStr(const aExpectedHex: string; const aText: AnsiString);
 begin
-  CheckEquals(AExpectedHex, TbpSHA256.HashStrHex(AText), string(AText));
+  CheckEquals(aExpectedHex, TbpSHA256.HashStrHex(aText), string(aText));
 end;
 
 procedure TBpSHA256Tests.TestFipsVectors;

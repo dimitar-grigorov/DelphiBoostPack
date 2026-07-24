@@ -11,9 +11,9 @@ type
   TBpHMACSHA256Tests = class(TTestCase)
   private
     // independent by-definition HMAC built from string concatenation over TbpSHA256
-    function ManualHmacHex(const AKey, AMsg: AnsiString): string;
-    procedure CheckHmac(const AExpectedHex: string; const AKey, AMsg: AnsiString;
-      const ACase: string);
+    function ManualHmacHex(const aKey, aMsg: AnsiString): string;
+    procedure CheckHmac(const aExpectedHex: string; const aKey, aMsg: AnsiString;
+      const aCase: string);
   published
     procedure TestRfc4231Vectors;
     procedure TestByDefinitionRandom;
@@ -27,13 +27,13 @@ implementation
 uses
   BpBase64;
 
-function TBpHMACSHA256Tests.ManualHmacHex(const AKey, AMsg: AnsiString): string;
+function TBpHMACSHA256Tests.ManualHmacHex(const aKey, aMsg: AnsiString): string;
 var
   lvKey, lvIpad, lvOpad, lvInnerStr: AnsiString;
   lvDigest: TbpSHA256Digest;
   i, lvByte: Integer;
 begin
-  lvKey := AKey;
+  lvKey := aKey;
   if Length(lvKey) > 64 then
   begin
     lvDigest := TbpSHA256.HashStr(lvKey);
@@ -50,15 +50,15 @@ begin
     lvIpad[i] := AnsiChar(lvByte xor $36);
     lvOpad[i] := AnsiChar(lvByte xor $5C);
   end;
-  lvDigest := TbpSHA256.HashStr(lvIpad + AMsg);
+  lvDigest := TbpSHA256.HashStr(lvIpad + aMsg);
   SetString(lvInnerStr, PAnsiChar(@lvDigest), SizeOf(lvDigest));
   Result := TbpSHA256.DigestToHex(TbpSHA256.HashStr(lvOpad + lvInnerStr));
 end;
 
-procedure TBpHMACSHA256Tests.CheckHmac(const AExpectedHex: string;
-  const AKey, AMsg: AnsiString; const ACase: string);
+procedure TBpHMACSHA256Tests.CheckHmac(const aExpectedHex: string;
+  const aKey, aMsg: AnsiString; const aCase: string);
 begin
-  CheckEquals(AExpectedHex, TbpHMACSHA256.ComputeHex(AKey, AMsg), ACase);
+  CheckEquals(aExpectedHex, TbpHMACSHA256.ComputeHex(aKey, aMsg), aCase);
 end;
 
 procedure TBpHMACSHA256Tests.TestRfc4231Vectors;

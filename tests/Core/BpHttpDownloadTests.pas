@@ -43,10 +43,10 @@ type
     FCompleteFired: Boolean;
     FErrorFired: Boolean;
     function ServerUrl: string;
-    procedure HandleProgress(ASender: TObject; const AReceived, ATotal: Int64;
-      var ACancel: Boolean);
-    procedure HandleComplete(ASender: TObject);
-    procedure HandleError(ASender: TObject; const AErrorMessage: string);
+    procedure HandleProgress(aSender: TObject; const aReceived, aTotal: Int64;
+      var aCancel: Boolean);
+    procedure HandleComplete(aSender: TObject);
+    procedure HandleError(aSender: TObject; const aErrorMessage: string);
   protected
     procedure SetUp; override;
     procedure TearDown; override;
@@ -68,10 +68,10 @@ type
     FCompleteFired: Boolean;
     FErrorFired: Boolean;
     function SkipIfOffline: Boolean;
-    procedure HandleProgress(ASender: TObject; const AReceived, ATotal: Int64;
-      var ACancel: Boolean);
-    procedure HandleComplete(ASender: TObject);
-    procedure HandleError(ASender: TObject; const AErrorMessage: string);
+    procedure HandleProgress(aSender: TObject; const aReceived, aTotal: Int64;
+      var aCancel: Boolean);
+    procedure HandleComplete(aSender: TObject);
+    procedure HandleError(aSender: TObject; const aErrorMessage: string);
   protected
     procedure SetUp; override;
     procedure TearDown; override;
@@ -89,7 +89,7 @@ type
   private
     FListenSocket: TSocket;
     FPort: Integer;
-    procedure ServeClient(AClient: TSocket);
+    procedure ServeClient(aClient: TSocket);
   protected
     procedure Execute; override;
   public
@@ -117,12 +117,12 @@ var
   gvOnlineProbed: Boolean = False;
   gvOnlineAvailable: Boolean = False;
 
-function TempFilePath(const AName: string): string;
+function TempFilePath(const aName: string): string;
 var
   lvBuffer: array[0..MAX_PATH] of Char;
 begin
   GetTempPath(MAX_PATH, lvBuffer);
-  Result := IncludeTrailingPathDelimiter(lvBuffer) + AName;
+  Result := IncludeTrailingPathDelimiter(lvBuffer) + aName;
 end;
 
 { TSlowHttpServer }
@@ -193,7 +193,7 @@ begin
   end;
 end;
 
-procedure TSlowHttpServer.ServeClient(AClient: TSocket);
+procedure TSlowHttpServer.ServeClient(aClient: TSocket);
 const
   lcHeader: AnsiString = 'HTTP/1.1 200 OK'#13#10 +
     'Content-Type: application/octet-stream'#13#10 +
@@ -206,23 +206,23 @@ var
   lvLen: Integer;
 begin
   // consume the request line and headers; a GET fits one recv in practice
-  lvLen := recv(AClient, lvRequest, SizeOf(lvRequest), 0);
+  lvLen := recv(aClient, lvRequest, SizeOf(lvRequest), 0);
   if lvLen <= 0 then
     Exit;
 
-  if send(AClient, PAnsiChar(lcHeader)^, Length(lcHeader), 0) = SOCKET_ERROR then
+  if send(aClient, PAnsiChar(lcHeader)^, Length(lcHeader), 0) = SOCKET_ERROR then
     Exit;
 
   // burst so the client sees progress fast, then dribble so it stays
   // mid-transfer long enough for a cancel to land while a read blocks
   FillChar(lvBurst, SizeOf(lvBurst), $42);
-  if send(AClient, lvBurst, SizeOf(lvBurst), 0) = SOCKET_ERROR then
+  if send(aClient, lvBurst, SizeOf(lvBurst), 0) = SOCKET_ERROR then
     Exit;
 
   FillChar(lvDribble, SizeOf(lvDribble), $42);
   while not Terminated do
   begin
-    if send(AClient, lvDribble, SizeOf(lvDribble), 0) = SOCKET_ERROR then
+    if send(aClient, lvDribble, SizeOf(lvDribble), 0) = SOCKET_ERROR then
       Exit;  // client hung up (cancelled) - done with this one
     Sleep(50);
   end;
@@ -489,20 +489,20 @@ begin
   Result := Format('http://127.0.0.1:%d/slow.bin', [FServer.Port]);
 end;
 
-procedure TBpHttpDownloadCancelTests.HandleProgress(ASender: TObject;
-  const AReceived, ATotal: Int64; var ACancel: Boolean);
+procedure TBpHttpDownloadCancelTests.HandleProgress(aSender: TObject;
+  const aReceived, aTotal: Int64; var aCancel: Boolean);
 begin
-  if FCancelAtFirstData and (AReceived > 0) then
-    ACancel := True;
+  if FCancelAtFirstData and (aReceived > 0) then
+    aCancel := True;
 end;
 
-procedure TBpHttpDownloadCancelTests.HandleComplete(ASender: TObject);
+procedure TBpHttpDownloadCancelTests.HandleComplete(aSender: TObject);
 begin
   FCompleteFired := True;
 end;
 
-procedure TBpHttpDownloadCancelTests.HandleError(ASender: TObject;
-  const AErrorMessage: string);
+procedure TBpHttpDownloadCancelTests.HandleError(aSender: TObject;
+  const aErrorMessage: string);
 begin
   FErrorFired := True;
 end;
@@ -615,23 +615,23 @@ begin
     Status('SKIPPED: no network access, integration test not executed');
 end;
 
-procedure TBpHttpDownloadOnlineTests.HandleProgress(ASender: TObject;
-  const AReceived, ATotal: Int64; var ACancel: Boolean);
+procedure TBpHttpDownloadOnlineTests.HandleProgress(aSender: TObject;
+  const aReceived, aTotal: Int64; var aCancel: Boolean);
 begin
   Inc(FProgressCalls);
-  if AReceived < FLastReceived then
+  if aReceived < FLastReceived then
     FMonotonic := False;
-  FLastReceived := AReceived;
-  FLastTotal := ATotal;
+  FLastReceived := aReceived;
+  FLastTotal := aTotal;
 end;
 
-procedure TBpHttpDownloadOnlineTests.HandleComplete(ASender: TObject);
+procedure TBpHttpDownloadOnlineTests.HandleComplete(aSender: TObject);
 begin
   FCompleteFired := True;
 end;
 
-procedure TBpHttpDownloadOnlineTests.HandleError(ASender: TObject;
-  const AErrorMessage: string);
+procedure TBpHttpDownloadOnlineTests.HandleError(aSender: TObject;
+  const aErrorMessage: string);
 begin
   FErrorFired := True;
 end;

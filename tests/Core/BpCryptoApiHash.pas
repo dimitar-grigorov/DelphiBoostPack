@@ -13,9 +13,9 @@ const
   CALG_MD5 = $00008003;
   CALG_SHA_256 = $0000800C;
 
-// hashes ASize bytes of AData with the given CryptoAPI algorithm id
-function CryptoApiHash(AAlgId: Cardinal; const AData; ASize: Integer): TBytes;
-function CryptoApiHashHex(AAlgId: Cardinal; const AData; ASize: Integer): string;
+// hashes aSize bytes of aData with the given CryptoAPI algorithm id
+function CryptoApiHash(aAlgId: Cardinal; const aData; aSize: Integer): TBytes;
+function CryptoApiHashHex(aAlgId: Cardinal; const aData; aSize: Integer): string;
 
 implementation
 
@@ -32,7 +32,7 @@ function CryptAcquireContextA(phProv: PCardinal; pszContainer, pszProvider: PAns
   dwProvType, dwFlags: Cardinal): BOOL; stdcall; external 'advapi32.dll';
 function CryptReleaseContext(hProv: Cardinal; dwFlags: Cardinal): BOOL; stdcall;
   external 'advapi32.dll';
-function CryptCreateHash(hProv, AAlgId, hKey, dwFlags: Cardinal;
+function CryptCreateHash(hProv, aAlgId, hKey, dwFlags: Cardinal;
   phHash: PCardinal): BOOL; stdcall; external 'advapi32.dll';
 function CryptHashData(hHash: Cardinal; pbData: Pointer;
   dwDataLen, dwFlags: Cardinal): BOOL; stdcall; external 'advapi32.dll';
@@ -40,7 +40,7 @@ function CryptGetHashParam(hHash, dwParam: Cardinal; pbData: Pointer;
   var pdwDataLen: Cardinal; dwFlags: Cardinal): BOOL; stdcall; external 'advapi32.dll';
 function CryptDestroyHash(hHash: Cardinal): BOOL; stdcall; external 'advapi32.dll';
 
-function CryptoApiHash(AAlgId: Cardinal; const AData; ASize: Integer): TBytes;
+function CryptoApiHash(aAlgId: Cardinal; const aData; aSize: Integer): TBytes;
 var
   lvProv, lvHash, lvLen: Cardinal;
 begin
@@ -48,10 +48,10 @@ begin
   if not CryptAcquireContextA(@lvProv, nil, nil, PROV_RSA_AES, CRYPT_VERIFYCONTEXT) then
     raise Exception.Create('CryptAcquireContext failed');
   try
-    if not CryptCreateHash(lvProv, AAlgId, 0, 0, @lvHash) then
+    if not CryptCreateHash(lvProv, aAlgId, 0, 0, @lvHash) then
       raise Exception.Create('CryptCreateHash failed');
     try
-      if (ASize > 0) and not CryptHashData(lvHash, @AData, ASize, 0) then
+      if (aSize > 0) and not CryptHashData(lvHash, @aData, aSize, 0) then
         raise Exception.Create('CryptHashData failed');
       lvLen := 0;
       if not CryptGetHashParam(lvHash, HP_HASHVAL, nil, lvLen, 0) then
@@ -67,12 +67,12 @@ begin
   end;
 end;
 
-function CryptoApiHashHex(AAlgId: Cardinal; const AData; ASize: Integer): string;
+function CryptoApiHashHex(aAlgId: Cardinal; const aData; aSize: Integer): string;
 var
   lvDigest: TBytes;
   i: Integer;
 begin
-  lvDigest := CryptoApiHash(AAlgId, AData, ASize);
+  lvDigest := CryptoApiHash(aAlgId, aData, aSize);
   Result := '';
   for i := 0 to High(lvDigest) do
     Result := Result + LowerCase(IntToHex(lvDigest[i], 2));

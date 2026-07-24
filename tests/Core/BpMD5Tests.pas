@@ -10,7 +10,7 @@ uses
 type
   TBpMD5Tests = class(TTestCase)
   private
-    procedure CheckHashStr(const AExpectedHex: string; const AText: AnsiString);
+    procedure CheckHashStr(const aExpectedHex: string; const aText: AnsiString);
   published
     procedure TestRfcVectors;
     procedure TestStreamingMatchesOneShot;
@@ -26,9 +26,9 @@ implementation
 uses
   BpBase64, BpCryptoApiHash;
 
-procedure TBpMD5Tests.CheckHashStr(const AExpectedHex: string; const AText: AnsiString);
+procedure TBpMD5Tests.CheckHashStr(const aExpectedHex: string; const aText: AnsiString);
 begin
-  CheckEquals(AExpectedHex, TbpMD5.HashStrHex(AText), string(AText));
+  CheckEquals(aExpectedHex, TbpMD5.HashStrHex(aText), string(aText));
 end;
 
 procedure TBpMD5Tests.TestRfcVectors;

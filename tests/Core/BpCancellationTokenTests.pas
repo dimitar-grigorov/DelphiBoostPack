@@ -39,9 +39,9 @@ var
   // written by the plain-procedure cleanups, inspected by the tests
   gvCleanupLog: string;
 
-procedure AppendCleanupLog(AData: Pointer);
+procedure AppendCleanupLog(aData: Pointer);
 begin
-  gvCleanupLog := gvCleanupLog + string(PChar(AData));
+  gvCleanupLog := gvCleanupLog + string(PChar(aData));
 end;
 
 type
@@ -51,12 +51,12 @@ type
   protected
     procedure Execute; override;
   public
-    constructor Create(AToken: TbpCancellationToken);
+    constructor Create(aToken: TbpCancellationToken);
   end;
 
-constructor TCancelAfterDelayThread.Create(AToken: TbpCancellationToken);
+constructor TCancelAfterDelayThread.Create(aToken: TbpCancellationToken);
 begin
-  FToken := AToken;
+  FToken := aToken;
   FreeOnTerminate := False;
   inherited Create(False);
 end;

@@ -12,8 +12,8 @@ type
   // throughput in MB/s on one large buffer
   TBpHashBenchmark = class(TBpBaseBenchmarkTestCase)
   private
-    function BuildPayload(ASize: Integer): AnsiString;
-    procedure LogThroughput(const AName: string; ASize: Integer);
+    function BuildPayload(aSize: Integer): AnsiString;
+    procedure LogThroughput(const aName: string; aSize: Integer);
   published
     procedure TestSHA256BpSHA256;
     procedure TestSHA256CryptoApi;
@@ -29,19 +29,19 @@ uses
 const
   PAYLOAD_SIZE = 10 * 1024 * 1024; // 10 MB
 
-function TBpHashBenchmark.BuildPayload(ASize: Integer): AnsiString;
+function TBpHashBenchmark.BuildPayload(aSize: Integer): AnsiString;
 var
   i: Integer;
 begin
-  SetLength(Result, ASize);
-  for i := 1 to ASize do
+  SetLength(Result, aSize);
+  for i := 1 to aSize do
     Result[i] := AnsiChar(i and $FF);
 end;
 
-procedure TBpHashBenchmark.LogThroughput(const AName: string; ASize: Integer);
+procedure TBpHashBenchmark.LogThroughput(const aName: string; aSize: Integer);
 begin
   LogStatusFmt('%s: %.1f ms, %.0f MB/s',
-    [AName, GetElapsedTime, (ASize / (1024 * 1024)) / (GetElapsedTime / 1000)]);
+    [aName, GetElapsedTime, (aSize / (1024 * 1024)) / (GetElapsedTime / 1000)]);
 end;
 
 procedure TBpHashBenchmark.TestSHA256BpSHA256;

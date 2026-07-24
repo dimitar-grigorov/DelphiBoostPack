@@ -12,8 +12,8 @@ type
   private
     procedure CallBadInput;
     function LocalBias: Integer;
-    procedure CheckEqualsI64(AExpected, AActual: Int64; const AMsg: string = '');
-    procedure CheckSameInstant(const AText, AExpectedIso: string);
+    procedure CheckEqualsI64(aExpected, aActual: Int64; const aMsg: string = '');
+    procedure CheckSameInstant(const aText, aExpectedIso: string);
   published
     // parse: accepted forms
     procedure TestParseDateOnly;
@@ -73,18 +73,18 @@ begin
     Result := lvTZI.Bias + lvTZI.StandardBias;
 end;
 
-procedure TBpDateUtilsTests.CheckEqualsI64(AExpected, AActual: Int64;
-  const AMsg: string);
+procedure TBpDateUtilsTests.CheckEqualsI64(aExpected, aActual: Int64;
+  const aMsg: string);
 begin
-  Check(AExpected = AActual,
-    Format('%s: expected %d but got %d', [AMsg, AExpected, AActual]));
+  Check(aExpected = aActual,
+    Format('%s: expected %d but got %d', [aMsg, aExpected, aActual]));
 end;
 
 // parse to the UTC instant, format it back, and compare the ISO text
-procedure TBpDateUtilsTests.CheckSameInstant(const AText, AExpectedIso: string);
+procedure TBpDateUtilsTests.CheckSameInstant(const aText, aExpectedIso: string);
 begin
-  CheckEquals(AExpectedIso,
-    BpDateTimeToISO8601(BpISO8601ToDateTime(AText, True)), AText);
+  CheckEquals(aExpectedIso,
+    BpDateTimeToISO8601(BpISO8601ToDateTime(aText, True)), aText);
 end;
 
 procedure TBpDateUtilsTests.TestParseDateOnly;
@@ -162,7 +162,7 @@ procedure TBpDateUtilsTests.TestParseNaiveVerbatim;
 var
   lvUtc, lvLocal: TDateTime;
 begin
-  // no zone: same value whatever AReturnUTC asks, nothing to convert from
+  // no zone: same value whatever aReturnUTC asks, nothing to convert from
   lvUtc := BpISO8601ToDateTime('2026-07-24T15:30:45', True);
   lvLocal := BpISO8601ToDateTime('2026-07-24T15:30:45', False);
   CheckEquals(lvUtc, lvLocal, cMs);
