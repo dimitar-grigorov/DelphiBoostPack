@@ -35,9 +35,28 @@ Everything has DUnit tests, and the crypto and hash units are cross-checked agai
 - **BpSysUtils** - small shims like `CharInSet` for the pre-2009 compilers.
 - **StopWatch** - a `QueryPerformanceCounter` stopwatch for Delphi 7-2007, used by the benchmarks.
 
-## Downloading files
+## Using the HTTP client
 
-The download API borrows its shape from modern C# and JS instead of the classic Delphi component dance. A progress callback gets `Int64` counters (`ATotal` is `-1` when the server sent no `Content-Length`) and can abort inline; a cancellation token lets anyone else abort from outside:
+One-liner fetch and everyday API calls:
+
+```pascal
+lvBody := TbpHttpClient.FetchUrl('https://api.example.com/v1/status');
+
+lvClient := TbpHttpClient.Create;
+try
+  lvClient.BearerToken := 'secret';           // or SetBasicAuth('user', 'pass')
+  lvClient.AddHeader('X-Api-Version', '2');   // sent with every request
+  lvResp := lvClient.PostJson('https://api.example.com/v1/items', '{"name":"first"}');
+  if BpHttpResponseIsSuccess(lvResp) then
+    lvText := BpHttpResponseBodyAsUtf8(lvResp)
+  else
+    ShowMessage(BpClassifyHttpError(0, lvResp.StatusCode));
+finally
+  lvClient.Free;
+end;
+```
+
+Downloading with progress and cancel. The callback gets `Int64` counters (`ATotal` is `-1` when the server sent no `Content-Length`) and can abort inline; a `TbpCancellationToken` aborts from outside, promptly, even while a read blocks:
 
 ```pascal
 procedure TMainForm.HandleProgress(ASender: TObject; const AReceived, ATotal: Int64;
@@ -46,26 +65,22 @@ begin
   ProgressBar1.Position := BpHttpProgressPercent(AReceived, ATotal);  // -1 = unknown
 end;
 
-// synchronous building block; blocking, so run it on a worker thread
+// blocking, so run it on a worker thread; the file is deleted on error or cancel
 lvClient.DownloadToFile('https://host/big.zip', 'C:\temp\big.zip',
-  HandleProgress, FToken);  // FToken.Cancel aborts promptly, partial file deleted
+  HandleProgress, FToken);
 ```
 
-`TbpHttpDownloadTask` is that worker thread, prepackaged. Create it on the main thread, wire the events, `Start` and return; the UI never freezes and there is no `ProcessMessages` trickery, events arrive through the message queue:
+Async without freezing the UI: `BpDownloadAsync` returns a started `TbpHttpDownloadTask` (a hot task, C# style). No `ProcessMessages` anywhere; events arrive through the message queue on the thread that created the task:
 
 ```pascal
-FTask := TbpHttpDownloadTask.Create;         // True (default): events on this thread
-FTask.Url := 'https://host/big.zip';
-FTask.DestFileName := 'C:\temp\big.zip';
-FTask.Client.BearerToken := 'secret';        // full TbpHttpClient config available
-FTask.OnProgress := HandleProgress;
-FTask.OnComplete := HandleComplete;          // fires on every terminal state
-FTask.Start;                                 // returns immediately
+FTask := BpDownloadAsync('https://host/big.zip', 'C:\temp\big.zip',
+  HandleProgress, HandleComplete);    // returns immediately
+// in HandleComplete check FTask.State: dtsSucceeded / dtsFailed / dtsCancelled
 // later, from the Stop button:
-FTask.Cancel;                                // -> State = dtsCancelled, file cleaned up
+FTask.Cancel;                         // partial file cleaned up
 ```
 
-In `HandleComplete` check `FTask.State`: `dtsSucceeded`, `dtsFailed` (message in `ErrorMessage`, WinInet code in `ErrorCode`, HTTP status in `HttpStatus`) or `dtsCancelled`. Console apps and tests pass `Create(False)` and get events directly on the worker thread. Resume is one header away: send `'Range: bytes=123456-'` in `AHeaders` and append on a 206.
+Need auth or timeouts on an async download? Create `TbpHttpDownloadTask` yourself, configure its `Client` (the full `TbpHttpClient` surface), set `Url` + `DestFileName`/`DestStream`, wire the events, `Start`. Console apps pass `Create(False)` / `BpDownloadAsync(..., False)` and get events on the worker thread. Resume is one header away: send `'Range: bytes=123456-'` and append on a 206.
 
 ## Grab a single file
 
