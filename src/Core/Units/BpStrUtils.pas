@@ -1,25 +1,9 @@
 unit BpStrUtils;
 
-// String helpers that D2007 lacks: Split, Join, a fast StringReplace and
-// StartsWith / EndsWith checks (ordinal and locale case-insensitive).
-//
-// FastStringReplace uses the FastCode project idea (StringReplace_JOH_PAS):
-// collect all match positions first, then allocate the exact result size once
-// and stream the pieces with Move. SysUtils.StringReplace instead copies the
-// whole remaining string on every match, which goes quadratic on many matches.
-// Case-insensitive mode folds text and pattern once with AnsiUpperCase (the
-// same locale fold the RTL uses), searches the folded copy and copies from
-// the original, so results match SysUtils.StringReplace exactly.
-//
-// Split('' ) returns an empty array; delimiters at the ends produce empty
-// elements ('a,' gives 'a' and ''), matching XE6 SplitString and .NET.
-// The string-delimiter overload treats the whole delimiter as one separator.
-//
-// StartsWith / EndsWith compare bytes without allocating; the *Text variants
-// are locale case-insensitive via CompareString, the API behind AnsiSameText.
-// Note for D2007 MBCS locales: EndsWithText anchors at a byte offset, so a
-// suffix starting inside a double-byte character is compared as-is (the RTL
-// AnsiEndsText has the same behavior).
+// String helpers D2007 lacks: Split, Join, StartsWith/EndsWith (ordinal, with
+// locale-insensitive *Text variants), and FastStringReplace, which collects
+// all match positions and builds the result in one allocation instead of
+// SysUtils.StringReplace's per-match recopy that goes quadratic.
 
 interface
 

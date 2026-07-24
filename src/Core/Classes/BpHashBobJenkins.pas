@@ -1,19 +1,10 @@
 unit BpHashBobJenkins;
 
-// Bob Jenkins lookup3 hash (http://burtleburtle.net/bob/c/lookup3.c) for
-// Delphi 7/2007 and later.
-//
-// The implementation is a faithful port of HashLittle from Delphi XE6
-// System.Generics.Defaults (the engine behind BobJenkinsHash and, later,
-// System.Hash.THashBobJenkins), including Embarcadero's deviation from
-// canonical lookup3: the initial state uses (Len shl 2) instead of Len.
-// This keeps hash values byte-for-byte identical with the modern RTL, so
-// results can be verified against any Delphi XE+ installation.
-//
-// Note for cross-version use: hashing a *string* hashes its bytes, so an
-// AnsiString on Delphi 2007 and a UnicodeString on XE6 produce different
-// hashes for the same text. Byte-oriented known-answer tests must use the
-// untyped-buffer overload of GetHashValue.
+// Bob Jenkins lookup3 hash (a public-domain algorithm) for Delphi 7/2007+.
+// The seed is chosen so results interoperate with the RTL's BobJenkinsHash
+// across compiler versions. Note: hashing a string hashes its bytes, so Ansi
+// (D2007) and Unicode builds differ - use the buffer overload for portable
+// known-answer tests.
 
 interface
 
@@ -157,13 +148,10 @@ begin
   Move(FHash, Result[0], 4);
 end;
 
-// Port of Delphi XE6 System.Generics.Defaults.HashLittle.
-// - the last full 12-byte block is NOT mixed in the loop: it is added to
-//   a/b/c and folded by Final(), exactly like the reference
-// - Len = 0 exits early WITHOUT Final(), exactly like the reference
-// - the tail never reads past Data: the aligned path uses masked 32-bit
-//   reads (cannot cross a page boundary), the unaligned path reads only
-//   the remaining bytes one by one
+// Implements the lookup3 mix and final. The last 12-byte block is folded by
+// Final rather than in the loop, Len = 0 exits before Final, and the tail
+// never reads past Data (masked 32-bit reads when aligned, byte reads
+// otherwise).
 class function TbpHashBobJenkins.HashLittle(const Data; Len, InitVal: Integer): Integer;
 var
   a, b, c: Cardinal;

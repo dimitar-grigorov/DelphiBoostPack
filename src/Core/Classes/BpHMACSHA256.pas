@@ -1,19 +1,9 @@
 unit BpHMACSHA256;
 
-// HMAC-SHA256 per RFC 2104 / FIPS 198-1, built on BpSHA256.
-//
-// HMAC is a keyed hash: only someone holding the shared secret can produce
-// (or verify) the code, which is what API signature schemes use (AWS SigV4,
-// webhook signatures, JWT HS256). Result = SHA256(opad || SHA256(ipad || msg))
-// where ipad/opad are the key xor $36 / $5C; keys longer than the 64-byte
-// block are hashed down first, shorter ones are zero-padded.
-//
-// Streaming like the hash classes: Create with the key, Update in chunks,
-// Final; Final re-arms the instance for the next message with the same key.
-// Class function one-shots cover the common string/bytes cases.
-//
-// Verified in the DUnit suite against the RFC 4231 test vectors and against
-// a by-definition construction over BpSHA256 on random keys and messages.
+// HMAC-SHA256 (RFC 2104), built on BpSHA256, for keyed message
+// authentication (API signatures, webhook verification, JWT HS256).
+// Streaming like the hash classes: Create with the key, Update, Final;
+// Final re-arms with the same key. One-shot class functions too.
 
 interface
 

@@ -1,20 +1,9 @@
 unit BpStringBuilder;
 
-// Fast string builder for Delphi 7/2007 and later, API modeled on the XE6
-// SysUtils.TStringBuilder (itself a port of the .NET StringBuilder API).
-//
-// Storage is one contiguous string used as a raw character buffer with the
-// logical length tracked separately, so an append is a capacity check, one
-// Move and a cursor bump. Capacity doubles on growth (minimum 16). The RTL
-// version funnels every Append through the Length property setter, which is
-// the main reason it is slow; this one writes through a cached raw pointer.
-//
-// Integers are formatted backward into a small stack buffer (the mORMot
-// TTextWriter trick), so Append(Integer) and Append(Int64) never allocate.
-//
-// Chars and Insert use 0-based indexes, matching the XE6 TStringBuilder
-// convention. Clear keeps the allocated capacity so a builder can be reused
-// in a loop without reallocating.
+// Fast string builder for Delphi 7/2007+, API modeled on XE6 TStringBuilder.
+// It writes through a cached buffer pointer rather than routing every append
+// through the Length setter, which is what makes the RTL version slow.
+// Chars and Insert use 0-based indexes; Clear keeps capacity for reuse.
 
 interface
 

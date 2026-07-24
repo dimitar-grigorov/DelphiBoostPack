@@ -6,14 +6,14 @@ Hash dictionaries, a fast StringBuilder, SHA-256 / MD5 / HMAC, Base64, a WinInet
 
 It targets Delphi 2007 first and stays clean from Delphi 7 all the way to 11.3, because rewriting a 300-unit legacy app just to get a `TDictionary` is not a plan. If you are stuck on an old compiler and keep reaching for things it does not have, help yourself to whatever is useful here.
 
-Everything has DUnit tests, and the crypto and hash units are cross-checked against the Windows CryptoAPI and the XE6 RTL so the numbers actually match.
+Everything has DUnit tests, and the crypto and hash units are checked against the published standard vectors (FIPS, RFC) and the Windows CryptoAPI, so the numbers actually match.
 
 > **Featured - a modern HTTP client for Delphi 2007.** `TbpHttpClient` brings the ergonomics of C# `HttpClient` and JS `fetch` to a 2007 compiler: one-liner `GET`s, JSON `POST`s, bearer and basic auth, and async streaming downloads with progress and cooperative cancellation. All over WinInet, so no OpenSSL DLLs ride along with your exe. [Jump to the examples ↓](#using-the-http-client)
 
 ## What's inside
 
 ### Collections
-- **`TbpStrDictionary`** / **`TbpIntDictionary`** - real hash maps with string and Int64 keys, for compilers with no generics. Same engine as XE6's `TDictionary`: open addressing, linear probing, power-of-two capacity, backward-shift deletion. Values are Variants, but the typed accessors (`GetInt`, `TryGetStr`, `GetFloatDef` and the rest) check the type instead of quietly coercing it.
+- **`TbpStrDictionary`** / **`TbpIntDictionary`** - real hash maps with string and Int64 keys, for compilers with no generics, with a familiar `TDictionary`-style API. Open addressing, linear probing, power-of-two capacity, backward-shift deletion. Values are Variants, but the typed accessors (`GetInt`, `TryGetStr`, `GetFloatDef` and the rest) check the type instead of quietly coercing it.
 - **`TbpIntList`** - a list of integers that behaves like `TStringList`: sorting, delimited text, the usual indexing.
 
 ### Strings
@@ -25,7 +25,7 @@ Everything has DUnit tests, and the crypto and hash units are cross-checked agai
 - **`BpMD5`** - MD5 (RFC 1321), same shape as the SHA unit. It is broken for anything security-related, so keep it to legacy checksums, ETags and content fingerprints.
 - **`BpHMACSHA256`** - HMAC-SHA256 (RFC 2104) for API request signing and webhook verification.
 - **`BpPasswordHash`** - password hashing done right: PBKDF2-HMAC-SHA256 (RFC 2898 / NIST SP 800-132). `BpHashPassword` salts from the Windows CSPRNG, derives with 600,000 iterations (current OWASP guidance) and returns a self-describing record (`$pbkdf2-sha256$600000$<salt>$<hash>`); `BpVerifyPassword` re-derives and compares in constant time, and malformed records just return `False`. The raw `BpPBKDF2SHA256` is exposed too, checked against the published test vectors and Python's `hashlib`.
-- **`BpHashBobJenkins`** - the Bob Jenkins lookup3 hash, byte-for-byte identical to the XE+ `BobJenkinsHash`. It is what powers the string dictionary.
+- **`BpHashBobJenkins`** - the Bob Jenkins lookup3 hash (a public-domain algorithm), producing values that interoperate with the RTL's `BobJenkinsHash`. It is what powers the string dictionary.
 - **`BpBase64`** - Base64 and Base64url (RFC 4648). One allocation to encode; the decoder eats either alphabet, forgives missing padding and skips whitespace, so MIME-wrapped input just works.
 
 ### HTTP, JSON and tasks

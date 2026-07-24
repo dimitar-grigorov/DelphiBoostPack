@@ -1,9 +1,8 @@
 unit BpPasswordHash;
 
-// Approved password hashing: PBKDF2-HMAC-SHA256 (RFC 2898 / NIST SP 800-132)
-// built on BpHMACSHA256. Salts come from the Windows CSPRNG (CryptGenRandom),
-// verification compares in constant time, and the stored record describes
-// itself, so iteration counts can grow without breaking old hashes:
+// Password hashing with PBKDF2-HMAC-SHA256 (RFC 2898), built on BpHMACSHA256.
+// Salt from the Windows CSPRNG, constant-time verify, and a self-describing
+// record so the work factor can grow without breaking old hashes:
 //   lvStored := BpHashPassword('hunter2');  // $pbkdf2-sha256$600000$<salt>$<hash>
 //   if BpVerifyPassword('hunter2', lvStored) then ...
 

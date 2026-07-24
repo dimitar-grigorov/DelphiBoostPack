@@ -79,10 +79,9 @@ begin
   Check(hashValue1 <> hashValue2, 'Small changes in input should produce different hashes');
 end;
 
-// Known-answer vectors generated from a reference implementation of
-// Delphi XE6 System.Generics.Defaults.HashLittle (incl. the Len shl 2 quirk).
-// Byte-oriented (AnsiString + untyped overload) so they hold on every
-// Delphi version regardless of the size of Char.
+// Known-answer vectors for the lookup3 hash with the same seed the RTL's
+// BobJenkinsHash uses. Byte-oriented (AnsiString + untyped overload) so they
+// hold on every Delphi version regardless of the size of Char.
 procedure TBpHashBobJenkinsTests.TestKnownAnswers;
 
   procedure CheckHash(Expected: Integer; const Data: AnsiString);

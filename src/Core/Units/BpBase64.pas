@@ -1,12 +1,9 @@
 unit BpBase64;
 
-// Base64 encode/decode per RFC 4648, standard and url-safe alphabets.
-// Encoding computes the exact output size and builds the result with a single
-// allocation. Standard encode pads with '='; Base64url encode omits padding
-// (the common form in tokens, e.g. JWT).
-// Decoding uses one shared reverse lookup table that accepts both alphabets,
-// tolerates missing padding and skips whitespace (so MIME output with CRLF
-// line breaks decodes fine). Any other character raises EbpBase64.
+// Base64 encode/decode (RFC 4648), standard and url-safe alphabets. Encoding
+// is a single allocation; standard pads with '=', url-safe omits it. Decoding
+// accepts either alphabet, tolerates missing padding and skips whitespace
+// (so MIME line breaks are fine); any other character raises EbpBase64.
 
 interface
 

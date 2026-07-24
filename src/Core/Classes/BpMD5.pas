@@ -1,14 +1,8 @@
 unit BpMD5;
 
-// MD5 per RFC 1321, pure Pascal, for Delphi 7/2007 and later.
-//
-// Same interface as BpSHA256: streaming (Create or Init, Update in chunks,
-// Final) plus class function one-shots for buffer/bytes/string/file with hex
-// or Base64 output. MD5 is cryptographically broken for signatures but stays
-// useful for legacy checksums, ETags and content fingerprints.
-//
-// Verified in the DUnit suite against the RFC 1321 test vectors and
-// cross-checked against Windows CryptoAPI on random data.
+// MD5 (RFC 1321), pure Pascal, for Delphi 7/2007+. Same interface as
+// BpSHA256: streaming Update plus one-shot class functions, hex or Base64.
+// Broken for signatures; fine for checksums, ETags and fingerprints.
 
 // hash arithmetic relies on Cardinal wraparound mod 2^32
 {$Q-}

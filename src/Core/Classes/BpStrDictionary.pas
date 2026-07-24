@@ -1,19 +1,10 @@
 unit BpStrDictionary;
 
-// Lightweight string-key dictionary for Delphi 7/2007 and later (no generics).
-//
-// Design follows Delphi XE6 System.Generics.Collections.TDictionary:
-// open addressing with linear probing over a single flat item array,
-// power-of-two capacity, cached hash codes (EMPTY_HASH sentinel marks free
-// slots), growth at 75% load and tombstone-free backward-shift deletion.
-// Keys are hashed with the Bob Jenkins lookup3 port in BpHashBobJenkins.
-//
-// Values are stored as Variant. Typed accessors with validation live in
-// the same class (GetInt, TryGetInt, GetIntDef, SetInt and friends).
-//
-// Case sensitivity: keys are case-sensitive by default; pass True to the
-// constructor for case-insensitive mode (keys are then hashed over their
-// AnsiUpperCase form and compared with AnsiSameText, locale-aware).
+// String-key dictionary for Delphi 7/2007+ (no generics), with a familiar
+// TDictionary-style API. Open addressing with linear probing, power-of-two
+// capacity and backward-shift deletion. Keys hashed via BpHashBobJenkins.
+// Values are Variant, with strict typed accessors. Case-insensitive mode is
+// opt-in (constructor arg), folding keys with AnsiUpperCase.
 
 interface
 
@@ -44,7 +35,7 @@ type
     function HashOf(const aKey: string): Integer;
     function KeysEqual(const aKey1, aKey2: string): Boolean;
     // returns the slot index (>= 0) when found, otherwise the bitwise
-    // complement of the first empty slot (always negative), XE6-style
+    // complement of the first empty slot (always negative)
     function GetBucketIndex(const aKey: string; aHashCode: Integer): Integer;
     procedure DoAdd(aHashCode, aIndex: Integer; const aKey: string; const aValue: Variant);
     procedure Grow;
@@ -64,10 +55,8 @@ type
     procedure SetCapacity(aCapacity: Integer);
     procedure ForEach(aCallback: TbpStrDictForEach);
     procedure GetKeys(aList: TStrings);
-    // typed accessors with validation. GetX raises on a missing key or a
-    // wrong stored type, GetXDef returns aDefault instead, TryGetX never
-    // raises. Conversion is strict: no boolean-to-int, no numeric strings,
-    // no float-to-int truncation
+    // typed accessors; GetX raises on missing key or wrong type, GetXDef
+    // returns aDefault, TryGetX never raises. No coercion between types.
     procedure SetInt(const aKey: string; aValue: Integer);
     function GetInt(const aKey: string): Integer;
     function GetIntDef(const aKey: string; aDefault: Integer): Integer;
@@ -294,9 +283,8 @@ function TbpStrDictionary.Remove(const aKey: string): Boolean;
 var
   lvGap, lvIndex, lvHC, lvBucket, lvLen: Integer;
 
-  // wrap-aware test whether aItem's home bucket lies in (aBottom, aTopInc],
-  // decides if an entry may slide back into the gap; nested (not unit-level)
-  // so amalgamated bundles can embed both dictionaries without a name clash
+  // wrap-aware test whether aItem's home bucket lies in (aBottom, aTopInc];
+  // nested so both dictionaries can be amalgamated without a name clash
   function InCircularRange(aBottom, aItem, aTopInc: Integer): Boolean;
   begin
     Result := ((aBottom < aItem) and (aItem <= aTopInc)) or

@@ -1,20 +1,9 @@
 unit BpIntDictionary;
 
-// Lightweight Int64-key dictionary for Delphi 7/2007 and later (no generics).
-//
-// Same engine as TbpStrDictionary (which follows Delphi XE6
-// System.Generics.Collections.TDictionary): open addressing with linear
-// probing over a single flat item array, power-of-two capacity, cached hash
-// codes (EMPTY_HASH sentinel marks free slots), growth at 75% load and
-// tombstone-free backward-shift deletion.
-// Keys are hashed with the Thomas Wang 64-bit to 32-bit integer mix, which
-// spreads sequential ids (the typical database key pattern) across buckets.
-//
-// Values are stored as Variant with the same strict typed accessors as
-// TbpStrDictionary (GetInt, TryGetInt, GetIntDef, SetInt and friends).
-//
-// Typical use: an in-memory index over a TDataSet or an id-to-data cache,
-//   lvIndex.SetInt(lvQuery.FieldByName('ID').AsInteger, lvQuery.RecNo);
+// Int64-key dictionary for Delphi 7/2007+ (no generics). Same open-addressing
+// engine as TbpStrDictionary; keys hashed with the Thomas Wang 64-bit mix,
+// which spreads sequential ids across buckets. Values are Variant, with the
+// same strict typed accessors (GetInt, TryGetInt, GetIntDef, SetInt).
 
 interface
 
@@ -44,7 +33,7 @@ type
     FCount: Integer;
     FGrowThreshold: Integer;
     // returns the slot index (>= 0) when found, otherwise the bitwise
-    // complement of the first empty slot (always negative), XE6-style
+    // complement of the first empty slot (always negative)
     function GetBucketIndex(aKey: Int64; aHashCode: Integer): Integer;
     procedure DoAdd(aHashCode, aIndex: Integer; aKey: Int64; const aValue: Variant);
     procedure Grow;
@@ -64,10 +53,8 @@ type
     procedure SetCapacity(aCapacity: Integer);
     procedure ForEach(aCallback: TbpIntDictForEach);
     function GetKeys: TbpInt64DynArray;
-    // typed accessors with validation. GetX raises on a missing key or a
-    // wrong stored type, GetXDef returns aDefault instead, TryGetX never
-    // raises. Conversion is strict: no boolean-to-int, no numeric strings,
-    // no float-to-int truncation
+    // typed accessors; GetX raises on missing key or wrong type, GetXDef
+    // returns aDefault, TryGetX never raises. No coercion between types.
     procedure SetInt(aKey: Int64; aValue: Integer);
     function GetInt(aKey: Int64): Integer;
     function GetIntDef(aKey: Int64; aDefault: Integer): Integer;
@@ -289,9 +276,8 @@ function TbpIntDictionary.Remove(aKey: Int64): Boolean;
 var
   lvGap, lvIndex, lvHC, lvBucket, lvLen: Integer;
 
-  // wrap-aware test whether aItem's home bucket lies in (aBottom, aTopInc],
-  // decides if an entry may slide back into the gap; nested (not unit-level)
-  // so amalgamated bundles can embed both dictionaries without a name clash
+  // wrap-aware test whether aItem's home bucket lies in (aBottom, aTopInc];
+  // nested so both dictionaries can be amalgamated without a name clash
   function InCircularRange(aBottom, aItem, aTopInc: Integer): Boolean;
   begin
     Result := ((aBottom < aItem) and (aItem <= aTopInc)) or

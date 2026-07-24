@@ -1,17 +1,9 @@
 unit BpSHA256;
 
-// SHA-256 per FIPS 180-4, pure Pascal, for Delphi 7/2007 and later.
-//
-// Streaming interface (Create or Init, Update in chunks, Final) so large
-// inputs such as files never need to fit in memory; class function one-shots
-// cover the common buffer/bytes/string/file cases with hex or Base64 output.
-// Update compresses full 64-byte blocks straight from the caller's buffer
-// (the partial-block copy only happens at chunk boundaries), Final resets the
-// state so an instance can be reused for the next message.
-//
-// Verified in the DUnit suite against the FIPS 180-4 known-answer vectors
-// (including the one-million-'a' streaming vector) and cross-checked against
-// Windows CryptoAPI on random data.
+// SHA-256 (FIPS 180-4), pure Pascal, for Delphi 7/2007+. Streaming (Init,
+// Update in chunks, Final) so large files need not fit in memory, plus
+// one-shot class functions for buffer/bytes/string/file, hex or Base64.
+// Final resets the state so an instance can be reused for the next message.
 
 // hash arithmetic relies on Cardinal wraparound mod 2^32
 {$Q-}
