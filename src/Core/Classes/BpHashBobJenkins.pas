@@ -37,20 +37,20 @@ type
       {$IFDEF Delphi_2007_UP} static; {$ENDIF}
   public
     constructor Create;
-    procedure Reset(AInitialValue: Integer = 0);
-    procedure Update(const AData; ALength: Cardinal); overload;
-    procedure Update(const AData: TBytes; ALength: Cardinal = 0); overload;
+    procedure Reset(aInitialValue: Integer = 0);
+    procedure Update(const aData; aLength: Cardinal); overload;
+    procedure Update(const aData: TBytes; aLength: Cardinal = 0); overload;
     procedure Update(const Input: string); overload;
     function HashAsBytes: TBytes;
     function HashAsInteger: Integer;
     function HashAsString: string;
-    class function GetHashBytes(const AData: string): TBytes;
+    class function GetHashBytes(const aData: string): TBytes;
       {$IFDEF Delphi_2007_UP} static; {$ENDIF}
-    class function GetHashString(const AString: string): string;
+    class function GetHashString(const aString: string): string;
       {$IFDEF Delphi_2007_UP} static; {$ENDIF}
-    class function GetHashValue(const AData: string): Integer; overload;
+    class function GetHashValue(const aData: string): Integer; overload;
       {$IFDEF Delphi_2007_UP} static; inline; {$ENDIF}
-    class function GetHashValue(const AData; ALength: Integer; AInitialValue: Integer = 0): Integer; overload;
+    class function GetHashValue(const aData; aLength: Integer; aInitialValue: Integer = 0): Integer; overload;
       {$IFDEF Delphi_2007_UP} static; inline; {$ENDIF}
   end;
 
@@ -93,21 +93,21 @@ begin
   FHash := 0;
 end;
 
-procedure TbpHashBobJenkins.Reset(AInitialValue: Integer = 0);
+procedure TbpHashBobJenkins.Reset(aInitialValue: Integer = 0);
 begin
-  FHash := AInitialValue;
+  FHash := aInitialValue;
 end;
 
-procedure TbpHashBobJenkins.Update(const AData; ALength: Cardinal);
+procedure TbpHashBobJenkins.Update(const aData; aLength: Cardinal);
 begin
-  FHash := HashLittle(AData, ALength, FHash);
+  FHash := HashLittle(aData, aLength, FHash);
 end;
 
-procedure TbpHashBobJenkins.Update(const AData: TBytes; ALength: Cardinal);
+procedure TbpHashBobJenkins.Update(const aData: TBytes; aLength: Cardinal);
 begin
-  if ALength = 0 then
-    ALength := Length(AData);
-  Update(Pointer(AData)^, ALength);
+  if aLength = 0 then
+    aLength := Length(aData);
+  Update(Pointer(aData)^, aLength);
 end;
 
 procedure TbpHashBobJenkins.Update(const Input: string);
@@ -130,25 +130,25 @@ begin
   Result := IntToHex(FHash, 8);
 end;
 
-class function TbpHashBobJenkins.GetHashBytes(const AData: string): TBytes;
+class function TbpHashBobJenkins.GetHashBytes(const aData: string): TBytes;
 begin
   SetLength(Result, 4);
-  PCardinal(@Result[0])^ := Cardinal(GetHashValue(AData));
+  PCardinal(@Result[0])^ := Cardinal(GetHashValue(aData));
 end;
 
-class function TbpHashBobJenkins.GetHashString(const AString: string): string;
+class function TbpHashBobJenkins.GetHashString(const aString: string): string;
 begin
-  Result := IntToHex(GetHashValue(AString), 8);
+  Result := IntToHex(GetHashValue(aString), 8);
 end;
 
-class function TbpHashBobJenkins.GetHashValue(const AData: string): Integer;
+class function TbpHashBobJenkins.GetHashValue(const aData: string): Integer;
 begin
-  Result := HashLittle(Pointer(AData)^, Length(AData) * SizeOf(Char), 0);
+  Result := HashLittle(Pointer(aData)^, Length(aData) * SizeOf(Char), 0);
 end;
 
-class function TbpHashBobJenkins.GetHashValue(const AData; ALength: Integer; AInitialValue: Integer): Integer;
+class function TbpHashBobJenkins.GetHashValue(const aData; aLength: Integer; aInitialValue: Integer): Integer;
 begin
-  Result := HashLittle(AData, ALength, AInitialValue);
+  Result := HashLittle(aData, aLength, aInitialValue);
 end;
 
 function TbpHashBobJenkins.GetDigest: TBytes;

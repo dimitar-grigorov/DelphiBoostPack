@@ -26,36 +26,36 @@ type
     FHasher: TbpSHA256;                // inner hash while streaming, outer in Final
     FInnerPad: array[0..63] of Byte;   // key xor $36
     FOuterPad: array[0..63] of Byte;   // key xor $5C
-    procedure SetKey(const AKey; AKeySize: Integer);
+    procedure SetKey(const aKey; aKeySize: Integer);
   public
-    constructor Create(const AKey; AKeySize: Integer); overload;
-    constructor Create(const AKey: AnsiString); overload;
-    constructor Create(const AKey: TBytes); overload;
+    constructor Create(const aKey; aKeySize: Integer); overload;
+    constructor Create(const aKey: AnsiString); overload;
+    constructor Create(const aKey: TBytes); overload;
     destructor Destroy; override;
-    procedure Update(const AData; ASize: Integer); overload;
-    procedure Update(const ABytes: TBytes); overload;
-    procedure Update(const AText: AnsiString); overload;
-    procedure Final(out ADigest: TbpSHA256Digest);
-    class function Compute(const AKey, AText: AnsiString): TbpSHA256Digest; overload;
-    class function Compute(const AKey, AData: TBytes): TbpSHA256Digest; overload;
-    class function ComputeHex(const AKey, AText: AnsiString): string;
-    class function ComputeBase64(const AKey, AText: AnsiString): string;
+    procedure Update(const aData; aSize: Integer); overload;
+    procedure Update(const aBytes: TBytes); overload;
+    procedure Update(const aText: AnsiString); overload;
+    procedure Final(out aDigest: TbpSHA256Digest);
+    class function Compute(const aKey, aText: AnsiString): TbpSHA256Digest; overload;
+    class function Compute(const aKey, aData: TBytes): TbpSHA256Digest; overload;
+    class function ComputeHex(const aKey, aText: AnsiString): string;
+    class function ComputeBase64(const aKey, aText: AnsiString): string;
   end;
 
 implementation
 
-procedure TbpHMACSHA256.SetKey(const AKey; AKeySize: Integer);
+procedure TbpHMACSHA256.SetKey(const aKey; aKeySize: Integer);
 var
   lvHashedKey: TbpSHA256Digest;
   lvKeyBytes: PByte;
   lvKeyLen, i: Integer;
 begin
-  lvKeyBytes := @AKey;
-  lvKeyLen := AKeySize;
+  lvKeyBytes := @aKey;
+  lvKeyLen := aKeySize;
   // a key longer than the block is replaced by its hash (RFC 2104)
   if lvKeyLen > 64 then
   begin
-    lvHashedKey := TbpSHA256.HashBuffer(AKey, AKeySize);
+    lvHashedKey := TbpSHA256.HashBuffer(aKey, aKeySize);
     lvKeyBytes := @lvHashedKey;
     lvKeyLen := SizeOf(lvHashedKey);
   end;
@@ -78,24 +78,24 @@ begin
   FHasher.Update(FInnerPad, SizeOf(FInnerPad));
 end;
 
-constructor TbpHMACSHA256.Create(const AKey; AKeySize: Integer);
+constructor TbpHMACSHA256.Create(const aKey; aKeySize: Integer);
 begin
   inherited Create;
   FHasher := TbpSHA256.Create;
-  SetKey(AKey, AKeySize);
+  SetKey(aKey, aKeySize);
 end;
 
-constructor TbpHMACSHA256.Create(const AKey: AnsiString);
+constructor TbpHMACSHA256.Create(const aKey: AnsiString);
 begin
-  Create(PAnsiChar(AKey)^, Length(AKey));
+  Create(PAnsiChar(aKey)^, Length(aKey));
 end;
 
-constructor TbpHMACSHA256.Create(const AKey: TBytes);
+constructor TbpHMACSHA256.Create(const aKey: TBytes);
 var
   lvDummy: Byte;
 begin
-  if Length(AKey) > 0 then
-    Create(AKey[0], Length(AKey))
+  if Length(aKey) > 0 then
+    Create(aKey[0], Length(aKey))
   else
   begin
     lvDummy := 0;
@@ -112,22 +112,22 @@ begin
   inherited Destroy;
 end;
 
-procedure TbpHMACSHA256.Update(const AData; ASize: Integer);
+procedure TbpHMACSHA256.Update(const aData; aSize: Integer);
 begin
-  FHasher.Update(AData, ASize);
+  FHasher.Update(aData, aSize);
 end;
 
-procedure TbpHMACSHA256.Update(const ABytes: TBytes);
+procedure TbpHMACSHA256.Update(const aBytes: TBytes);
 begin
-  FHasher.Update(ABytes);
+  FHasher.Update(aBytes);
 end;
 
-procedure TbpHMACSHA256.Update(const AText: AnsiString);
+procedure TbpHMACSHA256.Update(const aText: AnsiString);
 begin
-  FHasher.Update(AText);
+  FHasher.Update(aText);
 end;
 
-procedure TbpHMACSHA256.Final(out ADigest: TbpSHA256Digest);
+procedure TbpHMACSHA256.Final(out aDigest: TbpSHA256Digest);
 var
   lvInnerDigest: TbpSHA256Digest;
 begin
@@ -135,45 +135,45 @@ begin
   FHasher.Final(lvInnerDigest);
   FHasher.Update(FOuterPad, SizeOf(FOuterPad));
   FHasher.Update(lvInnerDigest, SizeOf(lvInnerDigest));
-  FHasher.Final(ADigest);
+  FHasher.Final(aDigest);
   // re-arm the inner hash for the next message with the same key
   FHasher.Update(FInnerPad, SizeOf(FInnerPad));
 end;
 
-class function TbpHMACSHA256.Compute(const AKey, AText: AnsiString): TbpSHA256Digest;
+class function TbpHMACSHA256.Compute(const aKey, aText: AnsiString): TbpSHA256Digest;
 var
   lvHmac: TbpHMACSHA256;
 begin
-  lvHmac := TbpHMACSHA256.Create(AKey);
+  lvHmac := TbpHMACSHA256.Create(aKey);
   try
-    lvHmac.Update(AText);
+    lvHmac.Update(aText);
     lvHmac.Final(Result);
   finally
     lvHmac.Free;
   end;
 end;
 
-class function TbpHMACSHA256.Compute(const AKey, AData: TBytes): TbpSHA256Digest;
+class function TbpHMACSHA256.Compute(const aKey, aData: TBytes): TbpSHA256Digest;
 var
   lvHmac: TbpHMACSHA256;
 begin
-  lvHmac := TbpHMACSHA256.Create(AKey);
+  lvHmac := TbpHMACSHA256.Create(aKey);
   try
-    lvHmac.Update(AData);
+    lvHmac.Update(aData);
     lvHmac.Final(Result);
   finally
     lvHmac.Free;
   end;
 end;
 
-class function TbpHMACSHA256.ComputeHex(const AKey, AText: AnsiString): string;
+class function TbpHMACSHA256.ComputeHex(const aKey, aText: AnsiString): string;
 begin
-  Result := TbpSHA256.DigestToHex(Compute(AKey, AText));
+  Result := TbpSHA256.DigestToHex(Compute(aKey, aText));
 end;
 
-class function TbpHMACSHA256.ComputeBase64(const AKey, AText: AnsiString): string;
+class function TbpHMACSHA256.ComputeBase64(const aKey, aText: AnsiString): string;
 begin
-  Result := TbpSHA256.DigestToBase64(Compute(AKey, AText));
+  Result := TbpSHA256.DigestToBase64(Compute(aKey, aText));
 end;
 
 end.

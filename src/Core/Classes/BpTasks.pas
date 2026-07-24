@@ -4,7 +4,7 @@ unit BpTasks;
 // get completion events on the creating thread, cancel cooperatively.
 // Self-contained; one thread per task, no pool.
 //
-//   FTask := BpRunAsync(DoWork, HandleDone);  // DoWork polls AToken
+//   FTask := BpRunAsync(DoWork, HandleDone);  // DoWork polls aToken
 //   FTask.Cancel;  // or FTask.Free: cancels, joins, cleans up
 
 interface
@@ -27,12 +27,12 @@ type
   TbpTaskState = (tskPending, tskRunning, tskSucceeded, tskFailed,
     tskCancelled);
 
-  // worker-thread body; poll AToken and return early to honour a cancel
-  TbpTaskWorkEvent = procedure(ASender: TObject;
-    AToken: TbpTaskToken) of object;
-  TbpTaskCompleteEvent = procedure(ASender: TObject) of object;
-  TbpTaskErrorEvent = procedure(ASender: TObject;
-    const AErrorMessage: string) of object;
+  // worker-thread body; poll aToken and return early to honour a cancel
+  TbpTaskWorkEvent = procedure(aSender: TObject;
+    aToken: TbpTaskToken) of object;
+  TbpTaskCompleteEvent = procedure(aSender: TObject) of object;
+  TbpTaskErrorEvent = procedure(aSender: TObject;
+    const aErrorMessage: string) of object;
 
   // one unit of work on an owned worker thread, C# Task style; one-shot.
   // Events fire on the creating thread (default) or the worker (Create(False)).
@@ -52,12 +52,12 @@ type
     function GetState: TbpTaskState;
     function GetErrorMessage: string;
     function GetErrorClass: string;
-    procedure WndProc(var AMessage: TMessage);
+    procedure WndProc(var aMessage: TMessage);
     procedure FireCompletionEvents;
     procedure RunWork;  // worker thread body
   public
     // create on the thread that should receive the events
-    constructor Create(AMarshalToMainThread: Boolean = True);
+    constructor Create(aMarshalToMainThread: Boolean = True);
     // cancels, joins the worker, frees everything
     destructor Destroy; override;
 
@@ -65,7 +65,7 @@ type
     procedure Start;
     // safe from any thread, also before Start
     procedure Cancel;
-    function WaitFor(ATimeoutMs: DWORD = INFINITE): Boolean;
+    function WaitFor(aTimeoutMs: DWORD = INFINITE): Boolean;
     function IsFinished: Boolean;
 
     // configure before Start
@@ -85,9 +85,9 @@ type
 
 // hot task: create, wire and start in one call; the caller frees the task
 // (a single name, no overloads: old compilers reject nil events on overloads)
-function BpRunAsync(AWork: TbpTaskWorkEvent;
-  AOnComplete: TbpTaskCompleteEvent = nil;
-  AMarshalToMainThread: Boolean = True): TbpTask;
+function BpRunAsync(aWork: TbpTaskWorkEvent;
+  aOnComplete: TbpTaskCompleteEvent = nil;
+  aMarshalToMainThread: Boolean = True): TbpTask;
 
 implementation
 
@@ -117,12 +117,12 @@ type
   protected
     procedure Execute; override;
   public
-    constructor Create(ATask: TbpTask);
+    constructor Create(aTask: TbpTask);
   end;
 
-constructor TbpTaskThread.Create(ATask: TbpTask);
+constructor TbpTaskThread.Create(aTask: TbpTask);
 begin
-  FTask := ATask;
+  FTask := aTask;
   FreeOnTerminate := False;  // the task owns and joins the thread
   inherited Create(False);
 end;
@@ -132,13 +132,13 @@ begin
   FTask.RunWork;
 end;
 
-constructor TbpTask.Create(AMarshalToMainThread: Boolean);
+constructor TbpTask.Create(aMarshalToMainThread: Boolean);
 begin
   inherited Create;
   InitializeCriticalSection(FLock);
   FToken := TbpTaskToken.Create;
   FState := tskPending;
-  FMarshalToMainThread := AMarshalToMainThread;
+  FMarshalToMainThread := aMarshalToMainThread;
   if FMarshalToMainThread then
     FWnd := Classes.AllocateHWnd(WndProc);
 end;
@@ -207,22 +207,22 @@ begin
   FToken.Cancel;
 end;
 
-function TbpTask.WaitFor(ATimeoutMs: DWORD): Boolean;
+function TbpTask.WaitFor(aTimeoutMs: DWORD): Boolean;
 begin
   if FThread = nil then
     Result := IsFinished  // never started
   else
-    Result := WaitForSingleObject(FThread.Handle, ATimeoutMs) = WAIT_OBJECT_0;
+    Result := WaitForSingleObject(FThread.Handle, aTimeoutMs) = WAIT_OBJECT_0;
 end;
 
 // main thread (marshaled mode only)
-procedure TbpTask.WndProc(var AMessage: TMessage);
+procedure TbpTask.WndProc(var aMessage: TMessage);
 begin
-  if AMessage.Msg = gcWmTaskDone then
+  if aMessage.Msg = gcWmTaskDone then
     FireCompletionEvents
   else
-    AMessage.Result := DefWindowProc(FWnd, AMessage.Msg, AMessage.WParam,
-      AMessage.LParam);
+    aMessage.Result := DefWindowProc(FWnd, aMessage.Msg, aMessage.WParam,
+      aMessage.LParam);
 end;
 
 procedure TbpTask.FireCompletionEvents;
@@ -278,13 +278,13 @@ end;
 
 { hot task factory }
 
-function BpRunAsync(AWork: TbpTaskWorkEvent;
-  AOnComplete: TbpTaskCompleteEvent; AMarshalToMainThread: Boolean): TbpTask;
+function BpRunAsync(aWork: TbpTaskWorkEvent;
+  aOnComplete: TbpTaskCompleteEvent; aMarshalToMainThread: Boolean): TbpTask;
 begin
-  Result := TbpTask.Create(AMarshalToMainThread);
+  Result := TbpTask.Create(aMarshalToMainThread);
   try
-    Result.Work := AWork;
-    Result.OnComplete := AOnComplete;
+    Result.Work := aWork;
+    Result.OnComplete := aOnComplete;
     Result.Start;
   except
     Result.Free;

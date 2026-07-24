@@ -16,14 +16,14 @@ uses
 type
   EbpBase64 = class(Exception);
 
-function Base64Encode(const AData; ASize: Integer): string; overload;
-function Base64Encode(const ABytes: TBytes): string; overload;
-function Base64Encode(const AText: AnsiString): string; overload;
-function Base64UrlEncode(const AData; ASize: Integer): string; overload;
-function Base64UrlEncode(const ABytes: TBytes): string; overload;
-function Base64UrlEncode(const AText: AnsiString): string; overload;
-function Base64Decode(const ABase64: string): TBytes;
-function Base64DecodeStr(const ABase64: string): AnsiString;
+function Base64Encode(const aData; aSize: Integer): string; overload;
+function Base64Encode(const aBytes: TBytes): string; overload;
+function Base64Encode(const aText: AnsiString): string; overload;
+function Base64UrlEncode(const aData; aSize: Integer): string; overload;
+function Base64UrlEncode(const aBytes: TBytes): string; overload;
+function Base64UrlEncode(const aText: AnsiString): string; overload;
+function Base64Decode(const aBase64: string): TBytes;
+function Base64DecodeStr(const aBase64: string): AnsiString;
 
 implementation
 
@@ -56,22 +56,22 @@ begin
   gvDecodeTable[Ord('=')] := gcPadding;
 end;
 
-function EncodeBuffer(ASource: PByte; ASize: Integer; const AAlphabet: string;
-  APadded: Boolean): string;
+function EncodeBuffer(aSource: PByte; aSize: Integer; const aAlphabet: string;
+  aPadded: Boolean): string;
 var
   lvDest: PChar;
   lvB0, lvB1, lvB2: Byte;
   lvFull, lvRest, lvOutLen, i: Integer;
 begin
   Result := '';
-  if ASize <= 0 then
+  if aSize <= 0 then
     Exit;
-  lvFull := ASize div 3;
-  lvRest := ASize mod 3;
+  lvFull := aSize div 3;
+  lvRest := aSize mod 3;
   lvOutLen := lvFull * 4;
   if lvRest > 0 then
   begin
-    if APadded then
+    if aPadded then
       Inc(lvOutLen, 4)
     else
       Inc(lvOutLen, lvRest + 1);
@@ -80,21 +80,21 @@ begin
   lvDest := Pointer(Result);
   for i := 1 to lvFull do
   begin
-    lvB0 := ASource^; Inc(ASource);
-    lvB1 := ASource^; Inc(ASource);
-    lvB2 := ASource^; Inc(ASource);
-    lvDest[0] := AAlphabet[(lvB0 shr 2) + 1];
-    lvDest[1] := AAlphabet[(((lvB0 and $03) shl 4) or (lvB1 shr 4)) + 1];
-    lvDest[2] := AAlphabet[(((lvB1 and $0F) shl 2) or (lvB2 shr 6)) + 1];
-    lvDest[3] := AAlphabet[(lvB2 and $3F) + 1];
+    lvB0 := aSource^; Inc(aSource);
+    lvB1 := aSource^; Inc(aSource);
+    lvB2 := aSource^; Inc(aSource);
+    lvDest[0] := aAlphabet[(lvB0 shr 2) + 1];
+    lvDest[1] := aAlphabet[(((lvB0 and $03) shl 4) or (lvB1 shr 4)) + 1];
+    lvDest[2] := aAlphabet[(((lvB1 and $0F) shl 2) or (lvB2 shr 6)) + 1];
+    lvDest[3] := aAlphabet[(lvB2 and $3F) + 1];
     Inc(lvDest, 4);
   end;
   if lvRest = 1 then
   begin
-    lvB0 := ASource^;
-    lvDest[0] := AAlphabet[(lvB0 shr 2) + 1];
-    lvDest[1] := AAlphabet[((lvB0 and $03) shl 4) + 1];
-    if APadded then
+    lvB0 := aSource^;
+    lvDest[0] := aAlphabet[(lvB0 shr 2) + 1];
+    lvDest[1] := aAlphabet[((lvB0 and $03) shl 4) + 1];
+    if aPadded then
     begin
       lvDest[2] := '=';
       lvDest[3] := '=';
@@ -102,59 +102,59 @@ begin
   end
   else if lvRest = 2 then
   begin
-    lvB0 := ASource^; Inc(ASource);
-    lvB1 := ASource^;
-    lvDest[0] := AAlphabet[(lvB0 shr 2) + 1];
-    lvDest[1] := AAlphabet[(((lvB0 and $03) shl 4) or (lvB1 shr 4)) + 1];
-    lvDest[2] := AAlphabet[((lvB1 and $0F) shl 2) + 1];
-    if APadded then
+    lvB0 := aSource^; Inc(aSource);
+    lvB1 := aSource^;
+    lvDest[0] := aAlphabet[(lvB0 shr 2) + 1];
+    lvDest[1] := aAlphabet[(((lvB0 and $03) shl 4) or (lvB1 shr 4)) + 1];
+    lvDest[2] := aAlphabet[((lvB1 and $0F) shl 2) + 1];
+    if aPadded then
       lvDest[3] := '=';
   end;
 end;
 
-function Base64Encode(const AData; ASize: Integer): string;
+function Base64Encode(const aData; aSize: Integer): string;
 begin
-  Result := EncodeBuffer(PByte(@AData), ASize, gcBase64Chars, True);
+  Result := EncodeBuffer(PByte(@aData), aSize, gcBase64Chars, True);
 end;
 
-function Base64Encode(const ABytes: TBytes): string;
+function Base64Encode(const aBytes: TBytes): string;
 begin
-  if Length(ABytes) = 0 then
+  if Length(aBytes) = 0 then
     Result := ''
   else
-    Result := EncodeBuffer(@ABytes[0], Length(ABytes), gcBase64Chars, True);
+    Result := EncodeBuffer(@aBytes[0], Length(aBytes), gcBase64Chars, True);
 end;
 
-function Base64Encode(const AText: AnsiString): string;
+function Base64Encode(const aText: AnsiString): string;
 begin
-  if AText = '' then
+  if aText = '' then
     Result := ''
   else
-    Result := EncodeBuffer(Pointer(AText), Length(AText), gcBase64Chars, True);
+    Result := EncodeBuffer(Pointer(aText), Length(aText), gcBase64Chars, True);
 end;
 
-function Base64UrlEncode(const AData; ASize: Integer): string;
+function Base64UrlEncode(const aData; aSize: Integer): string;
 begin
-  Result := EncodeBuffer(PByte(@AData), ASize, gcBase64UrlChars, False);
+  Result := EncodeBuffer(PByte(@aData), aSize, gcBase64UrlChars, False);
 end;
 
-function Base64UrlEncode(const ABytes: TBytes): string;
+function Base64UrlEncode(const aBytes: TBytes): string;
 begin
-  if Length(ABytes) = 0 then
+  if Length(aBytes) = 0 then
     Result := ''
   else
-    Result := EncodeBuffer(@ABytes[0], Length(ABytes), gcBase64UrlChars, False);
+    Result := EncodeBuffer(@aBytes[0], Length(aBytes), gcBase64UrlChars, False);
 end;
 
-function Base64UrlEncode(const AText: AnsiString): string;
+function Base64UrlEncode(const aText: AnsiString): string;
 begin
-  if AText = '' then
+  if aText = '' then
     Result := ''
   else
-    Result := EncodeBuffer(Pointer(AText), Length(AText), gcBase64UrlChars, False);
+    Result := EncodeBuffer(Pointer(aText), Length(aText), gcBase64UrlChars, False);
 end;
 
-function Base64Decode(const ABase64: string): TBytes;
+function Base64Decode(const aBase64: string): TBytes;
 var
   lvLen, lvOutPos, lvAccum, lvGroup, i: Integer;
   lvCode: ShortInt;
@@ -162,7 +162,7 @@ var
   lvSeenPad: Boolean;
 begin
   Result := nil;
-  lvLen := Length(ABase64);
+  lvLen := Length(aBase64);
   if lvLen = 0 then
     Exit;
   // upper bound, trimmed to the real size at the end
@@ -173,7 +173,7 @@ begin
   lvSeenPad := False;
   for i := 1 to lvLen do
   begin
-    lvCh := ABase64[i];
+    lvCh := aBase64[i];
     {$IF SizeOf(Char) > 1}
     if Ord(lvCh) > 255 then
       raise EbpBase64.CreateFmt('Invalid Base64 character at position %d', [i]);
@@ -220,12 +220,12 @@ begin
   SetLength(Result, lvOutPos);
 end;
 
-function Base64DecodeStr(const ABase64: string): AnsiString;
+function Base64DecodeStr(const aBase64: string): AnsiString;
 var
   lvBytes: TBytes;
 begin
   Result := '';
-  lvBytes := Base64Decode(ABase64);
+  lvBytes := Base64Decode(aBase64);
   if Length(lvBytes) = 0 then
     Exit;
   SetLength(Result, Length(lvBytes));

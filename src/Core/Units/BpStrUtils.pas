@@ -29,41 +29,41 @@ uses
 type
   TbpStringArray = array of string;
 
-function Split(const AText: string; ADelimiter: Char): TbpStringArray; overload;
-function Split(const AText, ADelimiter: string): TbpStringArray; overload;
-function Join(const AValues: array of string; const ASeparator: string): string;
-function FastStringReplace(const AText, AOldPattern, ANewPattern: string;
-  AFlags: TReplaceFlags): string;
-function StartsWith(const AText, APrefix: string): Boolean;
-function EndsWith(const AText, ASuffix: string): Boolean;
-function StartsWithText(const AText, APrefix: string): Boolean;
-function EndsWithText(const AText, ASuffix: string): Boolean;
+function Split(const aText: string; aDelimiter: Char): TbpStringArray; overload;
+function Split(const aText, aDelimiter: string): TbpStringArray; overload;
+function Join(const aValues: array of string; const aSeparator: string): string;
+function FastStringReplace(const aText, aOldPattern, aNewPattern: string;
+  aFlags: TReplaceFlags): string;
+function StartsWith(const aText, aPrefix: string): Boolean;
+function EndsWith(const aText, aSuffix: string): Boolean;
+function StartsWithText(const aText, aPrefix: string): Boolean;
+function EndsWithText(const aText, aSuffix: string): Boolean;
 
 implementation
 
 uses
   Windows, StrUtils;
 
-function Split(const AText: string; ADelimiter: Char): TbpStringArray;
+function Split(const aText: string; aDelimiter: Char): TbpStringArray;
 var
   lvSource: PChar;
   lvTextLen, lvCount, lvIndex, lvStart, lvPos: Integer;
 begin
   Result := nil;
-  lvTextLen := Length(AText);
+  lvTextLen := Length(aText);
   if lvTextLen = 0 then
     Exit;
   // count delimiters so the result array is allocated exactly once
-  lvSource := Pointer(AText);
+  lvSource := Pointer(aText);
   lvCount := 0;
   for lvPos := 0 to lvTextLen - 1 do
-    if lvSource[lvPos] = ADelimiter then
+    if lvSource[lvPos] = aDelimiter then
       Inc(lvCount);
   SetLength(Result, lvCount + 1);
   lvIndex := 0;
   lvStart := 0;
   for lvPos := 0 to lvTextLen - 1 do
-    if lvSource[lvPos] = ADelimiter then
+    if lvSource[lvPos] = aDelimiter then
     begin
       SetString(Result[lvIndex], lvSource + lvStart, lvPos - lvStart);
       Inc(lvIndex);
@@ -72,74 +72,74 @@ begin
   SetString(Result[lvIndex], lvSource + lvStart, lvTextLen - lvStart);
 end;
 
-function Split(const AText, ADelimiter: string): TbpStringArray;
+function Split(const aText, aDelimiter: string): TbpStringArray;
 var
   lvDelimLen, lvCount, lvStart, lvFound: Integer;
 begin
   Result := nil;
-  if AText = '' then
+  if aText = '' then
     Exit;
-  lvDelimLen := Length(ADelimiter);
+  lvDelimLen := Length(aDelimiter);
   if lvDelimLen = 0 then
   begin
     SetLength(Result, 1);
-    Result[0] := AText;
+    Result[0] := aText;
     Exit;
   end;
   SetLength(Result, 8);
   lvCount := 0;
   lvStart := 1;
-  lvFound := PosEx(ADelimiter, AText, 1);
+  lvFound := PosEx(aDelimiter, aText, 1);
   while lvFound > 0 do
   begin
     if lvCount = Length(Result) then
       SetLength(Result, lvCount * 2);
-    Result[lvCount] := Copy(AText, lvStart, lvFound - lvStart);
+    Result[lvCount] := Copy(aText, lvStart, lvFound - lvStart);
     Inc(lvCount);
     lvStart := lvFound + lvDelimLen;
-    lvFound := PosEx(ADelimiter, AText, lvStart);
+    lvFound := PosEx(aDelimiter, aText, lvStart);
   end;
   if lvCount = Length(Result) then
     SetLength(Result, lvCount + 1);
-  Result[lvCount] := Copy(AText, lvStart, Length(AText) - lvStart + 1);
+  Result[lvCount] := Copy(aText, lvStart, Length(aText) - lvStart + 1);
   SetLength(Result, lvCount + 1);
 end;
 
-function Join(const AValues: array of string; const ASeparator: string): string;
+function Join(const aValues: array of string; const aSeparator: string): string;
 var
   lvTotal, lvSepLen, lvItemLen, i: Integer;
   lvDest: PChar;
 begin
   Result := '';
-  if Length(AValues) = 0 then
+  if Length(aValues) = 0 then
     Exit;
-  lvSepLen := Length(ASeparator);
-  lvTotal := lvSepLen * (Length(AValues) - 1);
-  for i := 0 to High(AValues) do
-    Inc(lvTotal, Length(AValues[i]));
+  lvSepLen := Length(aSeparator);
+  lvTotal := lvSepLen * (Length(aValues) - 1);
+  for i := 0 to High(aValues) do
+    Inc(lvTotal, Length(aValues[i]));
   if lvTotal = 0 then
     Exit;
   // exact size known upfront, build with a single allocation
   SetLength(Result, lvTotal);
   lvDest := Pointer(Result);
-  for i := 0 to High(AValues) do
+  for i := 0 to High(aValues) do
   begin
     if (i > 0) and (lvSepLen > 0) then
     begin
-      Move(Pointer(ASeparator)^, lvDest^, lvSepLen * SizeOf(Char));
+      Move(Pointer(aSeparator)^, lvDest^, lvSepLen * SizeOf(Char));
       Inc(lvDest, lvSepLen);
     end;
-    lvItemLen := Length(AValues[i]);
+    lvItemLen := Length(aValues[i]);
     if lvItemLen > 0 then
     begin
-      Move(Pointer(AValues[i])^, lvDest^, lvItemLen * SizeOf(Char));
+      Move(Pointer(aValues[i])^, lvDest^, lvItemLen * SizeOf(Char));
       Inc(lvDest, lvItemLen);
     end;
   end;
 end;
 
-function FastStringReplace(const AText, AOldPattern, ANewPattern: string;
-  AFlags: TReplaceFlags): string;
+function FastStringReplace(const aText, aOldPattern, aNewPattern: string;
+  aFlags: TReplaceFlags): string;
 var
   lvTextLen, lvOldLen, lvNewLen: Integer;
   lvSearchText, lvSearchPattern: string;
@@ -149,31 +149,31 @@ var
   lvSource, lvDest: PChar;
   lvStart, lvGap, i: Integer;
 begin
-  lvTextLen := Length(AText);
-  lvOldLen := Length(AOldPattern);
-  lvNewLen := Length(ANewPattern);
+  lvTextLen := Length(aText);
+  lvOldLen := Length(aOldPattern);
+  lvNewLen := Length(aNewPattern);
   if (lvOldLen = 0) or (lvTextLen < lvOldLen) then
   begin
-    Result := AText;
+    Result := aText;
     Exit;
   end;
-  if rfIgnoreCase in AFlags then
+  if rfIgnoreCase in aFlags then
   begin
     // fold once; CharUpperBuff keeps the length, so folded positions map 1:1
-    lvSearchText := AnsiUpperCase(AText);
-    lvSearchPattern := AnsiUpperCase(AOldPattern);
+    lvSearchText := AnsiUpperCase(aText);
+    lvSearchPattern := AnsiUpperCase(aOldPattern);
   end
   else
   begin
-    lvSearchText := AText;
-    lvSearchPattern := AOldPattern;
+    lvSearchText := aText;
+    lvSearchPattern := aOldPattern;
   end;
   // single char to single char replace-all: copy once and patch in place
-  if (lvOldLen = 1) and (lvNewLen = 1) and (rfReplaceAll in AFlags) then
+  if (lvOldLen = 1) and (lvNewLen = 1) and (rfReplaceAll in aFlags) then
   begin
-    SetString(Result, PChar(AText), lvTextLen);
+    SetString(Result, PChar(aText), lvTextLen);
     lvOldChar := lvSearchPattern[1];
-    lvNewChar := ANewPattern[1];
+    lvNewChar := aNewPattern[1];
     lvSource := Pointer(lvSearchText);
     lvDest := Pointer(Result);
     for i := 0 to lvTextLen - 1 do
@@ -195,17 +195,17 @@ begin
     end;
     lvMatches[lvMatchCount] := lvFound;
     Inc(lvMatchCount);
-    if not (rfReplaceAll in AFlags) then
+    if not (rfReplaceAll in aFlags) then
       Break;
     lvFound := PosEx(lvSearchPattern, lvSearchText, lvFound + lvOldLen);
   end;
   if lvMatchCount = 0 then
   begin
-    Result := AText;
+    Result := aText;
     Exit;
   end;
   SetLength(Result, lvTextLen + lvMatchCount * (lvNewLen - lvOldLen));
-  lvSource := Pointer(AText);
+  lvSource := Pointer(aText);
   lvDest := Pointer(Result);
   lvStart := 1;
   for i := 0 to lvMatchCount - 1 do
@@ -219,7 +219,7 @@ begin
     Inc(lvSource, lvGap + lvOldLen);
     if lvNewLen > 0 then
     begin
-      Move(Pointer(ANewPattern)^, lvDest^, lvNewLen * SizeOf(Char));
+      Move(Pointer(aNewPattern)^, lvDest^, lvNewLen * SizeOf(Char));
       Inc(lvDest, lvNewLen);
     end;
     lvStart := lvMatches[i] + lvOldLen;
@@ -230,54 +230,54 @@ begin
     Move(lvSource^, lvDest^, lvGap * SizeOf(Char));
 end;
 
-function StartsWith(const AText, APrefix: string): Boolean;
+function StartsWith(const aText, aPrefix: string): Boolean;
 var
   lvPrefixLen: Integer;
 begin
-  lvPrefixLen := Length(APrefix);
-  Result := (lvPrefixLen <= Length(AText)) and ((lvPrefixLen = 0) or
-    CompareMem(Pointer(AText), Pointer(APrefix), lvPrefixLen * SizeOf(Char)));
+  lvPrefixLen := Length(aPrefix);
+  Result := (lvPrefixLen <= Length(aText)) and ((lvPrefixLen = 0) or
+    CompareMem(Pointer(aText), Pointer(aPrefix), lvPrefixLen * SizeOf(Char)));
 end;
 
-function EndsWith(const AText, ASuffix: string): Boolean;
+function EndsWith(const aText, aSuffix: string): Boolean;
 var
   lvSuffixLen, lvTextLen: Integer;
 begin
-  lvSuffixLen := Length(ASuffix);
-  lvTextLen := Length(AText);
+  lvSuffixLen := Length(aSuffix);
+  lvTextLen := Length(aText);
   Result := (lvSuffixLen <= lvTextLen) and ((lvSuffixLen = 0) or
-    CompareMem(PChar(Pointer(AText)) + lvTextLen - lvSuffixLen,
-      Pointer(ASuffix), lvSuffixLen * SizeOf(Char)));
+    CompareMem(PChar(Pointer(aText)) + lvTextLen - lvSuffixLen,
+      Pointer(aSuffix), lvSuffixLen * SizeOf(Char)));
 end;
 
-function StartsWithText(const AText, APrefix: string): Boolean;
+function StartsWithText(const aText, aPrefix: string): Boolean;
 var
   lvPrefixLen: Integer;
 begin
-  lvPrefixLen := Length(APrefix);
+  lvPrefixLen := Length(aPrefix);
   if lvPrefixLen = 0 then
     Result := True
-  else if lvPrefixLen > Length(AText) then
+  else if lvPrefixLen > Length(aText) then
     Result := False
   else
     Result := CompareString(LOCALE_USER_DEFAULT, NORM_IGNORECASE,
-      Pointer(AText), lvPrefixLen, Pointer(APrefix), lvPrefixLen) = CSTR_EQUAL;
+      Pointer(aText), lvPrefixLen, Pointer(aPrefix), lvPrefixLen) = CSTR_EQUAL;
 end;
 
-function EndsWithText(const AText, ASuffix: string): Boolean;
+function EndsWithText(const aText, aSuffix: string): Boolean;
 var
   lvSuffixLen, lvTextLen: Integer;
 begin
-  lvSuffixLen := Length(ASuffix);
-  lvTextLen := Length(AText);
+  lvSuffixLen := Length(aSuffix);
+  lvTextLen := Length(aText);
   if lvSuffixLen = 0 then
     Result := True
   else if lvSuffixLen > lvTextLen then
     Result := False
   else
     Result := CompareString(LOCALE_USER_DEFAULT, NORM_IGNORECASE,
-      PChar(Pointer(AText)) + lvTextLen - lvSuffixLen, lvSuffixLen,
-      Pointer(ASuffix), lvSuffixLen) = CSTR_EQUAL;
+      PChar(Pointer(aText)) + lvTextLen - lvSuffixLen, lvSuffixLen,
+      Pointer(aSuffix), lvSuffixLen) = CSTR_EQUAL;
 end;
 
 end.

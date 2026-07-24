@@ -30,35 +30,35 @@ type
     FBuffer: string;  // raw storage, logical content is the first FLength chars
     FData: PChar;     // cached Pointer(FBuffer), refreshed on every reallocation
     FLength: Integer;
-    procedure Grow(AMinCapacity: Integer);
-    procedure AppendBuffer(ASource: PChar; ACount: Integer);
+    procedure Grow(aMinCapacity: Integer);
+    procedure AppendBuffer(aSource: PChar; aCount: Integer);
     function GetCapacity: Integer;
-    procedure SetCapacity(AValue: Integer);
-    function GetChar(AIndex: Integer): Char;
-    procedure SetChar(AIndex: Integer; AValue: Char);
-    procedure SetLength(AValue: Integer);
+    procedure SetCapacity(aValue: Integer);
+    function GetChar(aIndex: Integer): Char;
+    procedure SetChar(aIndex: Integer; aValue: Char);
+    procedure SetLength(aValue: Integer);
   public
     constructor Create; overload;
-    constructor Create(ACapacity: Integer); overload;
-    constructor Create(const AValue: string); overload;
+    constructor Create(aCapacity: Integer); overload;
+    constructor Create(const aValue: string); overload;
     // all Append overloads return Self so calls can be chained
-    function Append(const AValue: string): TbpStringBuilder; overload;
-    function Append(AValue: Char): TbpStringBuilder; overload;
-    function Append(AValue: Char; ARepeatCount: Integer): TbpStringBuilder; overload;
-    function Append(AValue: Integer): TbpStringBuilder; overload;
-    function Append(AValue: Int64): TbpStringBuilder; overload;
-    function Append(AValue: Double): TbpStringBuilder; overload;
-    function Append(AValue: Boolean): TbpStringBuilder; overload;
+    function Append(const aValue: string): TbpStringBuilder; overload;
+    function Append(aValue: Char): TbpStringBuilder; overload;
+    function Append(aValue: Char; aRepeatCount: Integer): TbpStringBuilder; overload;
+    function Append(aValue: Integer): TbpStringBuilder; overload;
+    function Append(aValue: Int64): TbpStringBuilder; overload;
+    function Append(aValue: Double): TbpStringBuilder; overload;
+    function Append(aValue: Boolean): TbpStringBuilder; overload;
     function AppendLine: TbpStringBuilder; overload;
-    function AppendLine(const AValue: string): TbpStringBuilder; overload;
-    function AppendFormat(const AFormat: string; const AArgs: array of const): TbpStringBuilder;
-    function Insert(AIndex: Integer; const AValue: string): TbpStringBuilder;
+    function AppendLine(const aValue: string): TbpStringBuilder; overload;
+    function AppendFormat(const aFormat: string; const aArgs: array of const): TbpStringBuilder;
+    function Insert(aIndex: Integer; const aValue: string): TbpStringBuilder;
     procedure Clear;
     function ToString: string; {$IF CompilerVersion >= 20.0} override; {$IFEND}
     // Length is writable: shrinking truncates, extending pads with #0
     property Length: Integer read FLength write SetLength;
     property Capacity: Integer read GetCapacity write SetCapacity;
-    property Chars[AIndex: Integer]: Char read GetChar write SetChar; default;
+    property Chars[aIndex: Integer]: Char read GetChar write SetChar; default;
   end;
 
 implementation
@@ -74,95 +74,95 @@ begin
   // no allocation here, the first append grows to gcDefaultCapacity
 end;
 
-constructor TbpStringBuilder.Create(ACapacity: Integer);
+constructor TbpStringBuilder.Create(aCapacity: Integer);
 begin
   inherited Create;
-  if ACapacity < 0 then
-    raise EbpStringBuilder.CreateFmt('Capacity cannot be negative (%d)', [ACapacity]);
-  if ACapacity > 0 then
-    SetCapacity(ACapacity);
+  if aCapacity < 0 then
+    raise EbpStringBuilder.CreateFmt('Capacity cannot be negative (%d)', [aCapacity]);
+  if aCapacity > 0 then
+    SetCapacity(aCapacity);
 end;
 
-constructor TbpStringBuilder.Create(const AValue: string);
+constructor TbpStringBuilder.Create(const aValue: string);
 begin
   inherited Create;
-  Append(AValue);
+  Append(aValue);
 end;
 
-procedure TbpStringBuilder.Grow(AMinCapacity: Integer);
+procedure TbpStringBuilder.Grow(aMinCapacity: Integer);
 var
   lvNewCapacity: Integer;
 begin
   lvNewCapacity := System.Length(FBuffer) * 2;
   if lvNewCapacity < gcDefaultCapacity then
     lvNewCapacity := gcDefaultCapacity;
-  if lvNewCapacity < AMinCapacity then
-    lvNewCapacity := AMinCapacity;
+  if lvNewCapacity < aMinCapacity then
+    lvNewCapacity := aMinCapacity;
   System.SetLength(FBuffer, lvNewCapacity);
   FData := Pointer(FBuffer);
 end;
 
-procedure TbpStringBuilder.AppendBuffer(ASource: PChar; ACount: Integer);
+procedure TbpStringBuilder.AppendBuffer(aSource: PChar; aCount: Integer);
 begin
-  if ACount <= 0 then
+  if aCount <= 0 then
     Exit;
-  if FLength + ACount > System.Length(FBuffer) then
-    Grow(FLength + ACount);
-  Move(ASource^, FData[FLength], ACount * SizeOf(Char));
-  Inc(FLength, ACount);
+  if FLength + aCount > System.Length(FBuffer) then
+    Grow(FLength + aCount);
+  Move(aSource^, FData[FLength], aCount * SizeOf(Char));
+  Inc(FLength, aCount);
 end;
 
-function TbpStringBuilder.Append(const AValue: string): TbpStringBuilder;
+function TbpStringBuilder.Append(const aValue: string): TbpStringBuilder;
 begin
-  AppendBuffer(Pointer(AValue), System.Length(AValue));
+  AppendBuffer(Pointer(aValue), System.Length(aValue));
   Result := Self;
 end;
 
-function TbpStringBuilder.Append(AValue: Char): TbpStringBuilder;
+function TbpStringBuilder.Append(aValue: Char): TbpStringBuilder;
 begin
   // single char fast path, direct store instead of a Move
   if FLength >= System.Length(FBuffer) then
     Grow(FLength + 1);
-  FData[FLength] := AValue;
+  FData[FLength] := aValue;
   Inc(FLength);
   Result := Self;
 end;
 
-function TbpStringBuilder.Append(AValue: Char; ARepeatCount: Integer): TbpStringBuilder;
+function TbpStringBuilder.Append(aValue: Char; aRepeatCount: Integer): TbpStringBuilder;
 var
   i: Integer;
 begin
-  if ARepeatCount < 0 then
-    raise EbpStringBuilder.CreateFmt('RepeatCount cannot be negative (%d)', [ARepeatCount]);
-  if ARepeatCount > 0 then
+  if aRepeatCount < 0 then
+    raise EbpStringBuilder.CreateFmt('RepeatCount cannot be negative (%d)', [aRepeatCount]);
+  if aRepeatCount > 0 then
   begin
-    if FLength + ARepeatCount > System.Length(FBuffer) then
-      Grow(FLength + ARepeatCount);
-    for i := 0 to ARepeatCount - 1 do
-      FData[FLength + i] := AValue;
-    Inc(FLength, ARepeatCount);
+    if FLength + aRepeatCount > System.Length(FBuffer) then
+      Grow(FLength + aRepeatCount);
+    for i := 0 to aRepeatCount - 1 do
+      FData[FLength + i] := aValue;
+    Inc(FLength, aRepeatCount);
   end;
   Result := Self;
 end;
 
-function TbpStringBuilder.Append(AValue: Integer): TbpStringBuilder;
+function TbpStringBuilder.Append(aValue: Integer): TbpStringBuilder;
 var
   lvBuf: array[0..11] of Char;
   lvPos: Integer;
   lvRemaining: Cardinal;
 begin
   // digits are written backward from the end of the stack buffer, no allocation
-  if AValue < 0 then
-    lvRemaining := Cardinal(-Int64(AValue)) // Int64 negation, -Low(Integer) overflows Integer
+  if aValue < 0 then
+    lvRemaining := Cardinal(-Int64(aValue)) // Int64 negation, -Low(Integer) overflows Integer
   else
-    lvRemaining := Cardinal(AValue);
+    lvRemaining := Cardinal(aValue);
   lvPos := High(lvBuf) + 1;
   repeat
     Dec(lvPos);
     lvBuf[lvPos] := Char(Ord('0') + lvRemaining mod 10);
     lvRemaining := lvRemaining div 10;
   until lvRemaining = 0;
-  if AValue < 0 then
+  if aValue < 0 then
   begin
     Dec(lvPos);
     lvBuf[lvPos] := '-';
@@ -171,18 +171,18 @@ begin
   Result := Self;
 end;
 
-function TbpStringBuilder.Append(AValue: Int64): TbpStringBuilder;
+function TbpStringBuilder.Append(aValue: Int64): TbpStringBuilder;
 var
   lvBuf: array[0..19] of Char;
   lvPos: Integer;
   lvRemaining: Int64;
 begin
-  if AValue = Low(Int64) then
+  if aValue = Low(Int64) then
   begin
     Result := Append(gcMinInt64Text);
     Exit;
   end;
-  lvRemaining := AValue;
+  lvRemaining := aValue;
   if lvRemaining < 0 then
     lvRemaining := -lvRemaining;
   lvPos := High(lvBuf) + 1;
@@ -191,7 +191,7 @@ begin
     lvBuf[lvPos] := Char(Ord('0') + lvRemaining mod 10);
     lvRemaining := lvRemaining div 10;
   until lvRemaining = 0;
-  if AValue < 0 then
+  if aValue < 0 then
   begin
     Dec(lvPos);
     lvBuf[lvPos] := '-';
@@ -200,14 +200,14 @@ begin
   Result := Self;
 end;
 
-function TbpStringBuilder.Append(AValue: Double): TbpStringBuilder;
+function TbpStringBuilder.Append(aValue: Double): TbpStringBuilder;
 begin
-  Result := Append(FloatToStr(AValue));
+  Result := Append(FloatToStr(aValue));
 end;
 
-function TbpStringBuilder.Append(AValue: Boolean): TbpStringBuilder;
+function TbpStringBuilder.Append(aValue: Boolean): TbpStringBuilder;
 begin
-  if AValue then
+  if aValue then
     Result := Append('True')
   else
     Result := Append('False');
@@ -218,33 +218,33 @@ begin
   Result := Append(sLineBreak);
 end;
 
-function TbpStringBuilder.AppendLine(const AValue: string): TbpStringBuilder;
+function TbpStringBuilder.AppendLine(const aValue: string): TbpStringBuilder;
 begin
-  Append(AValue);
+  Append(aValue);
   Result := Append(sLineBreak);
 end;
 
-function TbpStringBuilder.AppendFormat(const AFormat: string;
-  const AArgs: array of const): TbpStringBuilder;
+function TbpStringBuilder.AppendFormat(const aFormat: string;
+  const aArgs: array of const): TbpStringBuilder;
 begin
-  Result := Append(Format(AFormat, AArgs));
+  Result := Append(Format(aFormat, aArgs));
 end;
 
-function TbpStringBuilder.Insert(AIndex: Integer; const AValue: string): TbpStringBuilder;
+function TbpStringBuilder.Insert(aIndex: Integer; const aValue: string): TbpStringBuilder;
 var
   lvLen: Integer;
 begin
-  if (AIndex < 0) or (AIndex > FLength) then
+  if (aIndex < 0) or (aIndex > FLength) then
     raise EbpStringBuilder.CreateFmt('Insert index %d out of bounds (0..%d)',
-      [AIndex, FLength]);
-  lvLen := System.Length(AValue);
+      [aIndex, FLength]);
+  lvLen := System.Length(aValue);
   if lvLen > 0 then
   begin
     if FLength + lvLen > System.Length(FBuffer) then
       Grow(FLength + lvLen);
-    if AIndex < FLength then
-      Move(FData[AIndex], FData[AIndex + lvLen], (FLength - AIndex) * SizeOf(Char));
-    Move(Pointer(AValue)^, FData[AIndex], lvLen * SizeOf(Char));
+    if aIndex < FLength then
+      Move(FData[aIndex], FData[aIndex + lvLen], (FLength - aIndex) * SizeOf(Char));
+    Move(Pointer(aValue)^, FData[aIndex], lvLen * SizeOf(Char));
     Inc(FLength, lvLen);
   end;
   Result := Self;
@@ -266,43 +266,43 @@ begin
   Result := System.Length(FBuffer);
 end;
 
-procedure TbpStringBuilder.SetCapacity(AValue: Integer);
+procedure TbpStringBuilder.SetCapacity(aValue: Integer);
 begin
-  if (AValue < 0) or (AValue < FLength) then
+  if (aValue < 0) or (aValue < FLength) then
     raise EbpStringBuilder.CreateFmt('Capacity %d is invalid (current length %d)',
-      [AValue, FLength]);
-  System.SetLength(FBuffer, AValue);
+      [aValue, FLength]);
+  System.SetLength(FBuffer, aValue);
   FData := Pointer(FBuffer);
 end;
 
-function TbpStringBuilder.GetChar(AIndex: Integer): Char;
+function TbpStringBuilder.GetChar(aIndex: Integer): Char;
 begin
-  if (AIndex < 0) or (AIndex >= FLength) then
+  if (aIndex < 0) or (aIndex >= FLength) then
     raise EbpStringBuilder.CreateFmt('Index %d out of bounds (0..%d)',
-      [AIndex, FLength - 1]);
-  Result := FData[AIndex];
+      [aIndex, FLength - 1]);
+  Result := FData[aIndex];
 end;
 
-procedure TbpStringBuilder.SetChar(AIndex: Integer; AValue: Char);
+procedure TbpStringBuilder.SetChar(aIndex: Integer; aValue: Char);
 begin
-  if (AIndex < 0) or (AIndex >= FLength) then
+  if (aIndex < 0) or (aIndex >= FLength) then
     raise EbpStringBuilder.CreateFmt('Index %d out of bounds (0..%d)',
-      [AIndex, FLength - 1]);
-  FData[AIndex] := AValue;
+      [aIndex, FLength - 1]);
+  FData[aIndex] := aValue;
 end;
 
-procedure TbpStringBuilder.SetLength(AValue: Integer);
+procedure TbpStringBuilder.SetLength(aValue: Integer);
 var
   i: Integer;
 begin
-  if AValue < 0 then
-    raise EbpStringBuilder.CreateFmt('Length cannot be negative (%d)', [AValue]);
-  if AValue > System.Length(FBuffer) then
-    Grow(AValue);
+  if aValue < 0 then
+    raise EbpStringBuilder.CreateFmt('Length cannot be negative (%d)', [aValue]);
+  if aValue > System.Length(FBuffer) then
+    Grow(aValue);
   // extending pads with #0 so the new region is deterministic
-  for i := FLength to AValue - 1 do
+  for i := FLength to aValue - 1 do
     FData[i] := #0;
-  FLength := AValue;
+  FLength := aValue;
 end;
 
 end.

@@ -15,12 +15,12 @@ uses
 type
   TbpIntegerDynArray = array of Integer;
 
-function BpTryVarToInt(const AValue: Variant; out AResult: Integer): Boolean;
-function BpTryVarToInt64(const AValue: Variant; out AResult: Int64): Boolean;
-function BpTryVarToStr(const AValue: Variant; out AResult: string): Boolean;
-function BpTryVarToBool(const AValue: Variant; out AResult: Boolean): Boolean;
-function BpTryVarToFloat(const AValue: Variant; out AResult: Double): Boolean;
-function BpTryVarToIntArray(const AValue: Variant; out AResult: TbpIntegerDynArray): Boolean;
+function BpTryVarToInt(const aValue: Variant; out aResult: Integer): Boolean;
+function BpTryVarToInt64(const aValue: Variant; out aResult: Int64): Boolean;
+function BpTryVarToStr(const aValue: Variant; out aResult: string): Boolean;
+function BpTryVarToBool(const aValue: Variant; out aResult: Boolean): Boolean;
+function BpTryVarToFloat(const aValue: Variant; out aResult: Double): Boolean;
+function BpTryVarToIntArray(const aValue: Variant; out aResult: TbpIntegerDynArray): Boolean;
 
 implementation
 
@@ -32,86 +32,86 @@ const
 const
   gcVarWord64 = $0015; // UInt64 variant type (varWord64/varUInt64, missing in D2007)
 
-function BpTryVarToInt64(const AValue: Variant; out AResult: Int64): Boolean;
+function BpTryVarToInt64(const aValue: Variant; out aResult: Int64): Boolean;
 begin
-  case VarType(AValue) of
+  case VarType(aValue) of
     varShortInt, varSmallint, varInteger, varByte, varWord, varLongWord,
     varInt64, gcVarWord64:
     begin
-      AResult := AValue;
+      aResult := aValue;
       Result := True;
     end;
   else
-    AResult := 0;
+    aResult := 0;
     Result := False;
   end;
 end;
 
-function BpTryVarToInt(const AValue: Variant; out AResult: Integer): Boolean;
+function BpTryVarToInt(const aValue: Variant; out aResult: Integer): Boolean;
 var
   lvInt64: Int64;
 begin
-  Result := BpTryVarToInt64(AValue, lvInt64) and
+  Result := BpTryVarToInt64(aValue, lvInt64) and
     (lvInt64 >= Low(Integer)) and (lvInt64 <= High(Integer));
   if Result then
-    AResult := Integer(lvInt64)
+    aResult := Integer(lvInt64)
   else
-    AResult := 0;
+    aResult := 0;
 end;
 
-function BpTryVarToStr(const AValue: Variant; out AResult: string): Boolean;
+function BpTryVarToStr(const aValue: Variant; out aResult: string): Boolean;
 begin
-  case VarType(AValue) of
+  case VarType(aValue) of
     varOleStr, varString, varUString:
     begin
-      AResult := AValue;
+      aResult := aValue;
       Result := True;
     end;
   else
-    AResult := '';
+    aResult := '';
     Result := False;
   end;
 end;
 
-function BpTryVarToBool(const AValue: Variant; out AResult: Boolean): Boolean;
+function BpTryVarToBool(const aValue: Variant; out aResult: Boolean): Boolean;
 begin
-  Result := VarType(AValue) = varBoolean;
+  Result := VarType(aValue) = varBoolean;
   if Result then
-    AResult := AValue
+    aResult := aValue
   else
-    AResult := False;
+    aResult := False;
 end;
 
-function BpTryVarToFloat(const AValue: Variant; out AResult: Double): Boolean;
+function BpTryVarToFloat(const aValue: Variant; out aResult: Double): Boolean;
 begin
-  case VarType(AValue) of
+  case VarType(aValue) of
     varShortInt, varSmallint, varInteger, varByte, varWord, varLongWord,
     varInt64, gcVarWord64, varSingle, varDouble, varCurrency:
     begin
-      AResult := AValue;
+      aResult := aValue;
       Result := True;
     end;
   else
-    AResult := 0;
+    aResult := 0;
     Result := False;
   end;
 end;
 
-function BpTryVarToIntArray(const AValue: Variant; out AResult: TbpIntegerDynArray): Boolean;
+function BpTryVarToIntArray(const aValue: Variant; out aResult: TbpIntegerDynArray): Boolean;
 var
   lvLow, lvHigh, i: Integer;
 begin
   Result := False;
-  AResult := nil;
-  if (not VarIsArray(AValue)) or (VarArrayDimCount(AValue) <> 1) then
+  aResult := nil;
+  if (not VarIsArray(aValue)) or (VarArrayDimCount(aValue) <> 1) then
     Exit;
-  lvLow := VarArrayLowBound(AValue, 1);
-  lvHigh := VarArrayHighBound(AValue, 1);
-  SetLength(AResult, lvHigh - lvLow + 1);
+  lvLow := VarArrayLowBound(aValue, 1);
+  lvHigh := VarArrayHighBound(aValue, 1);
+  SetLength(aResult, lvHigh - lvLow + 1);
   for i := lvLow to lvHigh do
-    if not BpTryVarToInt(AValue[i], AResult[i - lvLow]) then
+    if not BpTryVarToInt(aValue[i], aResult[i - lvLow]) then
     begin
-      AResult := nil;
+      aResult := nil;
       Exit;
     end;
   Result := True;

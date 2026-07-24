@@ -28,23 +28,23 @@ type
     FLenBits: Int64;
     FBuffer: array[0..63] of Byte;  // partial input block
     FIndex: Integer;                // filled bytes in FBuffer
-    procedure Compress(AData: PByteArray);
+    procedure Compress(aData: PByteArray);
   public
     constructor Create;
     // resets to a fresh hash; Final calls it automatically
     procedure Init;
-    procedure Update(const AData; ASize: Integer); overload;
-    procedure Update(const ABytes: TBytes); overload;
-    procedure Update(const AText: AnsiString); overload;
-    procedure Final(out ADigest: TbpMD5Digest);
-    class function HashBuffer(const AData; ASize: Integer): TbpMD5Digest;
-    class function HashBytes(const ABytes: TBytes): TbpMD5Digest;
-    class function HashStr(const AText: AnsiString): TbpMD5Digest;
-    class function HashFile(const AFileName: string): TbpMD5Digest;
-    class function HashStrHex(const AText: AnsiString): string;
-    class function HashFileHex(const AFileName: string): string;
-    class function DigestToHex(const ADigest: TbpMD5Digest): string;
-    class function DigestToBase64(const ADigest: TbpMD5Digest): string;
+    procedure Update(const aData; aSize: Integer); overload;
+    procedure Update(const aBytes: TBytes); overload;
+    procedure Update(const aText: AnsiString); overload;
+    procedure Final(out aDigest: TbpMD5Digest);
+    class function HashBuffer(const aData; aSize: Integer): TbpMD5Digest;
+    class function HashBytes(const aBytes: TBytes): TbpMD5Digest;
+    class function HashStr(const aText: AnsiString): TbpMD5Digest;
+    class function HashFile(const aFileName: string): TbpMD5Digest;
+    class function HashStrHex(const aText: AnsiString): string;
+    class function HashFileHex(const aFileName: string): string;
+    class function DigestToHex(const aDigest: TbpMD5Digest): string;
+    class function DigestToBase64(const aDigest: TbpMD5Digest): string;
   end;
 
 implementation
@@ -87,7 +87,7 @@ begin
   FillChar(FBuffer, SizeOf(FBuffer), 0);
 end;
 
-procedure TbpMD5.Compress(AData: PByteArray);
+procedure TbpMD5.Compress(aData: PByteArray);
 var
   lvW: array[0..15] of Cardinal;
   lvA, lvB, lvC, lvD, lvF, lvX, lvTemp: Cardinal;
@@ -95,8 +95,8 @@ var
 begin
   // 16 little-endian input words
   for i := 0 to 15 do
-    lvW[i] := Cardinal(AData[i * 4]) or (Cardinal(AData[i * 4 + 1]) shl 8) or
-              (Cardinal(AData[i * 4 + 2]) shl 16) or (Cardinal(AData[i * 4 + 3]) shl 24);
+    lvW[i] := Cardinal(aData[i * 4]) or (Cardinal(aData[i * 4 + 1]) shl 8) or
+              (Cardinal(aData[i * 4 + 2]) shl 16) or (Cardinal(aData[i * 4 + 3]) shl 24);
   lvA := FHash[0];
   lvB := FHash[1];
   lvC := FHash[2];
@@ -138,58 +138,58 @@ begin
   Inc(FHash[3], lvD);
 end;
 
-procedure TbpMD5.Update(const AData; ASize: Integer);
+procedure TbpMD5.Update(const aData; aSize: Integer);
 var
   lvSource: PByte;
   lvFree: Integer;
 begin
-  if ASize <= 0 then
+  if aSize <= 0 then
     Exit;
-  lvSource := @AData;
-  Inc(FLenBits, Int64(ASize) * 8);
+  lvSource := @aData;
+  Inc(FLenBits, Int64(aSize) * 8);
   // top up a partially filled block first
   if FIndex > 0 then
   begin
     lvFree := 64 - FIndex;
-    if lvFree > ASize then
+    if lvFree > aSize then
     begin
-      Move(lvSource^, FBuffer[FIndex], ASize);
-      Inc(FIndex, ASize);
+      Move(lvSource^, FBuffer[FIndex], aSize);
+      Inc(FIndex, aSize);
       Exit;
     end;
     Move(lvSource^, FBuffer[FIndex], lvFree);
     Compress(@FBuffer);
     FIndex := 0;
     Inc(lvSource, lvFree);
-    Dec(ASize, lvFree);
+    Dec(aSize, lvFree);
   end;
   // full blocks compress straight from the source, no copy
-  while ASize >= 64 do
+  while aSize >= 64 do
   begin
     Compress(PByteArray(lvSource));
     Inc(lvSource, 64);
-    Dec(ASize, 64);
+    Dec(aSize, 64);
   end;
-  if ASize > 0 then
+  if aSize > 0 then
   begin
-    Move(lvSource^, FBuffer[0], ASize);
-    FIndex := ASize;
+    Move(lvSource^, FBuffer[0], aSize);
+    FIndex := aSize;
   end;
 end;
 
-procedure TbpMD5.Update(const ABytes: TBytes);
+procedure TbpMD5.Update(const aBytes: TBytes);
 begin
-  if Length(ABytes) > 0 then
-    Update(ABytes[0], Length(ABytes));
+  if Length(aBytes) > 0 then
+    Update(aBytes[0], Length(aBytes));
 end;
 
-procedure TbpMD5.Update(const AText: AnsiString);
+procedure TbpMD5.Update(const aText: AnsiString);
 begin
-  if AText <> '' then
-    Update(PAnsiChar(AText)^, Length(AText));
+  if aText <> '' then
+    Update(PAnsiChar(aText)^, Length(aText));
 end;
 
-procedure TbpMD5.Final(out ADigest: TbpMD5Digest);
+procedure TbpMD5.Final(out aDigest: TbpMD5Digest);
 var
   lvBits: Int64;
   i: Integer;
@@ -211,34 +211,34 @@ begin
   // digest is the state words in little-endian byte order
   for i := 0 to 3 do
   begin
-    ADigest[i * 4] := Byte(FHash[i]);
-    ADigest[i * 4 + 1] := Byte(FHash[i] shr 8);
-    ADigest[i * 4 + 2] := Byte(FHash[i] shr 16);
-    ADigest[i * 4 + 3] := Byte(FHash[i] shr 24);
+    aDigest[i * 4] := Byte(FHash[i]);
+    aDigest[i * 4 + 1] := Byte(FHash[i] shr 8);
+    aDigest[i * 4 + 2] := Byte(FHash[i] shr 16);
+    aDigest[i * 4 + 3] := Byte(FHash[i] shr 24);
   end;
   // wipe the state, ready for the next message
   Init;
 end;
 
-class function TbpMD5.HashBuffer(const AData; ASize: Integer): TbpMD5Digest;
+class function TbpMD5.HashBuffer(const aData; aSize: Integer): TbpMD5Digest;
 var
   lvHasher: TbpMD5;
 begin
   lvHasher := TbpMD5.Create;
   try
-    lvHasher.Update(AData, ASize);
+    lvHasher.Update(aData, aSize);
     lvHasher.Final(Result);
   finally
     lvHasher.Free;
   end;
 end;
 
-class function TbpMD5.HashBytes(const ABytes: TBytes): TbpMD5Digest;
+class function TbpMD5.HashBytes(const aBytes: TBytes): TbpMD5Digest;
 var
   lvDummy: Byte;
 begin
-  if Length(ABytes) > 0 then
-    Result := HashBuffer(ABytes[0], Length(ABytes))
+  if Length(aBytes) > 0 then
+    Result := HashBuffer(aBytes[0], Length(aBytes))
   else
   begin
     lvDummy := 0;
@@ -246,19 +246,19 @@ begin
   end;
 end;
 
-class function TbpMD5.HashStr(const AText: AnsiString): TbpMD5Digest;
+class function TbpMD5.HashStr(const aText: AnsiString): TbpMD5Digest;
 begin
-  Result := HashBuffer(PAnsiChar(AText)^, Length(AText));
+  Result := HashBuffer(PAnsiChar(aText)^, Length(aText));
 end;
 
-class function TbpMD5.HashFile(const AFileName: string): TbpMD5Digest;
+class function TbpMD5.HashFile(const aFileName: string): TbpMD5Digest;
 var
   lvStream: TFileStream;
   lvHasher: TbpMD5;
   lvChunk: TBytes;
   lvRead: Integer;
 begin
-  lvStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
+  lvStream := TFileStream.Create(aFileName, fmOpenRead or fmShareDenyWrite);
   try
     lvHasher := TbpMD5.Create;
     try
@@ -277,31 +277,31 @@ begin
   end;
 end;
 
-class function TbpMD5.HashStrHex(const AText: AnsiString): string;
+class function TbpMD5.HashStrHex(const aText: AnsiString): string;
 begin
-  Result := DigestToHex(HashStr(AText));
+  Result := DigestToHex(HashStr(aText));
 end;
 
-class function TbpMD5.HashFileHex(const AFileName: string): string;
+class function TbpMD5.HashFileHex(const aFileName: string): string;
 begin
-  Result := DigestToHex(HashFile(AFileName));
+  Result := DigestToHex(HashFile(aFileName));
 end;
 
-class function TbpMD5.DigestToHex(const ADigest: TbpMD5Digest): string;
+class function TbpMD5.DigestToHex(const aDigest: TbpMD5Digest): string;
 var
   i: Integer;
 begin
-  SetLength(Result, SizeOf(ADigest) * 2);
-  for i := 0 to High(ADigest) do
+  SetLength(Result, SizeOf(aDigest) * 2);
+  for i := 0 to High(aDigest) do
   begin
-    Result[i * 2 + 1] := gcMd5HexDigits[(ADigest[i] shr 4) + 1];
-    Result[i * 2 + 2] := gcMd5HexDigits[(ADigest[i] and $0F) + 1];
+    Result[i * 2 + 1] := gcMd5HexDigits[(aDigest[i] shr 4) + 1];
+    Result[i * 2 + 2] := gcMd5HexDigits[(aDigest[i] and $0F) + 1];
   end;
 end;
 
-class function TbpMD5.DigestToBase64(const ADigest: TbpMD5Digest): string;
+class function TbpMD5.DigestToBase64(const aDigest: TbpMD5Digest): string;
 begin
-  Result := Base64Encode(ADigest, SizeOf(ADigest));
+  Result := Base64Encode(aDigest, SizeOf(aDigest));
 end;
 
 end.

@@ -12,7 +12,7 @@ unit BpHttpClient;
 //     lvResp := lvClient.PostJson('https://api.example.com/v1/items', '{"a":1}');
 //     if BpHttpResponseIsSuccess(lvResp) then ...
 //     // sync download: blocks, so run it on a worker thread; lvToken.Cancel
-//     // (from anywhere) or ACancel in HandleProgress aborts it promptly
+//     // (from anywhere) or aCancel in HandleProgress aborts it promptly
 //     lvClient.DownloadToFile('https://host/big.zip', 'c:\tmp\big.zip',
 //       HandleProgress, lvToken);
 //   finally
@@ -37,8 +37,8 @@ type
     FStatusCode: Integer;
     FWinInetError: DWORD;
   public
-    constructor Create(const AMessage: string; AStatusCode: Integer = 0;
-      AWinInetError: DWORD = 0);
+    constructor Create(const aMessage: string; aStatusCode: Integer = 0;
+      aWinInetError: DWORD = 0);
     property StatusCode: Integer read FStatusCode;
     property WinInetError: DWORD read FWinInetError;
   end;
@@ -54,7 +54,7 @@ type
     ContentLength: Int64;    // from the Content-Length header, -1 when absent
   end;
 
-  TbpCancelCleanupProc = procedure(AData: Pointer);
+  TbpCancelCleanupProc = procedure(aData: Pointer);
 
   // cooperative cancel (C# CancellationToken style); thread-safe, one-shot
   TbpCancellationToken = class
@@ -65,22 +65,22 @@ type
     FCleanupData: array of Pointer;
     FCleanupIds: array of Integer;
     FNextId: Integer;
-    function IndexOfId(AId: Integer): Integer;
+    function IndexOfId(aId: Integer): Integer;
   public
     constructor Create;
     destructor Destroy; override;
     procedure Cancel;
     function IsCancellationRequested: Boolean;
     // cleanup runs inside Cancel; False when already cancelled
-    function RegisterCleanup(AProc: TbpCancelCleanupProc; AData: Pointer;
-      out AId: Integer): Boolean;
+    function RegisterCleanup(aProc: TbpCancelCleanupProc; aData: Pointer;
+      out aId: Integer): Boolean;
     // True when still pending, False when Cancel already ran it
-    function UnregisterCleanup(AId: Integer): Boolean;
+    function UnregisterCleanup(aId: Integer): Boolean;
   end;
 
-  // per-chunk download progress; ATotal -1 = unknown, set ACancel to abort
-  TbpHttpProgressEvent = procedure(ASender: TObject; const AReceived,
-    ATotal: Int64; var ACancel: Boolean) of object;
+  // per-chunk download progress; aTotal -1 = unknown, set aCancel to abort
+  TbpHttpProgressEvent = procedure(aSender: TObject; const aReceived,
+    aTotal: Int64; var aCancel: Boolean) of object;
 
   // synchronous client: request verbs plus streaming downloads
   TbpHttpClient = class
@@ -94,58 +94,58 @@ type
     FPassword: AnsiString;
     FBearerToken: string;
     FHeaders: TStringList;  // persistent headers as Name=Value pairs
-    function GetWinInetErrorMessage(AErrorCode: DWORD): string;
+    function GetWinInetErrorMessage(aErrorCode: DWORD): string;
     function CreateSession: HINTERNET;
-    function CreateConnection(ASession: HINTERNET; const AServerName: string;
-      APort: Integer): HINTERNET;
-    function CreateRequest(AConnection: HINTERNET; const AMethod, AResource: string;
-      ASecure: Boolean): HINTERNET;
-    procedure ApplyTimeouts(AHandle: HINTERNET);
-    procedure ApplyAuthentication(ARequest: HINTERNET);
-    procedure SendHttpRequest(ARequest: HINTERNET; const AHeaders: string;
-      const ABody: AnsiString);
-    function ReadResponseStatus(ARequest: HINTERNET): Integer;
-    function ReadResponseHeaders(ARequest: HINTERNET): string;
-    function ReadResponseBody(ARequest: HINTERNET): AnsiString;
-    procedure ReadBodyToStream(ARequest: HINTERNET; ADest: TStream;
-      const ATotal: Int64; AProgress: TbpHttpProgressEvent;
-      AToken: TbpCancellationToken);
+    function CreateConnection(aSession: HINTERNET; const aServerName: string;
+      aPort: Integer): HINTERNET;
+    function CreateRequest(aConnection: HINTERNET; const aMethod, aResource: string;
+      aSecure: Boolean): HINTERNET;
+    procedure ApplyTimeouts(aHandle: HINTERNET);
+    procedure ApplyAuthentication(aRequest: HINTERNET);
+    procedure SendHttpRequest(aRequest: HINTERNET; const aHeaders: string;
+      const aBody: AnsiString);
+    function ReadResponseStatus(aRequest: HINTERNET): Integer;
+    function ReadResponseHeaders(aRequest: HINTERNET): string;
+    function ReadResponseBody(aRequest: HINTERNET): AnsiString;
+    procedure ReadBodyToStream(aRequest: HINTERNET; aDest: TStream;
+      const aTotal: Int64; aProgress: TbpHttpProgressEvent;
+      aToken: TbpCancellationToken);
   public
     constructor Create;
     destructor Destroy; override;
 
-    function Execute(const AUrl: string; AMethod: TbpHttpMethod = hmGet;
-      const AHeaders: string = ''; const ABody: AnsiString = ''): TbpHttpResponse;
-    function Get(const AUrl: string; const AHeaders: string = ''): TbpHttpResponse;
-    function Post(const AUrl: string; const ABody: AnsiString;
-      const AHeaders: string = ''): TbpHttpResponse;
-    function PostJson(const AUrl: string; const AJson: AnsiString): TbpHttpResponse;
-    function Put(const AUrl: string; const ABody: AnsiString;
-      const AHeaders: string = ''): TbpHttpResponse;
-    function Delete(const AUrl: string; const AHeaders: string = ''): TbpHttpResponse;
-    class function FetchUrl(const AUrl: string; const AHeaders: string = ''): AnsiString;
+    function Execute(const aUrl: string; aMethod: TbpHttpMethod = hmGet;
+      const aHeaders: string = ''; const aBody: AnsiString = ''): TbpHttpResponse;
+    function Get(const aUrl: string; const aHeaders: string = ''): TbpHttpResponse;
+    function Post(const aUrl: string; const aBody: AnsiString;
+      const aHeaders: string = ''): TbpHttpResponse;
+    function PostJson(const aUrl: string; const aJson: AnsiString): TbpHttpResponse;
+    function Put(const aUrl: string; const aBody: AnsiString;
+      const aHeaders: string = ''): TbpHttpResponse;
+    function Delete(const aUrl: string; const aHeaders: string = ''): TbpHttpResponse;
+    class function FetchUrl(const aUrl: string; const aHeaders: string = ''): AnsiString;
 
-    // streams the body to ADest whatever the status; cancel raises
-    // EbpHttpClientCancelled ('Range: bytes=N-' in AHeaders resumes)
-    function Download(const AUrl: string; ADest: TStream;
-      AProgress: TbpHttpProgressEvent = nil; AToken: TbpCancellationToken = nil;
-      const AHeaders: string = ''; const AMethod: string = 'GET'): TbpHttpResponse;
+    // streams the body to aDest whatever the status; cancel raises
+    // EbpHttpClientCancelled ('Range: bytes=N-' in aHeaders resumes)
+    function Download(const aUrl: string; aDest: TStream;
+      aProgress: TbpHttpProgressEvent = nil; aToken: TbpCancellationToken = nil;
+      const aHeaders: string = ''; const aMethod: string = 'GET'): TbpHttpResponse;
     // the file survives only on a 2xx; deleted on error, cancel or non-2xx
-    function DownloadToFile(const AUrl, AFileName: string;
-      AProgress: TbpHttpProgressEvent = nil; AToken: TbpCancellationToken = nil;
-      const AHeaders: string = ''): TbpHttpResponse;
+    function DownloadToFile(const aUrl, aFileName: string;
+      aProgress: TbpHttpProgressEvent = nil; aToken: TbpCancellationToken = nil;
+      const aHeaders: string = ''): TbpHttpResponse;
 
     // persistent headers sent with every request; setting a name again replaces it
-    procedure AddHeader(const AName, AValue: string);
+    procedure AddHeader(const aName, aValue: string);
     procedure ClearHeaders;
     // preemptive Basic auth header via Base64; clears BearerToken
-    procedure SetBasicAuth(const AUser, APassword: AnsiString);
+    procedure SetBasicAuth(const aUser, aPassword: AnsiString);
 
     // exposed for testing; also useful on their own
-    function ParseUrl(const AUrl: string; out AServerName, AResource: string;
-      out APort: Integer; out ASecure: Boolean): Boolean;
-    function BuildHeaders(const ARequestHeaders: string): string;
-    class function MethodToString(AMethod: TbpHttpMethod): string;
+    function ParseUrl(const aUrl: string; out aServerName, aResource: string;
+      out aPort: Integer; out aSecure: Boolean): Boolean;
+    function BuildHeaders(const aRequestHeaders: string): string;
+    class function MethodToString(aMethod: TbpHttpMethod): string;
 
     property UserAgent: string read FUserAgent write FUserAgent;
     property Username: AnsiString read FUsername write FUsername;
@@ -161,9 +161,9 @@ type
   TbpHttpDownloadState = (dtsPending, dtsRunning, dtsSucceeded, dtsFailed,
     dtsCancelled);
 
-  TbpHttpDownloadCompleteEvent = procedure(ASender: TObject) of object;
-  TbpHttpDownloadErrorEvent = procedure(ASender: TObject;
-    const AErrorMessage: string) of object;
+  TbpHttpDownloadCompleteEvent = procedure(aSender: TObject) of object;
+  TbpHttpDownloadErrorEvent = procedure(aSender: TObject;
+    const aErrorMessage: string) of object;
 
   // one download on an owned worker thread, C# Task style; one-shot.
   // Events fire on the creating thread's message loop (default) or on the
@@ -198,22 +198,22 @@ type
     function GetErrorMessage: string;
     function GetErrorCode: DWORD;
     function GetHttpStatus: Integer;
-    procedure WndProc(var AMessage: TMessage);
-    procedure HandleWorkerProgress(ASender: TObject; const AReceived,
-      ATotal: Int64; var ACancel: Boolean);
+    procedure WndProc(var aMessage: TMessage);
+    procedure HandleWorkerProgress(aSender: TObject; const aReceived,
+      aTotal: Int64; var aCancel: Boolean);
     procedure FireCompletionEvents;
     procedure RunDownload;  // worker thread body
   public
     // create on the thread that should receive the events (destructor
     // cancels, joins the worker and frees everything)
-    constructor Create(AMarshalToMainThread: Boolean = True);
+    constructor Create(aMarshalToMainThread: Boolean = True);
     destructor Destroy; override;
 
     // returns immediately; raises when already started or misconfigured
     procedure Start;
     // prompt and safe from any thread, also before Start
     procedure Cancel;
-    function WaitFor(ATimeoutMs: DWORD = INFINITE): Boolean;
+    function WaitFor(aTimeoutMs: DWORD = INFINITE): Boolean;
     function IsFinished: Boolean;
 
     // configure before Start
@@ -243,26 +243,26 @@ type
 
 // hot tasks: create, wire and start in one call; the caller frees the task.
 // Two names, not an overload: old compilers reject nil events on overloads.
-function BpDownloadAsync(const AUrl, AFileName: string;
-  AOnProgress: TbpHttpProgressEvent = nil;
-  AOnComplete: TbpHttpDownloadCompleteEvent = nil;
-  AMarshalToMainThread: Boolean = True): TbpHttpDownloadTask;
-function BpDownloadToStreamAsync(const AUrl: string; ADest: TStream;
-  AOnProgress: TbpHttpProgressEvent = nil;
-  AOnComplete: TbpHttpDownloadCompleteEvent = nil;
-  AMarshalToMainThread: Boolean = True): TbpHttpDownloadTask;
+function BpDownloadAsync(const aUrl, aFileName: string;
+  aOnProgress: TbpHttpProgressEvent = nil;
+  aOnComplete: TbpHttpDownloadCompleteEvent = nil;
+  aMarshalToMainThread: Boolean = True): TbpHttpDownloadTask;
+function BpDownloadToStreamAsync(const aUrl: string; aDest: TStream;
+  aOnProgress: TbpHttpProgressEvent = nil;
+  aOnComplete: TbpHttpDownloadCompleteEvent = nil;
+  aMarshalToMainThread: Boolean = True): TbpHttpDownloadTask;
 
-function BpHttpResponseIsSuccess(const AResponse: TbpHttpResponse): Boolean;
+function BpHttpResponseIsSuccess(const aResponse: TbpHttpResponse): Boolean;
 // decodes the body as UTF-8 (invalid input yields an empty string)
-function BpHttpResponseBodyAsUtf8(const AResponse: TbpHttpResponse): WideString;
+function BpHttpResponseBodyAsUtf8(const aResponse: TbpHttpResponse): WideString;
 // value of a header line from a raw CRLF header block, '' when absent
-function BpHttpHeaderValue(const AHeaders, AName: string): string;
+function BpHttpHeaderValue(const aHeaders, aName: string): string;
 // Content-Length parsed from a raw header block; -1 when absent or invalid
-function BpHttpContentLength(const AHeaders: string): Int64;
+function BpHttpContentLength(const aHeaders: string): Int64;
 // whole percent 0..100 for a progress pair; -1 when the total is unknown
-function BpHttpProgressPercent(const AReceived, ATotal: Int64): Integer;
+function BpHttpProgressPercent(const aReceived, aTotal: Int64): Integer;
 // user-facing categorization; pass 0 for the dimension that does not apply
-function BpClassifyHttpError(AWinInetError: DWORD; AHttpStatus: Integer): string;
+function BpClassifyHttpError(aWinInetError: DWORD; aHttpStatus: Integer): string;
 
 const
   // WinInet ERROR_INTERNET_OPERATION_CANCELLED, missing from D2007's WinInet.pas
@@ -282,20 +282,20 @@ const
   gcWmTaskDone = WM_APP + 2;
 
 // appends a header line with a CRLF separator between lines
-procedure AppendHeaderLine(var AHeaders: string; const ALine: string);
+procedure AppendHeaderLine(var aHeaders: string; const aLine: string);
 begin
-  if ALine = '' then
+  if aLine = '' then
     Exit;
-  if AHeaders <> '' then
-    AHeaders := AHeaders + #13#10;
-  AHeaders := AHeaders + ALine;
+  if aHeaders <> '' then
+    aHeaders := aHeaders + #13#10;
+  aHeaders := aHeaders + aLine;
 end;
 
 // registered with the token so Cancel aborts a blocked WinInet call by
 // closing its request handle (fails over with error 12017)
-procedure BpCloseInetHandleCleanup(AData: Pointer);
+procedure BpCloseInetHandleCleanup(aData: Pointer);
 begin
-  InternetCloseHandle(HINTERNET(AData));
+  InternetCloseHandle(HINTERNET(aData));
 end;
 
 procedure RaiseDownloadCancelled;
@@ -306,12 +306,12 @@ end;
 
 { EbpHttpClient }
 
-constructor EbpHttpClient.Create(const AMessage: string; AStatusCode: Integer;
-  AWinInetError: DWORD);
+constructor EbpHttpClient.Create(const aMessage: string; aStatusCode: Integer;
+  aWinInetError: DWORD);
 begin
-  inherited Create(AMessage);
-  FStatusCode := AStatusCode;
-  FWinInetError := AWinInetError;
+  inherited Create(aMessage);
+  FStatusCode := aStatusCode;
+  FWinInetError := aWinInetError;
 end;
 
 { TbpCancellationToken }
@@ -335,13 +335,13 @@ begin
   Result := FCancelled <> 0;
 end;
 
-function TbpCancellationToken.IndexOfId(AId: Integer): Integer;
+function TbpCancellationToken.IndexOfId(aId: Integer): Integer;
 var
   i: Integer;
 begin
   Result := -1;
   for i := 0 to High(FCleanupIds) do
-    if FCleanupIds[i] = AId then
+    if FCleanupIds[i] = aId then
     begin
       Result := i;
       Exit;
@@ -369,12 +369,12 @@ begin
   end;
 end;
 
-function TbpCancellationToken.RegisterCleanup(AProc: TbpCancelCleanupProc;
-  AData: Pointer; out AId: Integer): Boolean;
+function TbpCancellationToken.RegisterCleanup(aProc: TbpCancelCleanupProc;
+  aData: Pointer; out aId: Integer): Boolean;
 var
   lvCount: Integer;
 begin
-  AId := 0;
+  aId := 0;
   Result := False;
   EnterCriticalSection(FLock);
   try
@@ -384,10 +384,10 @@ begin
     SetLength(FCleanupProcs, lvCount + 1);
     SetLength(FCleanupData, lvCount + 1);
     SetLength(FCleanupIds, lvCount + 1);
-    FCleanupProcs[lvCount] := AProc;
-    FCleanupData[lvCount] := AData;
+    FCleanupProcs[lvCount] := aProc;
+    FCleanupData[lvCount] := aData;
     FCleanupIds[lvCount] := FNextId;
-    AId := FNextId;
+    aId := FNextId;
     Inc(FNextId);
     Result := True;
   finally
@@ -395,13 +395,13 @@ begin
   end;
 end;
 
-function TbpCancellationToken.UnregisterCleanup(AId: Integer): Boolean;
+function TbpCancellationToken.UnregisterCleanup(aId: Integer): Boolean;
 var
   lvIndex, i: Integer;
 begin
   EnterCriticalSection(FLock);
   try
-    lvIndex := IndexOfId(AId);
+    lvIndex := IndexOfId(aId);
     Result := lvIndex >= 0;
     if not Result then
       Exit;
@@ -438,9 +438,9 @@ begin
   inherited;
 end;
 
-procedure TbpHttpClient.AddHeader(const AName, AValue: string);
+procedure TbpHttpClient.AddHeader(const aName, aValue: string);
 begin
-  FHeaders.Values[AName] := AValue;
+  FHeaders.Values[aName] := aValue;
 end;
 
 procedure TbpHttpClient.ClearHeaders;
@@ -448,15 +448,15 @@ begin
   FHeaders.Clear;
 end;
 
-procedure TbpHttpClient.SetBasicAuth(const AUser, APassword: AnsiString);
+procedure TbpHttpClient.SetBasicAuth(const aUser, aPassword: AnsiString);
 begin
   FBearerToken := '';
-  AddHeader('Authorization', 'Basic ' + Base64Encode(AUser + ':' + APassword));
+  AddHeader('Authorization', 'Basic ' + Base64Encode(aUser + ':' + aPassword));
 end;
 
-class function TbpHttpClient.MethodToString(AMethod: TbpHttpMethod): string;
+class function TbpHttpClient.MethodToString(aMethod: TbpHttpMethod): string;
 begin
-  case AMethod of
+  case aMethod of
     hmGet: Result := 'GET';
     hmPost: Result := 'POST';
     hmPut: Result := 'PUT';
@@ -466,7 +466,7 @@ begin
   end;
 end;
 
-function TbpHttpClient.GetWinInetErrorMessage(AErrorCode: DWORD): string;
+function TbpHttpClient.GetWinInetErrorMessage(aErrorCode: DWORD): string;
 var
   lvBuffer: array[0..1023] of Char;
   lvLen: DWORD;
@@ -474,7 +474,7 @@ begin
   lvLen := FormatMessage(
     FORMAT_MESSAGE_FROM_HMODULE or FORMAT_MESSAGE_FROM_SYSTEM,
     Pointer(GetModuleHandle('wininet.dll')),
-    AErrorCode,
+    aErrorCode,
     0,
     lvBuffer,
     Length(lvBuffer),
@@ -486,11 +486,11 @@ begin
     Result := Trim(Result);
   end
   else
-    Result := Format('WinInet error %d', [AErrorCode]);
+    Result := Format('WinInet error %d', [aErrorCode]);
 end;
 
-function TbpHttpClient.ParseUrl(const AUrl: string; out AServerName,
-  AResource: string; out APort: Integer; out ASecure: Boolean): Boolean;
+function TbpHttpClient.ParseUrl(const aUrl: string; out aServerName,
+  aResource: string; out aPort: Integer; out aSecure: Boolean): Boolean;
 var
   lvComponents: TURLComponents;
   lvHostBuffer: array[0..INTERNET_MAX_HOST_NAME_LENGTH] of Char;
@@ -512,30 +512,30 @@ begin
   lvComponents.lpszExtraInfo := @lvExtraBuffer[0];
   lvComponents.dwExtraInfoLength := Length(lvExtraBuffer);
 
-  if not InternetCrackUrl(PChar(AUrl), Length(AUrl), 0, lvComponents) then
+  if not InternetCrackUrl(PChar(aUrl), Length(aUrl), 0, lvComponents) then
     Exit;
 
-  AServerName := lvComponents.lpszHostName;
+  aServerName := lvComponents.lpszHostName;
   // keep the query string attached to the resource
-  AResource := string(lvComponents.lpszUrlPath) + string(lvComponents.lpszExtraInfo);
-  if AResource = '' then
-    AResource := '/';
+  aResource := string(lvComponents.lpszUrlPath) + string(lvComponents.lpszExtraInfo);
+  if aResource = '' then
+    aResource := '/';
 
-  APort := lvComponents.nPort;
-  ASecure := lvComponents.nScheme = INTERNET_SCHEME_HTTPS;
+  aPort := lvComponents.nPort;
+  aSecure := lvComponents.nScheme = INTERNET_SCHEME_HTTPS;
 
-  if APort = 0 then
+  if aPort = 0 then
   begin
-    if ASecure then
-      APort := INTERNET_DEFAULT_HTTPS_PORT
+    if aSecure then
+      aPort := INTERNET_DEFAULT_HTTPS_PORT
     else
-      APort := INTERNET_DEFAULT_HTTP_PORT;
+      aPort := INTERNET_DEFAULT_HTTP_PORT;
   end;
 
   Result := True;
 end;
 
-function TbpHttpClient.BuildHeaders(const ARequestHeaders: string): string;
+function TbpHttpClient.BuildHeaders(const aRequestHeaders: string): string;
 var
   i: Integer;
 begin
@@ -544,7 +544,7 @@ begin
     AppendHeaderLine(Result, FHeaders.Names[i] + ': ' + FHeaders.ValueFromIndex[i]);
   if FBearerToken <> '' then
     AppendHeaderLine(Result, 'Authorization: Bearer ' + FBearerToken);
-  AppendHeaderLine(Result, Trim(ARequestHeaders));
+  AppendHeaderLine(Result, Trim(aRequestHeaders));
 end;
 
 function TbpHttpClient.CreateSession: HINTERNET;
@@ -569,15 +569,15 @@ begin
   ApplyTimeouts(Result);
 end;
 
-function TbpHttpClient.CreateConnection(ASession: HINTERNET;
-  const AServerName: string; APort: Integer): HINTERNET;
+function TbpHttpClient.CreateConnection(aSession: HINTERNET;
+  const aServerName: string; aPort: Integer): HINTERNET;
 var
   lvErr: DWORD;
 begin
   Result := InternetConnect(
-    ASession,
-    PChar(AServerName),
-    APort,
+    aSession,
+    PChar(aServerName),
+    aPort,
     nil,
     nil,
     INTERNET_SERVICE_HTTP,
@@ -589,28 +589,28 @@ begin
     lvErr := GetLastError;
     raise EbpHttpClient.Create(
       Format('Failed to connect to %s:%d: %s',
-        [AServerName, APort, GetWinInetErrorMessage(lvErr)]),
+        [aServerName, aPort, GetWinInetErrorMessage(lvErr)]),
       0, lvErr);
   end;
 end;
 
-function TbpHttpClient.CreateRequest(AConnection: HINTERNET;
-  const AMethod, AResource: string; ASecure: Boolean): HINTERNET;
+function TbpHttpClient.CreateRequest(aConnection: HINTERNET;
+  const aMethod, aResource: string; aSecure: Boolean): HINTERNET;
 var
   lvFlags, lvErr: DWORD;
 begin
   lvFlags := INTERNET_FLAG_RELOAD or INTERNET_FLAG_NO_CACHE_WRITE;
 
-  if ASecure then
+  if aSecure then
     lvFlags := lvFlags or INTERNET_FLAG_SECURE;
 
   if not FFollowRedirects then
     lvFlags := lvFlags or INTERNET_FLAG_NO_AUTO_REDIRECT;
 
   Result := HttpOpenRequest(
-    AConnection,
-    PChar(AMethod),
-    PChar(AResource),
+    aConnection,
+    PChar(aMethod),
+    PChar(aResource),
     nil,  // nil version defaults to HTTP/1.1 on any non-ancient Windows
     nil,
     nil,
@@ -622,50 +622,50 @@ begin
     lvErr := GetLastError;
     raise EbpHttpClient.Create(
       Format('Failed to create HTTP request for %s: %s',
-        [AResource, GetWinInetErrorMessage(lvErr)]),
+        [aResource, GetWinInetErrorMessage(lvErr)]),
       0, lvErr);
   end;
 end;
 
-procedure TbpHttpClient.ApplyTimeouts(AHandle: HINTERNET);
+procedure TbpHttpClient.ApplyTimeouts(aHandle: HINTERNET);
 begin
   if FConnectTimeout > 0 then
-    InternetSetOption(AHandle, INTERNET_OPTION_CONNECT_TIMEOUT,
+    InternetSetOption(aHandle, INTERNET_OPTION_CONNECT_TIMEOUT,
       @FConnectTimeout, SizeOf(FConnectTimeout));
 
   if FSendTimeout > 0 then
-    InternetSetOption(AHandle, INTERNET_OPTION_SEND_TIMEOUT,
+    InternetSetOption(aHandle, INTERNET_OPTION_SEND_TIMEOUT,
       @FSendTimeout, SizeOf(FSendTimeout));
 
   if FReceiveTimeout > 0 then
-    InternetSetOption(AHandle, INTERNET_OPTION_RECEIVE_TIMEOUT,
+    InternetSetOption(aHandle, INTERNET_OPTION_RECEIVE_TIMEOUT,
       @FReceiveTimeout, SizeOf(FReceiveTimeout));
 end;
 
-procedure TbpHttpClient.ApplyAuthentication(ARequest: HINTERNET);
+procedure TbpHttpClient.ApplyAuthentication(aRequest: HINTERNET);
 begin
   // WinInet-level credentials, also used for proxy and 401 challenges
   if FUsername <> '' then
-    InternetSetOption(ARequest, INTERNET_OPTION_USERNAME,
+    InternetSetOption(aRequest, INTERNET_OPTION_USERNAME,
       @FUsername[1], Length(FUsername));
 
   if FPassword <> '' then
-    InternetSetOption(ARequest, INTERNET_OPTION_PASSWORD,
+    InternetSetOption(aRequest, INTERNET_OPTION_PASSWORD,
       @FPassword[1], Length(FPassword));
 end;
 
-procedure TbpHttpClient.SendHttpRequest(ARequest: HINTERNET;
-  const AHeaders: string; const ABody: AnsiString);
+procedure TbpHttpClient.SendHttpRequest(aRequest: HINTERNET;
+  const aHeaders: string; const aBody: AnsiString);
 var
   lvHeadersPtr: PChar;
   lvHeadersLen: DWORD;
   lvBodyPtr: Pointer;
   lvBodyLen, lvErr: DWORD;
 begin
-  if AHeaders <> '' then
+  if aHeaders <> '' then
   begin
-    lvHeadersPtr := PChar(AHeaders);
-    lvHeadersLen := Length(AHeaders);
+    lvHeadersPtr := PChar(aHeaders);
+    lvHeadersLen := Length(aHeaders);
   end
   else
   begin
@@ -673,10 +673,10 @@ begin
     lvHeadersLen := 0;
   end;
 
-  if Length(ABody) > 0 then
+  if Length(aBody) > 0 then
   begin
-    lvBodyPtr := @ABody[1];
-    lvBodyLen := Length(ABody);
+    lvBodyPtr := @aBody[1];
+    lvBodyLen := Length(aBody);
   end
   else
   begin
@@ -684,7 +684,7 @@ begin
     lvBodyLen := 0;
   end;
 
-  if not HttpSendRequest(ARequest, lvHeadersPtr, lvHeadersLen,
+  if not HttpSendRequest(aRequest, lvHeadersPtr, lvHeadersLen,
     lvBodyPtr, lvBodyLen) then
   begin
     lvErr := GetLastError;
@@ -694,7 +694,7 @@ begin
   end;
 end;
 
-function TbpHttpClient.ReadResponseStatus(ARequest: HINTERNET): Integer;
+function TbpHttpClient.ReadResponseStatus(aRequest: HINTERNET): Integer;
 var
   lvStatusCode, lvBufferLen, lvReserved, lvErr: DWORD;
 begin
@@ -702,7 +702,7 @@ begin
   lvReserved := 0;
 
   if not HttpQueryInfo(
-    ARequest,
+    aRequest,
     HTTP_QUERY_STATUS_CODE or HTTP_QUERY_FLAG_NUMBER,
     @lvStatusCode,
     lvBufferLen,
@@ -717,7 +717,7 @@ begin
   Result := lvStatusCode;
 end;
 
-function TbpHttpClient.ReadResponseHeaders(ARequest: HINTERNET): string;
+function TbpHttpClient.ReadResponseHeaders(aRequest: HINTERNET): string;
 var
   lvSize, lvReserved: DWORD;
 begin
@@ -726,20 +726,20 @@ begin
   lvReserved := 0;
 
   // first call just reports the required buffer size
-  if HttpQueryInfo(ARequest, HTTP_QUERY_RAW_HEADERS_CRLF, nil, lvSize, lvReserved) then
+  if HttpQueryInfo(aRequest, HTTP_QUERY_RAW_HEADERS_CRLF, nil, lvSize, lvReserved) then
     Exit;
   if GetLastError <> ERROR_INSUFFICIENT_BUFFER then
     Exit;
 
   SetLength(Result, lvSize div SizeOf(Char));
-  if HttpQueryInfo(ARequest, HTTP_QUERY_RAW_HEADERS_CRLF, PChar(Result),
+  if HttpQueryInfo(aRequest, HTTP_QUERY_RAW_HEADERS_CRLF, PChar(Result),
     lvSize, lvReserved) then
     SetLength(Result, lvSize div SizeOf(Char))
   else
     Result := '';
 end;
 
-function TbpHttpClient.ReadResponseBody(ARequest: HINTERNET): AnsiString;
+function TbpHttpClient.ReadResponseBody(aRequest: HINTERNET): AnsiString;
 var
   lvBuffer: array[0..gcBufferSize - 1] of Byte;
   lvBytesRead, lvErr: DWORD;
@@ -748,7 +748,7 @@ begin
   lvStream := TMemoryStream.Create;
   try
     repeat
-      if not InternetReadFile(ARequest, @lvBuffer[0], gcBufferSize, lvBytesRead) then
+      if not InternetReadFile(aRequest, @lvBuffer[0], gcBufferSize, lvBytesRead) then
       begin
         lvErr := GetLastError;
         raise EbpHttpClient.Create(
@@ -771,26 +771,26 @@ begin
   end;
 end;
 
-function TbpHttpClient.Execute(const AUrl: string; AMethod: TbpHttpMethod;
-  const AHeaders: string; const ABody: AnsiString): TbpHttpResponse;
+function TbpHttpClient.Execute(const aUrl: string; aMethod: TbpHttpMethod;
+  const aHeaders: string; const aBody: AnsiString): TbpHttpResponse;
 var
   lvSession, lvConnection, lvRequest: HINTERNET;
   lvServerName, lvResource: string;
   lvPort: Integer;
   lvSecure: Boolean;
 begin
-  if not ParseUrl(AUrl, lvServerName, lvResource, lvPort, lvSecure) then
-    raise EbpHttpClient.Create('Invalid URL: ' + AUrl);
+  if not ParseUrl(aUrl, lvServerName, lvResource, lvPort, lvSecure) then
+    raise EbpHttpClient.Create('Invalid URL: ' + aUrl);
 
   lvSession := CreateSession;
   try
     lvConnection := CreateConnection(lvSession, lvServerName, lvPort);
     try
-      lvRequest := CreateRequest(lvConnection, MethodToString(AMethod),
+      lvRequest := CreateRequest(lvConnection, MethodToString(aMethod),
         lvResource, lvSecure);
       try
         ApplyAuthentication(lvRequest);
-        SendHttpRequest(lvRequest, BuildHeaders(AHeaders), ABody);
+        SendHttpRequest(lvRequest, BuildHeaders(aHeaders), aBody);
 
         Result.StatusCode := ReadResponseStatus(lvRequest);
         Result.Headers := ReadResponseHeaders(lvRequest);
@@ -808,54 +808,54 @@ begin
   end;
 end;
 
-function TbpHttpClient.Get(const AUrl: string;
-  const AHeaders: string): TbpHttpResponse;
+function TbpHttpClient.Get(const aUrl: string;
+  const aHeaders: string): TbpHttpResponse;
 begin
-  Result := Execute(AUrl, hmGet, AHeaders, '');
+  Result := Execute(aUrl, hmGet, aHeaders, '');
 end;
 
-function TbpHttpClient.Post(const AUrl: string; const ABody: AnsiString;
-  const AHeaders: string): TbpHttpResponse;
+function TbpHttpClient.Post(const aUrl: string; const aBody: AnsiString;
+  const aHeaders: string): TbpHttpResponse;
 begin
-  Result := Execute(AUrl, hmPost, AHeaders, ABody);
+  Result := Execute(aUrl, hmPost, aHeaders, aBody);
 end;
 
-function TbpHttpClient.PostJson(const AUrl: string;
-  const AJson: AnsiString): TbpHttpResponse;
+function TbpHttpClient.PostJson(const aUrl: string;
+  const aJson: AnsiString): TbpHttpResponse;
 begin
-  Result := Execute(AUrl, hmPost, 'Content-Type: application/json', AJson);
+  Result := Execute(aUrl, hmPost, 'Content-Type: application/json', aJson);
 end;
 
-function TbpHttpClient.Put(const AUrl: string; const ABody: AnsiString;
-  const AHeaders: string): TbpHttpResponse;
+function TbpHttpClient.Put(const aUrl: string; const aBody: AnsiString;
+  const aHeaders: string): TbpHttpResponse;
 begin
-  Result := Execute(AUrl, hmPut, AHeaders, ABody);
+  Result := Execute(aUrl, hmPut, aHeaders, aBody);
 end;
 
-function TbpHttpClient.Delete(const AUrl: string;
-  const AHeaders: string): TbpHttpResponse;
+function TbpHttpClient.Delete(const aUrl: string;
+  const aHeaders: string): TbpHttpResponse;
 begin
-  Result := Execute(AUrl, hmDelete, AHeaders, '');
+  Result := Execute(aUrl, hmDelete, aHeaders, '');
 end;
 
-class function TbpHttpClient.FetchUrl(const AUrl: string;
-  const AHeaders: string): AnsiString;
+class function TbpHttpClient.FetchUrl(const aUrl: string;
+  const aHeaders: string): AnsiString;
 var
   lvClient: TbpHttpClient;
   lvResponse: TbpHttpResponse;
 begin
   lvClient := TbpHttpClient.Create;
   try
-    lvResponse := lvClient.Get(AUrl, AHeaders);
+    lvResponse := lvClient.Get(aUrl, aHeaders);
     Result := lvResponse.Body;
   finally
     lvClient.Free;
   end;
 end;
 
-procedure TbpHttpClient.ReadBodyToStream(ARequest: HINTERNET; ADest: TStream;
-  const ATotal: Int64; AProgress: TbpHttpProgressEvent;
-  AToken: TbpCancellationToken);
+procedure TbpHttpClient.ReadBodyToStream(aRequest: HINTERNET; aDest: TStream;
+  const aTotal: Int64; aProgress: TbpHttpProgressEvent;
+  aToken: TbpCancellationToken);
 var
   lvBuffer: array[0..gcDownloadBufferSize - 1] of Byte;
   lvBytesRead, lvErr: DWORD;
@@ -863,20 +863,20 @@ var
   lvCancel: Boolean;
 begin
   lvReceived := 0;
-  if Assigned(AProgress) then
+  if Assigned(aProgress) then
   begin
     // headers are in; announce the total before the first byte
     lvCancel := False;
-    AProgress(Self, 0, ATotal, lvCancel);
+    aProgress(Self, 0, aTotal, lvCancel);
     if lvCancel then
       RaiseDownloadCancelled;
   end;
 
   repeat
-    if (AToken <> nil) and AToken.IsCancellationRequested then
+    if (aToken <> nil) and aToken.IsCancellationRequested then
       RaiseDownloadCancelled;
 
-    if not InternetReadFile(ARequest, @lvBuffer[0], gcDownloadBufferSize,
+    if not InternetReadFile(aRequest, @lvBuffer[0], gcDownloadBufferSize,
       lvBytesRead) then
     begin
       lvErr := GetLastError;
@@ -887,12 +887,12 @@ begin
 
     if lvBytesRead > 0 then
     begin
-      ADest.WriteBuffer(lvBuffer[0], lvBytesRead);
+      aDest.WriteBuffer(lvBuffer[0], lvBytesRead);
       Inc(lvReceived, lvBytesRead);
-      if Assigned(AProgress) then
+      if Assigned(aProgress) then
       begin
         lvCancel := False;
-        AProgress(Self, lvReceived, ATotal, lvCancel);
+        aProgress(Self, lvReceived, aTotal, lvCancel);
         if lvCancel then
           RaiseDownloadCancelled;
       end;
@@ -900,9 +900,9 @@ begin
   until lvBytesRead = 0;
 end;
 
-function TbpHttpClient.Download(const AUrl: string; ADest: TStream;
-  AProgress: TbpHttpProgressEvent; AToken: TbpCancellationToken;
-  const AHeaders: string; const AMethod: string): TbpHttpResponse;
+function TbpHttpClient.Download(const aUrl: string; aDest: TStream;
+  aProgress: TbpHttpProgressEvent; aToken: TbpCancellationToken;
+  const aHeaders: string; const aMethod: string): TbpHttpResponse;
 var
   lvSession, lvConnection, lvRequest: HINTERNET;
   lvServerName, lvResource: string;
@@ -910,24 +910,24 @@ var
   lvSecure, lvOwnsRequest: Boolean;
   lvCleanupId: Integer;
 begin
-  if ADest = nil then
+  if aDest = nil then
     raise EbpHttpClient.Create('Download destination stream is nil');
-  if (AToken <> nil) and AToken.IsCancellationRequested then
+  if (aToken <> nil) and aToken.IsCancellationRequested then
     RaiseDownloadCancelled;
-  if not ParseUrl(AUrl, lvServerName, lvResource, lvPort, lvSecure) then
-    raise EbpHttpClient.Create('Invalid URL: ' + AUrl);
+  if not ParseUrl(aUrl, lvServerName, lvResource, lvPort, lvSecure) then
+    raise EbpHttpClient.Create('Invalid URL: ' + aUrl);
 
   lvSession := CreateSession;
   try
     lvConnection := CreateConnection(lvSession, lvServerName, lvPort);
     try
-      lvRequest := CreateRequest(lvConnection, AMethod, lvResource, lvSecure);
+      lvRequest := CreateRequest(lvConnection, aMethod, lvResource, lvSecure);
       // hand the request handle to the token: Cancel closes it, which makes
       // a blocked connect/read fail over immediately with error 12017
       lvOwnsRequest := True;
       lvCleanupId := 0;
-      if AToken <> nil then
-        if not AToken.RegisterCleanup(BpCloseInetHandleCleanup, lvRequest,
+      if aToken <> nil then
+        if not aToken.RegisterCleanup(BpCloseInetHandleCleanup, lvRequest,
           lvCleanupId) then
         begin
           // cancelled between the check above and here
@@ -937,7 +937,7 @@ begin
       try
         try
           ApplyAuthentication(lvRequest);
-          SendHttpRequest(lvRequest, BuildHeaders(AHeaders), '');
+          SendHttpRequest(lvRequest, BuildHeaders(aHeaders), '');
 
           Result.StatusCode := ReadResponseStatus(lvRequest);
           Result.Headers := ReadResponseHeaders(lvRequest);
@@ -945,21 +945,21 @@ begin
           Result.Body := '';
           Result.ContentLength := BpHttpContentLength(Result.Headers);
 
-          ReadBodyToStream(lvRequest, ADest, Result.ContentLength, AProgress,
-            AToken);
+          ReadBodyToStream(lvRequest, aDest, Result.ContentLength, aProgress,
+            aToken);
         except
           // a WinInet failure caused by Cancel closing the handle surfaces
           // as the typed cancellation, not as a generic network error
           on E: EbpHttpClient do
-            if (AToken <> nil) and AToken.IsCancellationRequested and
+            if (aToken <> nil) and aToken.IsCancellationRequested and
               not (E is EbpHttpClientCancelled) then
               RaiseDownloadCancelled
             else
               raise;
         end;
       finally
-        if AToken <> nil then
-          lvOwnsRequest := AToken.UnregisterCleanup(lvCleanupId);
+        if aToken <> nil then
+          lvOwnsRequest := aToken.UnregisterCleanup(lvCleanupId);
         if lvOwnsRequest then
           InternetCloseHandle(lvRequest);
       end;
@@ -971,23 +971,23 @@ begin
   end;
 end;
 
-function TbpHttpClient.DownloadToFile(const AUrl, AFileName: string;
-  AProgress: TbpHttpProgressEvent; AToken: TbpCancellationToken;
-  const AHeaders: string): TbpHttpResponse;
+function TbpHttpClient.DownloadToFile(const aUrl, aFileName: string;
+  aProgress: TbpHttpProgressEvent; aToken: TbpCancellationToken;
+  const aHeaders: string): TbpHttpResponse;
 var
   lvFile: TFileStream;
   lvKeep: Boolean;
 begin
   lvKeep := False;
-  lvFile := TFileStream.Create(AFileName, fmCreate);
+  lvFile := TFileStream.Create(aFileName, fmCreate);
   try
-    Result := Download(AUrl, lvFile, AProgress, AToken, AHeaders);
+    Result := Download(aUrl, lvFile, aProgress, aToken, aHeaders);
     lvKeep := BpHttpResponseIsSuccess(Result);
   finally
     lvFile.Free;
     // never leave a partial or error-page file behind
     if not lvKeep then
-      SysUtils.DeleteFile(AFileName);
+      SysUtils.DeleteFile(aFileName);
   end;
 end;
 
@@ -1001,12 +1001,12 @@ type
   protected
     procedure Execute; override;
   public
-    constructor Create(ATask: TbpHttpDownloadTask);
+    constructor Create(aTask: TbpHttpDownloadTask);
   end;
 
-constructor TbpDownloadThread.Create(ATask: TbpHttpDownloadTask);
+constructor TbpDownloadThread.Create(aTask: TbpHttpDownloadTask);
 begin
-  FTask := ATask;
+  FTask := aTask;
   FreeOnTerminate := False;  // the task owns and joins the thread
   inherited Create(False);
 end;
@@ -1016,7 +1016,7 @@ begin
   FTask.RunDownload;
 end;
 
-constructor TbpHttpDownloadTask.Create(AMarshalToMainThread: Boolean);
+constructor TbpHttpDownloadTask.Create(aMarshalToMainThread: Boolean);
 begin
   inherited Create;
   InitializeCriticalSection(FLock);
@@ -1024,7 +1024,7 @@ begin
   FToken := TbpCancellationToken.Create;
   FState := dtsPending;
   FTotal := -1;
-  FMarshalToMainThread := AMarshalToMainThread;
+  FMarshalToMainThread := aMarshalToMainThread;
   if FMarshalToMainThread then
     FWnd := Classes.AllocateHWnd(WndProc);
 end;
@@ -1126,21 +1126,21 @@ begin
   FToken.Cancel;
 end;
 
-function TbpHttpDownloadTask.WaitFor(ATimeoutMs: DWORD): Boolean;
+function TbpHttpDownloadTask.WaitFor(aTimeoutMs: DWORD): Boolean;
 begin
   if FThread = nil then
     Result := IsFinished  // never started
   else
-    Result := WaitForSingleObject(FThread.Handle, ATimeoutMs) = WAIT_OBJECT_0;
+    Result := WaitForSingleObject(FThread.Handle, aTimeoutMs) = WAIT_OBJECT_0;
 end;
 
 // worker thread: forward directly, or store and post one coalesced note
-procedure TbpHttpDownloadTask.HandleWorkerProgress(ASender: TObject;
-  const AReceived, ATotal: Int64; var ACancel: Boolean);
+procedure TbpHttpDownloadTask.HandleWorkerProgress(aSender: TObject;
+  const aReceived, aTotal: Int64; var aCancel: Boolean);
 begin
   EnterCriticalSection(FLock);
-  FReceived := AReceived;
-  FTotal := ATotal;
+  FReceived := aReceived;
+  FTotal := aTotal;
   LeaveCriticalSection(FLock);
 
   if FMarshalToMainThread then
@@ -1149,16 +1149,16 @@ begin
       PostMessage(FWnd, gcWmTaskProgress, 0, 0);
   end
   else if Assigned(FOnProgress) then
-    FOnProgress(Self, AReceived, ATotal, ACancel);
+    FOnProgress(Self, aReceived, aTotal, aCancel);
 end;
 
 // main thread (marshaled mode only)
-procedure TbpHttpDownloadTask.WndProc(var AMessage: TMessage);
+procedure TbpHttpDownloadTask.WndProc(var aMessage: TMessage);
 var
   lvReceived, lvTotal: Int64;
   lvCancel: Boolean;
 begin
-  case AMessage.Msg of
+  case aMessage.Msg of
     gcWmTaskProgress:
       begin
         InterlockedExchange(FProgressPosted, 0);
@@ -1177,8 +1177,8 @@ begin
     gcWmTaskDone:
       FireCompletionEvents;
   else
-    AMessage.Result := DefWindowProc(FWnd, AMessage.Msg, AMessage.WParam,
-      AMessage.LParam);
+    aMessage.Result := DefWindowProc(FWnd, aMessage.Msg, aMessage.WParam,
+      aMessage.LParam);
   end;
 end;
 
@@ -1261,16 +1261,16 @@ end;
 
 { hot task factories }
 
-function BpDownloadAsync(const AUrl, AFileName: string;
-  AOnProgress: TbpHttpProgressEvent; AOnComplete: TbpHttpDownloadCompleteEvent;
-  AMarshalToMainThread: Boolean): TbpHttpDownloadTask;
+function BpDownloadAsync(const aUrl, aFileName: string;
+  aOnProgress: TbpHttpProgressEvent; aOnComplete: TbpHttpDownloadCompleteEvent;
+  aMarshalToMainThread: Boolean): TbpHttpDownloadTask;
 begin
-  Result := TbpHttpDownloadTask.Create(AMarshalToMainThread);
+  Result := TbpHttpDownloadTask.Create(aMarshalToMainThread);
   try
-    Result.Url := AUrl;
-    Result.DestFileName := AFileName;
-    Result.OnProgress := AOnProgress;
-    Result.OnComplete := AOnComplete;
+    Result.Url := aUrl;
+    Result.DestFileName := aFileName;
+    Result.OnProgress := aOnProgress;
+    Result.OnComplete := aOnComplete;
     Result.Start;
   except
     Result.Free;
@@ -1278,16 +1278,16 @@ begin
   end;
 end;
 
-function BpDownloadToStreamAsync(const AUrl: string; ADest: TStream;
-  AOnProgress: TbpHttpProgressEvent; AOnComplete: TbpHttpDownloadCompleteEvent;
-  AMarshalToMainThread: Boolean): TbpHttpDownloadTask;
+function BpDownloadToStreamAsync(const aUrl: string; aDest: TStream;
+  aOnProgress: TbpHttpProgressEvent; aOnComplete: TbpHttpDownloadCompleteEvent;
+  aMarshalToMainThread: Boolean): TbpHttpDownloadTask;
 begin
-  Result := TbpHttpDownloadTask.Create(AMarshalToMainThread);
+  Result := TbpHttpDownloadTask.Create(aMarshalToMainThread);
   try
-    Result.Url := AUrl;
-    Result.DestStream := ADest;
-    Result.OnProgress := AOnProgress;
-    Result.OnComplete := AOnComplete;
+    Result.Url := aUrl;
+    Result.DestStream := aDest;
+    Result.OnProgress := aOnProgress;
+    Result.OnComplete := aOnComplete;
     Result.Start;
   except
     Result.Free;
@@ -1297,39 +1297,39 @@ end;
 
 { helper functions }
 
-function BpHttpResponseIsSuccess(const AResponse: TbpHttpResponse): Boolean;
+function BpHttpResponseIsSuccess(const aResponse: TbpHttpResponse): Boolean;
 begin
-  Result := (AResponse.StatusCode >= 200) and (AResponse.StatusCode < 300);
+  Result := (aResponse.StatusCode >= 200) and (aResponse.StatusCode < 300);
 end;
 
-function BpHttpResponseBodyAsUtf8(const AResponse: TbpHttpResponse): WideString;
+function BpHttpResponseBodyAsUtf8(const aResponse: TbpHttpResponse): WideString;
 var
   lvLen: Integer;
 begin
   Result := '';
-  if AResponse.Body = '' then
+  if aResponse.Body = '' then
     Exit;
   // convert straight from the raw bytes so no ANSI codepage round trip happens
-  lvLen := MultiByteToWideChar(CP_UTF8, 0, PAnsiChar(AResponse.Body),
-    Length(AResponse.Body), nil, 0);
+  lvLen := MultiByteToWideChar(CP_UTF8, 0, PAnsiChar(aResponse.Body),
+    Length(aResponse.Body), nil, 0);
   if lvLen = 0 then
     Exit;
   SetLength(Result, lvLen);
-  MultiByteToWideChar(CP_UTF8, 0, PAnsiChar(AResponse.Body),
-    Length(AResponse.Body), PWideChar(Result), lvLen);
+  MultiByteToWideChar(CP_UTF8, 0, PAnsiChar(aResponse.Body),
+    Length(aResponse.Body), PWideChar(Result), lvLen);
 end;
 
-function BpHttpHeaderValue(const AHeaders, AName: string): string;
+function BpHttpHeaderValue(const aHeaders, aName: string): string;
 var
   lvLines: TStringList;
   lvLine, lvPrefix: string;
   i, lvColon: Integer;
 begin
   Result := '';
-  lvPrefix := LowerCase(AName);
+  lvPrefix := LowerCase(aName);
   lvLines := TStringList.Create;
   try
-    lvLines.Text := AHeaders;
+    lvLines.Text := aHeaders;
     for i := 0 to lvLines.Count - 1 do
     begin
       lvLine := lvLines[i];
@@ -1347,12 +1347,12 @@ begin
   end;
 end;
 
-function BpHttpContentLength(const AHeaders: string): Int64;
+function BpHttpContentLength(const aHeaders: string): Int64;
 var
   lvValue: string;
 begin
   Result := -1;
-  lvValue := BpHttpHeaderValue(AHeaders, 'Content-Length');
+  lvValue := BpHttpHeaderValue(aHeaders, 'Content-Length');
   if lvValue = '' then
     Exit;
   Result := StrToInt64Def(lvValue, -1);
@@ -1360,19 +1360,19 @@ begin
     Result := -1;
 end;
 
-function BpHttpProgressPercent(const AReceived, ATotal: Int64): Integer;
+function BpHttpProgressPercent(const aReceived, aTotal: Int64): Integer;
 begin
-  if ATotal <= 0 then
+  if aTotal <= 0 then
     Result := -1
-  else if AReceived <= 0 then
+  else if aReceived <= 0 then
     Result := 0
-  else if AReceived >= ATotal then
+  else if aReceived >= aTotal then
     Result := 100
   else
-    Result := (AReceived * 100) div ATotal;
+    Result := (aReceived * 100) div aTotal;
 end;
 
-function BpClassifyHttpError(AWinInetError: DWORD; AHttpStatus: Integer): string;
+function BpClassifyHttpError(aWinInetError: DWORD; aHttpStatus: Integer): string;
 const
   // some of these are missing from D2007's WinInet.pas, so declared inline
   lcErrTimeout           = 12002;
@@ -1384,9 +1384,9 @@ const
   lcErrInvalidCa         = 12045;
   lcErrSecureFailure     = 12175;
 begin
-  if AWinInetError <> 0 then
+  if aWinInetError <> 0 then
   begin
-    case AWinInetError of
+    case aWinInetError of
       lcErrNameNotResolved:
         Result := 'Cannot reach server (DNS or network issue)';
       lcErrTimeout:
@@ -1405,16 +1405,16 @@ begin
     Exit;
   end;
 
-  case AHttpStatus of
+  case aHttpStatus of
     401: Result := 'Authentication failed (invalid credentials or token?)';
     403: Result := 'Access denied (missing permission or scope?)';
     404: Result := 'Endpoint not found (check URL)';
     429: Result := 'Rate limited by server';
   else
-    if (AHttpStatus >= 500) and (AHttpStatus <= 599) then
+    if (aHttpStatus >= 500) and (aHttpStatus <= 599) then
       Result := 'Server error'
-    else if AHttpStatus > 0 then
-      Result := Format('HTTP error %d', [AHttpStatus])
+    else if aHttpStatus > 0 then
+      Result := Format('HTTP error %d', [aHttpStatus])
     else
       Result := 'Unknown error';
   end;
