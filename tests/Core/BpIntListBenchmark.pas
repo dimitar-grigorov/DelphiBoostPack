@@ -56,7 +56,11 @@ begin
   lvMemStatus.dwLength := SizeOf(TMemoryStatus);
   GlobalMemoryStatus(lvMemStatus); // Retrieve the memory status
   if (lvMemStatus.dwAvailPhys < lcTwoGB) then
-    Fail('Insufficient memory available to run test: less than 2 GB RAM free');
+  begin
+    // skip instead of fail: a busy machine is not a regression
+    Status('SKIPPED: less than 2 GB RAM free, benchmark not executed');
+    Exit;
+  end;
 
   lvProcessMemoryBefore.cb := SizeOf(lvProcessMemoryBefore);
   lvProcessMemoryAfter.cb := SizeOf(lvProcessMemoryAfter);
