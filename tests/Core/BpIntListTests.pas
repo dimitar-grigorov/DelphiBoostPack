@@ -8,11 +8,11 @@ uses
   TestFramework, Classes, BpIntList, SysUtils;
 
 type
-  // Test methods for class TBpIntList
+  // Test methods for class TbpIntList
 
   TBpIntListTests = class(TTestCase)
   private
-    FBpIntList: TBpIntList;
+    FBpIntList: TbpIntList;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -102,7 +102,7 @@ uses
 
 procedure TBpIntListTests.SetUp;
 begin
-  FBpIntList := TBpIntList.Create;
+  FBpIntList := TbpIntList.Create;
 end;
 
 procedure TBpIntListTests.TearDown;

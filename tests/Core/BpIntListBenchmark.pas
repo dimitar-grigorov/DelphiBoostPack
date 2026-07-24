@@ -10,7 +10,7 @@ uses
 type
   TbpIntListBenchmark = class(TTestCase)
   private
-    FBpIntList: TBpIntList;
+    FBpIntList: TbpIntList;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -28,7 +28,7 @@ uses
 
 procedure TbpIntListBenchmark.SetUp;
 begin
-  FBpIntList := TBpIntList.Create;
+  FBpIntList := TbpIntList.Create;
 end;
 
 procedure TbpIntListBenchmark.TearDown;
@@ -39,7 +39,7 @@ end;
 
 procedure TbpIntListBenchmark.TestAddPerformance;
 var
-  lvIntList: TBpIntList;
+  lvIntList: TbpIntList;
   lvStrList: TStringList;
   lvStartTick, lvEndTick: Cardinal;
   lvDurationIntList, lvDurationStrList, lvMemoryIntList, lvMemoryStrList: Cardinal;
@@ -65,8 +65,8 @@ begin
   lvProcessMemoryBefore.cb := SizeOf(lvProcessMemoryBefore);
   lvProcessMemoryAfter.cb := SizeOf(lvProcessMemoryAfter);
 
-  // Test TBpIntList
-  lvIntList := TBpIntList.Create;
+  // Test TbpIntList
+  lvIntList := TbpIntList.Create;
   try
     GetProcessMemoryInfo(GetCurrentProcess(), @lvProcessMemoryBefore, SizeOf(lvProcessMemoryBefore));
     lvStartTick := GetTickCount;
@@ -110,11 +110,11 @@ begin
   // Output results
   Status(Format('Integers count: %d', [lcIntegersToAdd]));
   Status(EmptyStr);
-  Status(Format('TBpIntList Duration: %d ms', [lvDurationIntList]));
+  Status(Format('TbpIntList Duration: %d ms', [lvDurationIntList]));
   Status(Format('TStringList Duration: %d ms', [lvDurationStrList]));
   Status(Format('Duration Ratio (String/Int List): %.2f', [lvDurationRatio]));
   Status(EmptyStr);
-  Status(Format('TBpIntList Memory Usage: %d KB', [lvMemoryIntList]));
+  Status(Format('TbpIntList Memory Usage: %d KB', [lvMemoryIntList]));
   Status(Format('TStringList Memory Usage: %d KB', [lvMemoryStrList]));
   Status(Format('Memory Usage Ratio (String/Int List): %.2f', [lvMemoryRatio]));
 end;

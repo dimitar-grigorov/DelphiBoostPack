@@ -31,7 +31,7 @@ procedure TBpIntListMemoryTests.TestMemoryLeak;
 var
   il: IBpIntList;
 begin
-  il := TBpIntList.Create;
+  il := TbpIntList.Create;
   il.Add(1);
   il.Add(2);
   TestList(il);

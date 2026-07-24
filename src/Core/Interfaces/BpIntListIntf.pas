@@ -1,27 +1,29 @@
 unit BpIntListIntf;
 
+// Interface for TbpIntList (BpIntList.pas).
+
 interface
 
 type
   IBpIntList = interface
-    function GetItem(Index: Integer): Integer;
-    procedure SetItem(Index: Integer; const Value: Integer);
+    function GetItem(aIndex: Integer): Integer;
+    procedure SetItem(aIndex: Integer; const aValue: Integer);
     function GetDelimitedText: string;
-    procedure SetDelimitedText(const Value: string);
+    procedure SetDelimitedText(const aValue: string);
     function GetDelimiter: Char;
-    procedure SetDelimiter(const Value: Char);
+    procedure SetDelimiter(const aValue: Char);
     function GetCount: Integer;
     function GetCommaText: string;
-    procedure SetCommaText(const Value: string);
-    procedure SetSorted(const Value: Boolean);
-    
-    function Add(const Item: Integer): Integer;
-    procedure Delete(const Index: Integer);
+    procedure SetCommaText(const aValue: string);
+    procedure SetSorted(const aValue: Boolean);
+
+    function Add(const aItem: Integer): Integer;
+    procedure Delete(const aIndex: Integer);
     procedure Clear;
-    function IndexOf(const Item: Integer): Integer;
-    procedure Insert(Index: Integer; const Item: Integer);
+    function IndexOf(const aItem: Integer): Integer;
+    procedure Insert(aIndex: Integer; const aItem: Integer);
     procedure Sort;
-    property Items[Index: Integer]: Integer read GetItem write SetItem; default;
+    property Items[aIndex: Integer]: Integer read GetItem write SetItem; default;
     property CommaText: string read GetCommaText write SetCommaText;
     property Count: Integer read GetCount;
     property Delimiter: Char read GetDelimiter write SetDelimiter;

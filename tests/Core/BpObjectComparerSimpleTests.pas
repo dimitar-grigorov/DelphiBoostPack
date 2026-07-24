@@ -56,7 +56,7 @@ begin
     Obj1.StringProp := 'Test';
     Obj2.StringProp := 'Test';
 
-    Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
+    Diffs := TbpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(0, Length(Diffs), 'There should be no differences');
   finally
     Obj1.Free;
@@ -77,7 +77,7 @@ begin
     Obj1.FloatProp := 1.1;
     Obj2.FloatProp := 1.2;
 
-    Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
+    Diffs := TbpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(2, Length(Diffs), 'There should be two differences');
 
     CheckEquals('CharProp', Diffs[0].OldPropPath, 'First difference should be in CharProp');
@@ -107,7 +107,7 @@ begin
     Obj1.VariantProp := 'Variant1';
     Obj2.VariantProp := 'Variant2';
 
-    DiffStr := TBpObjectComparer.CompareObjectsAsString(Obj1, Obj2);
+    DiffStr := TbpObjectComparer.CompareObjectsAsString(Obj1, Obj2);
     CheckNotEquals('', DiffStr, 'The difference string should not be empty');
 
     CheckTrue(AnsiContainsStr(DiffStr, 'EnumProp; OldValue: meFirst; NewValue: meSecond'), 'Difference in EnumProp should be correctly formatted in DiffStr');
@@ -129,7 +129,7 @@ begin
     Obj1.MyCollection.Add.ID := 2;
     Obj2.MyCollection.Add.ID := 2;
 
-    Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
+    Diffs := TbpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(0, Length(Diffs), 'Collections are identical, no differences should be found');
   finally
     Obj1.Free;
@@ -148,7 +148,7 @@ begin
     Obj1.MyCollection.Add.ID := 1;
     Obj2.MyCollection.Add.ID := 2; // Different ID
 
-    Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
+    Diffs := TbpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(2, Length(Diffs), 'Should find differences in collections for each item');
   finally
     Obj1.Free;
@@ -167,7 +167,7 @@ begin
     // Obj1 has no items added to MyCollection
     Obj2.MyCollection.Add.ID := 1; // Obj2 has one item
 
-    Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
+    Diffs := TbpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(2, Length(Diffs), 'Should find differences for count and the missing item');
   finally
     Obj1.Free;
@@ -192,7 +192,7 @@ begin
     Item2.ID := 5;
     Item2.Name := 'Item2';
 
-    Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
+    Diffs := TbpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(1, Length(Diffs), 'One difference expected');
     CheckEquals('MyCollection[0].Name', Diffs[0].OldPropPath, 'Property path should match');
     CheckEquals('Item1', Diffs[0].OldValue, 'Old value should match');
@@ -220,7 +220,7 @@ begin
     Item2.ID := 5;
     Item2.CharProp := 'B';
 
-    Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
+    Diffs := TbpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(1, Length(Diffs), 'One difference expected');
     CheckEquals('MyCollection[0].CharProp', Diffs[0].OldPropPath, 'Property path should match');
     CheckEquals('A', Diffs[0].OldValue, 'Old value should match');
@@ -248,7 +248,7 @@ begin
     Item2.ID := 5;
     Item2.FloatProp := 2.0;
 
-    Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
+    Diffs := TbpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(1, Length(Diffs), 'One difference expected');
     CheckEquals('MyCollection[0].FloatProp', Diffs[0].OldPropPath, 'Property path should match');
     CheckEquals(1.0, VarAsType(Diffs[0].OldValue, varDouble), 0.001, 'Old value should match');
@@ -276,7 +276,7 @@ begin
     Item2.ID := 5;
     Item2.EnumProp := meValueTwo;
 
-    Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
+    Diffs := TbpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(1, Length(Diffs), 'One difference expected');
     CheckEquals('MyCollection[0].EnumProp', Diffs[0].OldPropPath, 'Property path should match');
 
@@ -312,7 +312,7 @@ begin
     Item2.FloatProp := 2.0;
     Item2.EnumProp := meValueTwo;
 
-    Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
+    Diffs := TbpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(4, Length(Diffs), 'Four differences expected');
 
     CheckEquals('MyCollection[0].CharProp', Diffs[0].OldPropPath);
@@ -366,7 +366,7 @@ begin
       Name := 'Item1';
     end;
 
-    Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
+    Diffs := TbpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(0, Length(Diffs), 'No differences should be found if order is not considered');
   finally
     Obj1.Free;
@@ -397,7 +397,7 @@ begin
     Item2.FloatProp := 2.2;
     Item2.EnumProp := meValueTwo;
 
-    Diffs := TBpObjectComparer.CompareObjects(Obj1, Obj2);
+    Diffs := TbpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(4, Length(Diffs), 'Four differences expected');
 
     CheckEquals('MyCollection[0].CharProp', Diffs[0].OldPropPath, 'Property path should match');
@@ -425,7 +425,7 @@ procedure TestTBpObjectComparer.TestStripIndexFromProperty_NoBrackets;
 var
   lvResult: string;
 begin
-  lvResult := TBpObjectComparer.StripIndexFromProperty('SomeProperty');
+  lvResult := TbpObjectComparer.StripIndexFromProperty('SomeProperty');
   CheckEquals('SomeProperty', lvResult);
 end;
 
@@ -433,7 +433,7 @@ procedure TestTBpObjectComparer.TestStripIndexFromProperty_WithBrackets;
 var
   lvResult: string;
 begin
-  lvResult := TBpObjectComparer.StripIndexFromProperty('SomeProperty[Index]');
+  lvResult := TbpObjectComparer.StripIndexFromProperty('SomeProperty[Index]');
   CheckEquals('SomeProperty', lvResult);
 end;
 
@@ -441,7 +441,7 @@ procedure TestTBpObjectComparer.TestStripIndexFromProperty_EmptyString;
 var
   lvResult: string;
 begin
-  lvResult := TBpObjectComparer.StripIndexFromProperty('');
+  lvResult := TbpObjectComparer.StripIndexFromProperty('');
   CheckEquals('', lvResult);
 end;
 
@@ -449,7 +449,7 @@ procedure TestTBpObjectComparer.TestStripIndexFromProperty_NestedBrackets;
 var
   lvResult: string;
 begin
-  lvResult := TBpObjectComparer.StripIndexFromProperty('SomeProperty[Outer[Inner]]');
+  lvResult := TbpObjectComparer.StripIndexFromProperty('SomeProperty[Outer[Inner]]');
   CheckEquals('SomeProperty', lvResult);
 end;
 
@@ -457,7 +457,7 @@ procedure TestTBpObjectComparer.TestStripIndexFromProperty_OnlyBrackets;
 var
   lvResult: string;
 begin
-  lvResult := TBpObjectComparer.StripIndexFromProperty('[Index]');
+  lvResult := TbpObjectComparer.StripIndexFromProperty('[Index]');
   CheckEquals('', lvResult);
 end;
 
@@ -465,7 +465,7 @@ procedure TestTBpObjectComparer.TestStripIndexFromProperty_BracketsAtEdges;
 var
   lvResult: string;
 begin
-  lvResult := TBpObjectComparer.StripIndexFromProperty('[Start]Property[End]');
+  lvResult := TbpObjectComparer.StripIndexFromProperty('[Start]Property[End]');
   CheckEquals('Property', lvResult);
 end;
 
