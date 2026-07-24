@@ -14,6 +14,7 @@ uses
   BpStrDictionary in 'Core\Classes\BpStrDictionary.pas',
   BpStringBuilder in 'Core\Classes\BpStringBuilder.pas',
   BpHMACSHA256 in 'Core\Classes\BpHMACSHA256.pas',
+  BpCredentials in 'Core\Classes\BpCredentials.pas',
   BpHttpClient in 'Core\Classes\BpHttpClient.pas',
   BpIntDictionary in 'Core\Classes\BpIntDictionary.pas',
   BpJson in 'Core\Classes\BpJson.pas',
