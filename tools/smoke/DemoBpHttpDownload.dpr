@@ -93,13 +93,11 @@ var
 begin
   Writeln('3) Async download on a worker thread, cancelled mid-flight');
   lvFileName := ExtractFilePath(ParamStr(0)) + 'demo_cancel.bin';
-  // False: console app without a message loop, so no event marshaling;
-  // this thread just polls the thread-safe properties
-  lvTask := TbpHttpDownloadTask.Create(False);
+  // hot task in one call; False = console app without a message loop, so no
+  // event marshaling, this thread just polls the thread-safe properties
+  lvTask := BpDownloadAsync('https://speed.cloudflare.com/__down?bytes=67108864',
+    lvFileName, nil, nil, False);
   try
-    lvTask.Url := 'https://speed.cloudflare.com/__down?bytes=67108864'; // 64 MB
-    lvTask.DestFileName := lvFileName;
-    lvTask.Start;
     Writeln('  started, main thread stays free...');
 
     // let it move some bytes, then abort

@@ -5,8 +5,7 @@ unit BpHttpDownloadTests;
 interface
 
 uses
-  TestFramework, SysUtils, Classes, Windows, WinSock, BpHttpClient,
-  BpCancellationToken, BpHttpDownloadTask;
+  TestFramework, SysUtils, Classes, Windows, WinSock, BpHttpClient;
 
 type
   // offline tests: progress math, header parsing, error classification,
@@ -28,6 +27,7 @@ type
     procedure TestTaskStartValidation;
     procedure TestTaskInvalidUrlFails;
     procedure TestTaskCancelBeforeStart;
+    procedure TestDownloadAsyncFactory;
   end;
 
   TSlowHttpServer = class;
@@ -225,109 +225,6 @@ begin
     if send(AClient, lvDribble, SizeOf(lvDribble), 0) = SOCKET_ERROR then
       Exit;  // client hung up (cancelled) - done with this one
     Sleep(50);
-  end;
-end;
-
-{ TBpHttpDownloadCancelTests }
-
-procedure TBpHttpDownloadCancelTests.SetUp;
-begin
-  inherited;
-  FClient := TbpHttpClient.Create;
-  FServer := TSlowHttpServer.Create;
-  FCancelAtFirstData := False;
-  FCompleteFired := False;
-  FErrorFired := False;
-end;
-
-procedure TBpHttpDownloadCancelTests.TearDown;
-begin
-  FServer.Free;   // Shutdown + join inside
-  FClient.Free;
-  inherited;
-end;
-
-function TBpHttpDownloadCancelTests.ServerUrl: string;
-begin
-  Result := Format('http://127.0.0.1:%d/slow.bin', [FServer.Port]);
-end;
-
-procedure TBpHttpDownloadCancelTests.HandleProgress(ASender: TObject;
-  const AReceived, ATotal: Int64; var ACancel: Boolean);
-begin
-  if FCancelAtFirstData and (AReceived > 0) then
-    ACancel := True;
-end;
-
-procedure TBpHttpDownloadCancelTests.HandleComplete(ASender: TObject);
-begin
-  FCompleteFired := True;
-end;
-
-procedure TBpHttpDownloadCancelTests.HandleError(ASender: TObject;
-  const AErrorMessage: string);
-begin
-  FErrorFired := True;
-end;
-
-procedure TBpHttpDownloadCancelTests.TestSyncCancelViaProgressCallback;
-var
-  lvStream: TMemoryStream;
-begin
-  lvStream := TMemoryStream.Create;
-  try
-    FCancelAtFirstData := True;
-    try
-      FClient.Download(ServerUrl, lvStream, HandleProgress);
-      Fail('expected EbpHttpClientCancelled');
-    except
-      on E: EbpHttpClientCancelled do
-        CheckEquals(gcErrOperationCancelled, E.WinInetError);
-    end;
-    Check(lvStream.Size > 0, 'some data arrived before the cancel');
-    Check(lvStream.Size < gcServerClaimedTotal,
-      'the download must not run to completion');
-  finally
-    lvStream.Free;
-  end;
-end;
-
-procedure TBpHttpDownloadCancelTests.TestAsyncCancelMidFlight;
-var
-  lvTask: TbpHttpDownloadTask;
-  lvFileName: string;
-  lvDeadline: Cardinal;
-begin
-  lvFileName := TempFilePath('bp_async_cancel_test.bin');
-  lvTask := TbpHttpDownloadTask.Create(False);  // events on the worker thread
-  try
-    lvTask.Url := ServerUrl;
-    lvTask.DestFileName := lvFileName;
-    lvTask.OnComplete := HandleComplete;
-    lvTask.OnError := HandleError;
-    lvTask.Start;
-
-    // wait for the first bytes, then cancel from this thread; the token
-    // closes the WinInet handle, so the abort is prompt even while the
-    // worker sits in a blocked read waiting for the server's dribble
-    lvDeadline := GetTickCount + 15000;
-    while (lvTask.Received = 0) and not lvTask.IsFinished and
-      (GetTickCount < lvDeadline) do
-      Sleep(10);
-    Check(lvTask.Received > 0,
-      'no data arrived to cancel mid-flight: ' + lvTask.ErrorMessage);
-    lvTask.Cancel;
-
-    CheckTrue(lvTask.WaitFor(10000), 'cancel must unwind promptly');
-    Check(lvTask.State = dtsCancelled,
-      'expected cancelled, got: ' + lvTask.ErrorMessage);
-    CheckEquals(gcErrOperationCancelled, lvTask.ErrorCode);
-    CheckFalse(FileExists(lvFileName), 'cancelled download deletes the partial file');
-    CheckTrue(FCompleteFired, 'OnComplete fires on every terminal state');
-    CheckFalse(FErrorFired, 'cancellation is not an error');
-  finally
-    lvTask.Free;
-    SysUtils.DeleteFile(lvFileName);
   end;
 end;
 
@@ -546,6 +443,128 @@ begin
   finally
     lvTask.Free;
     lvStream.Free;
+  end;
+end;
+
+procedure TBpHttpDownloadTests.TestDownloadAsyncFactory;
+var
+  lvTask: TbpHttpDownloadTask;
+  lvStream: TMemoryStream;
+begin
+  lvStream := TMemoryStream.Create;
+  // hot task: created, wired and already started; an unparsable url makes
+  // it fail fast without touching the network
+  lvTask := BpDownloadToStreamAsync('not a url at all', lvStream, nil, nil, False);
+  try
+    Check(lvTask.State in [dtsRunning, dtsFailed], 'factory returns a started task');
+    CheckTrue(lvTask.WaitFor(5000), 'worker must finish promptly');
+    Check(lvTask.State = dtsFailed, 'unparsable url fails the task');
+  finally
+    lvTask.Free;
+    lvStream.Free;
+  end;
+end;
+
+{ TBpHttpDownloadCancelTests }
+
+procedure TBpHttpDownloadCancelTests.SetUp;
+begin
+  inherited;
+  FClient := TbpHttpClient.Create;
+  FServer := TSlowHttpServer.Create;
+  FCancelAtFirstData := False;
+  FCompleteFired := False;
+  FErrorFired := False;
+end;
+
+procedure TBpHttpDownloadCancelTests.TearDown;
+begin
+  FServer.Free;   // Shutdown + join inside
+  FClient.Free;
+  inherited;
+end;
+
+function TBpHttpDownloadCancelTests.ServerUrl: string;
+begin
+  Result := Format('http://127.0.0.1:%d/slow.bin', [FServer.Port]);
+end;
+
+procedure TBpHttpDownloadCancelTests.HandleProgress(ASender: TObject;
+  const AReceived, ATotal: Int64; var ACancel: Boolean);
+begin
+  if FCancelAtFirstData and (AReceived > 0) then
+    ACancel := True;
+end;
+
+procedure TBpHttpDownloadCancelTests.HandleComplete(ASender: TObject);
+begin
+  FCompleteFired := True;
+end;
+
+procedure TBpHttpDownloadCancelTests.HandleError(ASender: TObject;
+  const AErrorMessage: string);
+begin
+  FErrorFired := True;
+end;
+
+procedure TBpHttpDownloadCancelTests.TestSyncCancelViaProgressCallback;
+var
+  lvStream: TMemoryStream;
+begin
+  lvStream := TMemoryStream.Create;
+  try
+    FCancelAtFirstData := True;
+    try
+      FClient.Download(ServerUrl, lvStream, HandleProgress);
+      Fail('expected EbpHttpClientCancelled');
+    except
+      on E: EbpHttpClientCancelled do
+        CheckEquals(gcErrOperationCancelled, E.WinInetError);
+    end;
+    Check(lvStream.Size > 0, 'some data arrived before the cancel');
+    Check(lvStream.Size < gcServerClaimedTotal,
+      'the download must not run to completion');
+  finally
+    lvStream.Free;
+  end;
+end;
+
+procedure TBpHttpDownloadCancelTests.TestAsyncCancelMidFlight;
+var
+  lvTask: TbpHttpDownloadTask;
+  lvFileName: string;
+  lvDeadline: Cardinal;
+begin
+  lvFileName := TempFilePath('bp_async_cancel_test.bin');
+  lvTask := TbpHttpDownloadTask.Create(False);  // events on the worker thread
+  try
+    lvTask.Url := ServerUrl;
+    lvTask.DestFileName := lvFileName;
+    lvTask.OnComplete := HandleComplete;
+    lvTask.OnError := HandleError;
+    lvTask.Start;
+
+    // wait for the first bytes, then cancel from this thread; the token
+    // closes the WinInet handle, so the abort is prompt even while the
+    // worker sits in a blocked read waiting for the server's dribble
+    lvDeadline := GetTickCount + 15000;
+    while (lvTask.Received = 0) and not lvTask.IsFinished and
+      (GetTickCount < lvDeadline) do
+      Sleep(10);
+    Check(lvTask.Received > 0,
+      'no data arrived to cancel mid-flight: ' + lvTask.ErrorMessage);
+    lvTask.Cancel;
+
+    CheckTrue(lvTask.WaitFor(10000), 'cancel must unwind promptly');
+    Check(lvTask.State = dtsCancelled,
+      'expected cancelled, got: ' + lvTask.ErrorMessage);
+    CheckEquals(gcErrOperationCancelled, lvTask.ErrorCode);
+    CheckFalse(FileExists(lvFileName), 'cancelled download deletes the partial file');
+    CheckTrue(FCompleteFired, 'OnComplete fires on every terminal state');
+    CheckFalse(FErrorFired, 'cancellation is not an error');
+  finally
+    lvTask.Free;
+    SysUtils.DeleteFile(lvFileName);
   end;
 end;
 
