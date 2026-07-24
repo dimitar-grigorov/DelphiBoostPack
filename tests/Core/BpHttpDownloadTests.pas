@@ -728,8 +728,13 @@ begin
 end;
 
 initialization
+  // offline unit tests always run
   RegisterTest(TBpHttpDownloadTests.Suite);
+{$IFNDEF NO_INTEGRATION}
+  // integration tests, on by default: loopback server plus live network.
+  // Build with NO_INTEGRATION defined for a fast, socket-free unit-only run.
   RegisterTest(TBpHttpDownloadCancelTests.Suite);
   RegisterTest(TBpHttpDownloadOnlineTests.Suite);
+{$ENDIF}
 
 end.

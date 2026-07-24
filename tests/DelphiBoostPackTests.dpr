@@ -13,10 +13,22 @@ uses
   TestFramework,
   GUITestRunner,
   TextTestRunner,
+{$IFDEF BENCHMARK}
+  // performance benchmarks, opt-in: build with BENCHMARK defined to include them
+  BpBaseBenchmarkTestCase in 'Benchmarks\BpBaseBenchmarkTestCase.pas',
+  BpIntListBenchmark in 'Core\BpIntListBenchmark.pas',
+  BpStringOperationsBenchmark in 'Benchmarks\BpStringOperationsBenchmark.pas',
+  BpStrDictionaryBenchmark in 'Benchmarks\BpStrDictionaryBenchmark.pas',
+  BpIntDictionaryBenchmark in 'Benchmarks\BpIntDictionaryBenchmark.pas',
+  BpStringBuilderBenchmark in 'Benchmarks\BpStringBuilderBenchmark.pas',
+  BpStrUtilsBenchmark in 'Benchmarks\BpStrUtilsBenchmark.pas',
+  BpBase64Benchmark in 'Benchmarks\BpBase64Benchmark.pas',
+  BpHashBenchmark in 'Benchmarks\BpHashBenchmark.pas',
+  BpTypesOperationsBenchmark in 'Benchmarks\BpTypesOperationsBenchmark.pas',
+{$ENDIF}
   BpIntListTests in 'Core\BpIntListTests.pas',
   BpIntList in '..\src\Core\Classes\BpIntList.pas',
   BpIntListIntf in '..\src\Core\Interfaces\BpIntListIntf.pas',
-  BpIntListBenchmark in 'Core\BpIntListBenchmark.pas',
   BpIntListMemoryTests in 'Core\BpIntListMemoryTests.pas',
   BpObjectComparerCollectionClasses in 'Core\BpObjectComparerCollectionClasses.pas',
   BpObjectComparerSimpleClasses in 'Core\BpObjectComparerSimpleClasses.pas',
@@ -51,16 +63,7 @@ uses
   BpStrUtils in '..\src\Core\Units\BpStrUtils.pas',
   BpSysUtilsTests in 'Core\BpSysUtilsTests.pas',
   BpSysUtils in '..\src\Core\Units\BpSysUtils.pas',
-  BpVariantUtils in '..\src\Core\Units\BpVariantUtils.pas',
-  BpStringOperationsBenchmark in 'Benchmarks\BpStringOperationsBenchmark.pas',
-  BpStrDictionaryBenchmark in 'Benchmarks\BpStrDictionaryBenchmark.pas',
-  BpIntDictionaryBenchmark in 'Benchmarks\BpIntDictionaryBenchmark.pas',
-  BpStringBuilderBenchmark in 'Benchmarks\BpStringBuilderBenchmark.pas',
-  BpStrUtilsBenchmark in 'Benchmarks\BpStrUtilsBenchmark.pas',
-  BpBase64Benchmark in 'Benchmarks\BpBase64Benchmark.pas',
-  BpHashBenchmark in 'Benchmarks\BpHashBenchmark.pas',
-  BpBaseBenchmarkTestCase in 'Benchmarks\BpBaseBenchmarkTestCase.pas',
-  BpTypesOperationsBenchmark in 'Benchmarks\BpTypesOperationsBenchmark.pas';
+  BpVariantUtils in '..\src\Core\Units\BpVariantUtils.pas';
 
 {$R *.RES}
 
