@@ -21,6 +21,7 @@ uses
   BpMD5 in 'Core\Classes\BpMD5.pas',
   BpPasswordHash in 'Core\Classes\BpPasswordHash.pas',
   BpSHA256 in 'Core\Classes\BpSHA256.pas',
+  BpTasks in 'Core\Classes\BpTasks.pas',
   BpBase64 in 'Core\Units\BpBase64.pas',
   BpDateUtils in 'Core\Units\BpDateUtils.pas',
   BpStrUtils in 'Core\Units\BpStrUtils.pas',
