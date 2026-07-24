@@ -1,5 +1,8 @@
 unit BpObjectComparer;
 
+// Diffs two objects by RTTI and reports which published properties changed,
+// collections included.
+
 interface
 
 uses
@@ -44,7 +47,7 @@ type
   TPropDifferences = array of IPropDifference;
 
 type
-  TBpObjectComparer = class
+  TbpObjectComparer = class
   private
     class procedure AppendDifference(var aDiffs: TPropDifferences; const aDiff: IPropDifference);
     class procedure AppendDifferences(var aTargetDiffs: TPropDifferences; const aSourceDiffs: TPropDifferences);
@@ -102,13 +105,13 @@ begin
   Result := FIdx;
 end;
 
-class procedure TBpObjectComparer.AppendDifference(var aDiffs: TPropDifferences; const aDiff: IPropDifference);
+class procedure TbpObjectComparer.AppendDifference(var aDiffs: TPropDifferences; const aDiff: IPropDifference);
 begin
   SetLength(aDiffs, Length(aDiffs) + 1);
   aDiffs[High(aDiffs)] := aDiff;
 end;
 
-class procedure TBpObjectComparer.AppendDifferences(var aTargetDiffs: TPropDifferences; const aSourceDiffs: TPropDifferences);
+class procedure TbpObjectComparer.AppendDifferences(var aTargetDiffs: TPropDifferences; const aSourceDiffs: TPropDifferences);
 var
   i: Integer;
 begin
@@ -116,45 +119,45 @@ begin
     AppendDifference(aTargetDiffs, aSourceDiffs[i]);
 end;
 
-class function TBpObjectComparer.InternalCompareProperties(aOld, aNew: TPersistent; const aOldPropPath, aNewPropPath: string; const aIdx: string = ''): TPropDifferences;
+class function TbpObjectComparer.InternalCompareProperties(aOld, aNew: TPersistent; const aOldPropPath, aNewPropPath: string; const aIdx: string = ''): TPropDifferences;
 var
-  PropList: PPropList;
-  PropCount, i: Integer;
-  PropInfo: PPropInfo;
+  lvPropList: PPropList;
+  lvPropCount, i: Integer;
+  lvPropInfo: PPropInfo;
   lvOldValue, lvNewValue: Variant;
   lvOldPropPath, lvNewPropPath: string;
 begin
   SetLength(Result, 0);
-  PropCount := GetPropList(aOld.ClassInfo, tkProperties, nil);
-  GetMem(PropList, PropCount * SizeOf(Pointer));
+  lvPropCount := GetPropList(aOld.ClassInfo, tkProperties, nil);
+  GetMem(lvPropList, lvPropCount * SizeOf(Pointer));
   try
-    GetPropList(aOld.ClassInfo, tkProperties, PropList);
-    for i := 0 to PropCount - 1 do
+    GetPropList(aOld.ClassInfo, tkProperties, lvPropList);
+    for i := 0 to lvPropCount - 1 do
     begin
-      PropInfo := PropList^[i];
-      lvOldPropPath := IfThen(aOldPropPath <> '', aOldPropPath + '.', '') + PropInfo^.Name;
+      lvPropInfo := lvPropList^[i];
+      lvOldPropPath := IfThen(aOldPropPath <> '', aOldPropPath + '.', '') + string(lvPropInfo^.Name);
       if (aNewPropPath = EmptyStr) then
         lvNewPropPath := lvOldPropPath
       else
-        lvNewPropPath := aNewPropPath + '.' + PropInfo^.Name;
+        lvNewPropPath := aNewPropPath + '.' + string(lvPropInfo^.Name);
 
-      case PropInfo^.PropType^.Kind of
+      case lvPropInfo^.PropType^.Kind of
         tkInteger, tkEnumeration, tkFloat, tkString, tkSet, tkLString, tkWString, tkVariant:
           begin
-            lvOldValue := GetPropValue(aOld, PropInfo^.Name);
-            lvNewValue := GetPropValue(aNew, PropInfo^.Name);
+            lvOldValue := GetPropValue(aOld, string(lvPropInfo^.Name));
+            lvNewValue := GetPropValue(aNew, string(lvPropInfo^.Name));
           end;
         tkChar, tkWChar:
           begin
-            lvOldValue := Char(GetOrdProp(aOld, PropInfo^.Name));
-            lvNewValue := Char(GetOrdProp(aNew, PropInfo^.Name));
+            lvOldValue := Char(GetOrdProp(aOld, string(lvPropInfo^.Name)));
+            lvNewValue := Char(GetOrdProp(aNew, string(lvPropInfo^.Name)));
           end;
         tkClass:
           begin
-            if GetObjectProp(aOld, PropInfo) is TCollection then
+            if GetObjectProp(aOld, lvPropInfo) is TCollection then
             begin
-              CompareCollectionItems(TCollection(GetObjectProp(aOld, PropInfo)),
-                TCollection(GetObjectProp(aNew, PropInfo)), lvOldPropPath, lvNewPropPath, Result);
+              CompareCollectionItems(TCollection(GetObjectProp(aOld, lvPropInfo)),
+                TCollection(GetObjectProp(aNew, lvPropInfo)), lvOldPropPath, lvNewPropPath, Result);
             end;
             Continue; // Skip the AppendDifference call for collections, as CompareCollectionItems handles it.
           end;
@@ -166,11 +169,11 @@ begin
         AppendDifference(Result, TPropDifference.Create(lvOldPropPath, lvNewPropPath, lvOldValue, lvNewValue, aIdx));
     end;
   finally
-    FreeMem(PropList);
+    FreeMem(lvPropList);
   end;
 end;
 
-class procedure TBpObjectComparer.CompareCollectionItems(aOldColl, aNewColl: TCollection;
+class procedure TbpObjectComparer.CompareCollectionItems(aOldColl, aNewColl: TCollection;
   const aOldPropPath, aNewPropPath: string; var aDiffs: TPropDifferences);
 var
   I, lvFoundItemIdx: Integer;
@@ -269,12 +272,12 @@ begin
   end;
 end;
 
-class function TBpObjectComparer.CompareObjects(aOld, aNew: TPersistent): TPropDifferences;
+class function TbpObjectComparer.CompareObjects(aOld, aNew: TPersistent): TPropDifferences;
 begin
   Result := InternalCompareProperties(aOld, aNew, '', '');
 end;
 
-class function TBpObjectComparer.CompareObjectsAsString(aOld, aNew: TPersistent): string;
+class function TbpObjectComparer.CompareObjectsAsString(aOld, aNew: TPersistent): string;
 var
   lvDiffs: TPropDifferences;
   lvStrings: TStringList;
@@ -297,7 +300,7 @@ begin
   end;
 end;
 
-class function TBpObjectComparer.StripIndexFromProperty(const aProp: string): string;
+class function TbpObjectComparer.StripIndexFromProperty(const aProp: string): string;
 var
   lvResult: string;
   lvChar: Char;

@@ -2,6 +2,9 @@
 
 unit BpIntList;
 
+// A list of integers that behaves like TStringList: sorting, delimited
+// text, the usual indexing.
+
 interface
 
 uses
@@ -10,52 +13,52 @@ uses
 type
   TbpIntListDefined = set of (idDelimiter, idLineBreak, idStrictDelimiter);
 
-  TBpIntList = class(TInterfacedObject, IBpIntList)
+  TbpIntList = class(TInterfacedObject, IBpIntList)
   private
     {$IFDEF BENCHMARK}
     FStepCount: Integer;
-    {$ENDIF}  
+    {$ENDIF}
     FList: array of Integer;
     FDefined: TbpIntListDefined;
     FUpdateCount: Integer;
     FCount: Integer;
     FSorted: Boolean;
     FDelimiter: Char;
-    function GetItem(Index: Integer): Integer;
-    procedure SetItem(Index: Integer; const Value: Integer);
-    procedure SetCapacity(const NewCapacity: Integer);
-    procedure ExchangeItems(Index1, Index2: Integer);
+    function GetItem(aIndex: Integer): Integer;
+    procedure SetItem(aIndex: Integer; const aValue: Integer);
+    procedure SetCapacity(const aNewCapacity: Integer);
+    procedure ExchangeItems(aIndex1, aIndex2: Integer);
     procedure Grow;
-    procedure QuickSort(L, R: Integer);
+    procedure QuickSort(aL, aR: Integer);
     function GetDelimitedText: string;
-    procedure SetDelimitedText(const Value: string);
+    procedure SetDelimitedText(const aValue: string);
     function GetDelimiter: Char;
-    procedure SetDelimiter(const Value: Char);
+    procedure SetDelimiter(const aValue: Char);
     function GetCount: Integer;
     function GetCommaText: string;
-    procedure SetCommaText(const Value: string);
-    procedure SetSorted(const Value: Boolean);
+    procedure SetCommaText(const aValue: string);
+    procedure SetSorted(const aValue: Boolean);
   protected
     property UpdateCount: Integer read FUpdateCount;
   public
     constructor Create;
     destructor Destroy; override;
-    function Add(const Item: Integer): Integer;
-    procedure Delete(const Index: Integer);
+    function Add(const aItem: Integer): Integer;
+    procedure Delete(const aIndex: Integer);
     procedure Clear;
-    procedure Exchange(Index1, Index2: Integer); virtual;
-    function IndexOf(const Item: Integer): Integer;
-    function BinarySearch(const Item: Integer; out FoundIndex: Integer): Boolean;    
-    procedure Insert(Index: Integer; const Item: Integer);
+    procedure Exchange(aIndex1, aIndex2: Integer); virtual;
+    function IndexOf(const aItem: Integer): Integer;
+    function BinarySearch(const aItem: Integer; out aFoundIndex: Integer): Boolean;
+    procedure Insert(aIndex: Integer; const aItem: Integer);
     procedure Sort; virtual;
 
-    procedure LoadFromFile(const FileName: string); virtual;
-    procedure LoadFromStream(Stream: TStream); virtual;
-    procedure SaveToFile(const FileName: string); virtual;
-    procedure SaveToStream(Stream: TStream); virtual;
-    class function CompareInt(I1, I2: Integer): Integer;    
+    procedure LoadFromFile(const aFileName: string); virtual;
+    procedure LoadFromStream(aStream: TStream); virtual;
+    procedure SaveToFile(const aFileName: string); virtual;
+    procedure SaveToStream(aStream: TStream); virtual;
+    class function CompareInt(aI1, aI2: Integer): Integer;
   public
-    property Items[Index: Integer]: Integer read GetItem write SetItem; default;
+    property Items[aIndex: Integer]: Integer read GetItem write SetItem; default;
     property CommaText: string read GetCommaText write SetCommaText;
     property Count: Integer read GetCount;
     property Delimiter: Char read GetDelimiter write SetDelimiter;
@@ -68,13 +71,21 @@ type
   end;
 
 {$IFNDEF NEXTGEN}
-  TIntegerList = class(TBpIntList)
+  TIntegerList = class(TbpIntList)
   end;
-  TIntList = class(TBpIntList)
+  TIntList = class(TbpIntList)
   end;
 {$ENDIF}
 
 implementation
+
+{$IF not Declared(CharInSet)}
+// Delphi 2007 and earlier lack CharInSet; there Char is single-byte, so a plain set test suffices.
+function CharInSet(C: Char; const CharSet: TSysCharSet): Boolean;
+begin
+  Result := C in CharSet;
+end;
+{$IFEND}
 
 resourcestring
   SListCapacityError = 'List capacity out of bounds (%d)';
@@ -82,7 +93,7 @@ resourcestring
   SListIndexError = 'List index out of bounds (%d)';
   SListMustBeSortedForBinarySearch = 'List must be sorted before performing binary search';
 
-constructor TBpIntList.Create;
+constructor TbpIntList.Create;
 begin
   inherited;
   FCount := 0;
@@ -90,89 +101,90 @@ begin
   SetCapacity(0);
 end;
 
-destructor TBpIntList.Destroy;
+destructor TbpIntList.Destroy;
 begin
   inherited Destroy;
   FCount := 0;
   SetCapacity(0);
 end;
 
-function TBpIntList.GetItem(Index: Integer): Integer;
+function TbpIntList.GetItem(aIndex: Integer): Integer;
 begin
-  if (Index < 0) or (Index >= FCount) then
+  if (aIndex < 0) or (aIndex >= FCount) then
     raise EListError.Create('List index out of bounds');
-  Result := FList[Index];
+  Result := FList[aIndex];
 end;
 
-procedure TBpIntList.SetItem(Index: Integer; const Value: Integer);
+procedure TbpIntList.SetItem(aIndex: Integer; const aValue: Integer);
 begin
-  if (Index < 0) or (Index >= FCount) then
+  if (aIndex < 0) or (aIndex >= FCount) then
     raise EListError.Create('List index out of bounds');
-  FList[Index] := Value;
+  FList[aIndex] := aValue;
 end;
 
-procedure TBpIntList.SetSorted(const Value: Boolean);
+procedure TbpIntList.SetSorted(const aValue: Boolean);
 begin
-  if FSorted <> Value then
+  if FSorted <> aValue then
   begin
-    if Value then
+    if aValue then
       Sort;
-    FSorted := Value;
+    FSorted := aValue;
   end;
 end;
 
-procedure TBpIntList.SetCapacity(const NewCapacity: Integer);
+procedure TbpIntList.SetCapacity(const aNewCapacity: Integer);
 begin
-  if NewCapacity < FCount then
-    FCount := NewCapacity; // Reduce count if reducing capacity below count
-  if NewCapacity <> Length(FList) then
-    SetLength(FList, NewCapacity);
+  if aNewCapacity < FCount then
+    FCount := aNewCapacity; // Reduce count if reducing capacity below count
+  if aNewCapacity <> Length(FList) then
+    SetLength(FList, aNewCapacity);
 end;
 
-procedure TBpIntList.Exchange(Index1, Index2: Integer);
+procedure TbpIntList.Exchange(aIndex1, aIndex2: Integer);
 begin
-  if (Index1 < 0) or (Index1 >= FCount) then
-    raise EListError.CreateFmt(SListIndexError, [Index1]);
-  if (Index2 < 0) or (Index2 >= FCount) then
-    raise EListError.CreateFmt(SListIndexError, [Index2]);
-  ExchangeItems(Index1, Index2);
+  if (aIndex1 < 0) or (aIndex1 >= FCount) then
+    raise EListError.CreateFmt(SListIndexError, [aIndex1]);
+  if (aIndex2 < 0) or (aIndex2 >= FCount) then
+    raise EListError.CreateFmt(SListIndexError, [aIndex2]);
+  ExchangeItems(aIndex1, aIndex2);
 end;
 
-procedure TBpIntList.ExchangeItems(Index1, Index2: Integer);
+procedure TbpIntList.ExchangeItems(aIndex1, aIndex2: Integer);
 var
-  Temp: Integer;
+  lvTemp: Integer;
 begin
-  Temp := FList[Index1];
-  FList[Index1] := FList[Index2];
-  FList[Index2] := Temp;
+  lvTemp := FList[aIndex1];
+  FList[aIndex1] := FList[aIndex2];
+  FList[aIndex2] := lvTemp;
 end;
 
-procedure TBpIntList.Grow;
+procedure TbpIntList.Grow;
 var
-  NewCapacity: Integer;
+  lvNewCapacity: Integer;
 begin
   if Length(FList) > 64 then
-    NewCapacity := Length(FList) + (Length(FList) div 4)
+    lvNewCapacity := Length(FList) + (Length(FList) div 4)
   else if Length(FList) > 8 then
-    NewCapacity := Length(FList) + 16
+    lvNewCapacity := Length(FList) + 16
   else
-    NewCapacity := Length(FList) + 4;
-  SetCapacity(NewCapacity);
+    lvNewCapacity := Length(FList) + 4;
+  SetCapacity(lvNewCapacity);
 end;
 
-procedure TBpIntList.QuickSort(L, R: Integer);
+procedure TbpIntList.QuickSort(aL, aR: Integer);
 var
-  I, J, Pivot: Integer;
+  I, J: Integer;
+  lvPivot: Integer;
 begin
-  if L < R then
+  if aL < aR then
   begin
-    Pivot := FList[(L + R) div 2]; // Choose the pivot element
-    I := L;
-    J := R;
+    lvPivot := FList[(aL + aR) div 2]; // Choose the pivot element
+    I := aL;
+    J := aR;
     repeat
-      while FList[I] < Pivot do
+      while FList[I] < lvPivot do
         Inc(I);
-      while FList[J] > Pivot do
+      while FList[J] > lvPivot do
         Dec(J);
       if I <= J then
       begin
@@ -183,27 +195,27 @@ begin
       end;
     until I > J;
     // Recursively sort the partitions
-    QuickSort(L, J);
-    QuickSort(I, R);
+    QuickSort(aL, J);
+    QuickSort(I, aR);
   end;
 end;
 
-function TBpIntList.Add(const Item: Integer): Integer;
+function TbpIntList.Add(const aItem: Integer): Integer;
 begin
   Result := GetCount;
-  Insert(Result, Item);
+  Insert(Result, aItem);
 end;
 
-procedure TBpIntList.Delete(const Index: Integer);
+procedure TbpIntList.Delete(const aIndex: Integer);
 begin
-  if (Index < 0) or (Index >= FCount) then
+  if (aIndex < 0) or (aIndex >= FCount) then
     raise EListError.Create('List index out of bounds');
   Dec(FCount);
-  if (Index < FCount) then
-    System.Move(FList[Index + 1], FList[Index], (FCount - Index) * SizeOf(Integer));
+  if (aIndex < FCount) then
+    System.Move(FList[aIndex + 1], FList[aIndex], (FCount - aIndex) * SizeOf(Integer));
 end;
 
-procedure TBpIntList.Clear;
+procedure TbpIntList.Clear;
 begin
   if FCount <> 0 then
   begin
@@ -212,23 +224,23 @@ begin
   end;
 end;
 
-function TBpIntList.GetDelimiter: Char;
+function TbpIntList.GetDelimiter: Char;
 begin
   if not (idDelimiter in FDefined) then
     Delimiter := ',';
   Result := FDelimiter;
 end;
 
-procedure TBpIntList.SetDelimiter(const Value: Char);
+procedure TbpIntList.SetDelimiter(const aValue: Char);
 begin
-  if (FDelimiter <> Value) or not (idDelimiter in FDefined) then
+  if (FDelimiter <> aValue) or not (idDelimiter in FDefined) then
   begin
     Include(FDefined, idDelimiter);
-    FDelimiter := Value;
+    FDelimiter := aValue;
   end
 end;
 
-function TBpIntList.GetCommaText: string;
+function TbpIntList.GetCommaText: string;
 var
   lvOldDefined: TbpIntListDefined;
   lvOldDelimiter: Char;
@@ -244,18 +256,18 @@ begin
   end;
 end;
 
-procedure TBpIntList.SetCommaText(const Value: string);
+procedure TbpIntList.SetCommaText(const aValue: string);
 begin
   Delimiter := ',';
-  SetDelimitedText(Value);
+  SetDelimitedText(aValue);
 end;
 
-function TBpIntList.GetCount: Integer;
+function TbpIntList.GetCount: Integer;
 begin
   Result := FCount;
 end;
 
-function TBpIntList.GetDelimitedText: string;
+function TbpIntList.GetDelimitedText: string;
 var
   i: Integer;
 begin
@@ -268,87 +280,87 @@ begin
   end;
 end;
 
-procedure TBpIntList.SetDelimitedText(const Value: string);
+procedure TbpIntList.SetDelimitedText(const aValue: string);
 var
-  P, Start: PChar;
-  S: string;
-  Num: Integer;
+  P, lvStart: PChar;
+  lvS: string;
+  lvNum: Integer;
 begin
   Clear;
-  P := PChar(Value);
+  P := PChar(aValue);
   while P^ <> #0 do
   begin
-    Start := P;
+    lvStart := P;
     // Search for the next delimiter, end of string, or newline character
-    while (P^ <> #0) and (P^ <> Delimiter) and not (P^ in [#10, #13]) do
+    while (P^ <> #0) and (P^ <> Delimiter) and not CharInSet(P^, [#10, #13]) do
       Inc(P);
 
     // Extract the substring from the start of the number to the delimiter
-    SetString(S, Start, P - Start);
-    if S <> '' then
+    SetString(lvS, lvStart, P - lvStart);
+    if lvS <> '' then
     begin
       // Try to convert the substring into a number and add it to the list
-      if TryStrToInt(S, Num) then
-        Add(Num)
+      if TryStrToInt(lvS, lvNum) then
+        Add(lvNum)
       else
-        raise EConvertError.CreateFmt('Cannot convert string "%s" to integer', [S]);
+        raise EConvertError.CreateFmt('Cannot convert string "%s" to integer', [lvS]);
     end;
 
     // Skip the delimiter and any trailing newline characters or spaces
-    while P^ in [Delimiter, #10, #13, ' '] do
+    while (P^ = Delimiter) or CharInSet(P^, [#10, #13, ' ']) do
       Inc(P);
   end;
 end;
 
 
-procedure TBpIntList.LoadFromFile(const FileName: string);
+procedure TbpIntList.LoadFromFile(const aFileName: string);
 var
-  FileStream: TFileStream;
+  lvFileStream: TFileStream;
 begin
-  FileStream := TFileStream.Create(FileName, fmOpenRead or fmShareDenyWrite);
+  lvFileStream := TFileStream.Create(aFileName, fmOpenRead or fmShareDenyWrite);
   try
-    LoadFromStream(FileStream);
+    LoadFromStream(lvFileStream);
   finally
-    FileStream.Free;
+    lvFileStream.Free;
   end;
 end;
 
-procedure TBpIntList.LoadFromStream(Stream: TStream);
+procedure TbpIntList.LoadFromStream(aStream: TStream);
 var
-  S: string;
-  Buffer: array of Byte;
+  lvS: string;
+  lvBuffer: array of Byte;
 begin
   Clear;
-  SetLength(Buffer, Stream.Size);
-  Stream.Position := 0; // Ensure the stream's read pointer is at the beginning.
-  Stream.Read(Buffer[0], Stream.Size);
+  SetLength(lvBuffer, aStream.Size);
+  aStream.Position := 0; // Ensure the stream's read pointer is at the beginning.
+  aStream.Read(lvBuffer[0], aStream.Size);
   // Convert buffer into string
-  SetString(S, PAnsiChar(@Buffer[0]), Length(Buffer));
-  SetDelimitedText(S);
+  SetString(lvS, PAnsiChar(@lvBuffer[0]), Length(lvBuffer));
+  SetDelimitedText(lvS);
 end;
 
-procedure TBpIntList.SaveToFile(const FileName: string);
+procedure TbpIntList.SaveToFile(const aFileName: string);
 var
-  FileStream: TFileStream;
+  lvFileStream: TFileStream;
 begin
-  FileStream := TFileStream.Create(FileName, fmCreate);
+  lvFileStream := TFileStream.Create(aFileName, fmCreate);
   try
-    SaveToStream(FileStream);
+    SaveToStream(lvFileStream);
   finally
-    FileStream.Free;
+    lvFileStream.Free;
   end;
 end;
 
-procedure TBpIntList.SaveToStream(Stream: TStream);
+procedure TbpIntList.SaveToStream(aStream: TStream);
 var
-  Text: string;
+  lvText: string;
 begin
-  Text := GetDelimitedText; // Get the delimited text representation of the list
-  if Length(Text) > 0 then
-    Stream.WriteBuffer(Text[1], Length(Text));
+  lvText := GetDelimitedText; // Get the delimited text representation of the list
+  if Length(lvText) > 0 then
+    aStream.WriteBuffer(lvText[1], Length(lvText));
 end;
 
-function TBpIntList.IndexOf(const Item: Integer): Integer;
+function TbpIntList.IndexOf(const aItem: Integer): Integer;
 var
   lvFound: Boolean;
   lvFoundIndex: Integer;
@@ -359,7 +371,7 @@ begin
   {$ENDIF}
   if Sorted then
   begin
-    lvFound := BinarySearch(Item, lvFoundIndex);
+    lvFound := BinarySearch(aItem, lvFoundIndex);
     if lvFound then
       Result := lvFoundIndex
     else
@@ -373,7 +385,7 @@ begin
       {$IFDEF BENCHMARK}
       Inc(FStepCount);
       {$ENDIF}
-      if (FList[lvFoundIndex] = Item) then
+      if (FList[lvFoundIndex] = aItem) then
       begin
         Result := lvFoundIndex;
         Break;
@@ -382,14 +394,15 @@ begin
   end;
 end;
 
-function TBpIntList.BinarySearch(const Item: Integer; out FoundIndex: Integer): Boolean;
+function TbpIntList.BinarySearch(const aItem: Integer; out aFoundIndex: Integer): Boolean;
 var
-  L, H, M, lvCompResult: Integer;
+  L, H, M: Integer;
+  lvCompResult: Integer;
 begin
-  FoundIndex := -1;
+  aFoundIndex := -1;
   if not Sorted then
     raise EListError.Create(SListMustBeSortedForBinarySearch);
-  
+
   L := 0;
   H := FCount - 1;
   {$IFDEF BENCHMARK}
@@ -401,66 +414,66 @@ begin
     {$IFDEF BENCHMARK}
     Inc(FStepCount);
     {$ENDIF}
-    lvCompResult := CompareInt(FList[M], Item);
+    lvCompResult := CompareInt(FList[M], aItem);
     if lvCompResult < 0 then
       L := M + 1
     else if lvCompResult > 0 then
       H := M - 1
     else
     begin
-      FoundIndex := M;
+      aFoundIndex := M;
       Result := True;
       Exit;
     end;
   end;
-  FoundIndex := L; // Return the insertion point if not found
+  aFoundIndex := L; // Return the insertion point if not found
   Result := False;
 end;
 
-class function TBpIntList.CompareInt(I1, I2: Integer): Integer;
+class function TbpIntList.CompareInt(aI1, aI2: Integer): Integer;
 begin
-  if I1 < I2 then
+  if aI1 < aI2 then
     Result := -1
-  else if I1 > I2 then
+  else if aI1 > aI2 then
     Result := 1
   else
     Result := 0;
 end;
 
-procedure TBpIntList.Insert(Index: Integer; const Item: Integer);
+procedure TbpIntList.Insert(aIndex: Integer; const aItem: Integer);
 var
-  Low, High, Mid: Integer;
+  lvLow, lvHigh, lvMid: Integer;
 begin
-  if (Index < 0) or (Index > Count) then
+  if (aIndex < 0) or (aIndex > Count) then
     raise EListError.Create('List index out of bounds');
 
   if Sorted then
   begin
-    Low := 0;
-    High := Count - 1;
-    while Low <= High do
+    lvLow := 0;
+    lvHigh := Count - 1;
+    while lvLow <= lvHigh do
     begin
-      Mid := Low + (High - Low) div 2;
-      if FList[Mid] < Item then
-        Low := Mid + 1
+      lvMid := lvLow + (lvHigh - lvLow) div 2;
+      if FList[lvMid] < aItem then
+        lvLow := lvMid + 1
       else
-        High := Mid - 1;
+        lvHigh := lvMid - 1;
     end;
-    Index := Low;  // Low will be the correct insertion index
+    aIndex := lvLow;  // lvLow will be the correct insertion index
   end;
 
   if Count = Length(FList) then
     Grow;
 
   // Shift elements to make space for the new item.
-  if Index < Count then
-    System.Move(FList[Index], FList[Index + 1], (Count - Index) * SizeOf(Integer));
+  if aIndex < Count then
+    System.Move(FList[aIndex], FList[aIndex + 1], (Count - aIndex) * SizeOf(Integer));
 
-  FList[Index] := Item;
+  FList[aIndex] := aItem;
   Inc(FCount);
 end;
 
-procedure TBpIntList.Sort;
+procedure TbpIntList.Sort;
 begin
   if not Sorted and (FCount > 1) then
     QuickSort(0, FCount - 1);
