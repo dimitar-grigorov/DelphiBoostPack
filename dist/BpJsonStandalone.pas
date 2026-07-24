@@ -4,7 +4,7 @@ unit BpJsonStandalone;
 // Single-file bundle amalgamated from the DelphiBoostPack modular units:
 //   src\Core\Classes\BpStringBuilder.pas
 //   src\Core\Classes\BpJson.pas
-// Source commit 2677e2a, generated 2026-07-24 by tools\Amalgamate.ps1.
+// Source commit 8a29519, generated 2026-07-24 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   powershell -ExecutionPolicy Bypass -File tools\Amalgamate.ps1
 // Notes:
@@ -22,21 +22,10 @@ uses
 // BpStringBuilder.pas - interface
 // ==================================================================
 
-// Fast string builder for Delphi 7/2007 and later, API modeled on the XE6
-// SysUtils.TStringBuilder (itself a port of the .NET StringBuilder API).
-//
-// Storage is one contiguous string used as a raw character buffer with the
-// logical length tracked separately, so an append is a capacity check, one
-// Move and a cursor bump. Capacity doubles on growth (minimum 16). The RTL
-// version funnels every Append through the Length property setter, which is
-// the main reason it is slow; this one writes through a cached raw pointer.
-//
-// Integers are formatted backward into a small stack buffer (the mORMot
-// TTextWriter trick), so Append(Integer) and Append(Int64) never allocate.
-//
-// Chars and Insert use 0-based indexes, matching the XE6 TStringBuilder
-// convention. Clear keeps the allocated capacity so a builder can be reused
-// in a loop without reallocating.
+// Fast string builder for Delphi 7/2007+, API modeled on XE6 TStringBuilder.
+// It writes through a cached buffer pointer rather than routing every append
+// through the Length setter, which is what makes the RTL version slow.
+// Chars and Insert use 0-based indexes; Clear keeps capacity for reuse.
 
 type
   // raised for out-of-range indexes and invalid capacity or length values
@@ -82,30 +71,11 @@ type
 // BpJson.pas - interface
 // ==================================================================
 
-// JSON reader and writer for Delphi 7/2007 and later (RFC 8259), no
-// dependencies outside the RTL and BpStringBuilder.
-//
-// One class models the whole tree: a TbpJsonValue is a null, bool, int,
-// float, string, array or object depending on Kind. Parse returns the root
-// and freeing the root frees the entire tree (a parent owns its children).
-// The API shape mines XE6 System.JSON and superobject: typed object
-// accessors follow the TbpStrDictionary convention (GetStr / GetStrDef /
-// TryGetStr / SetStr) and FindPath walks dotted paths with [n] indexing,
-// e.g. Root.PathStrDef('data.items[0].name', '').
-//
-// The reader is a strict single-pass recursive descent parser over PChar:
-// leading zeros, control characters in strings, trailing commas and text
-// after the value all fail with a line/position message. Numbers without
-// '.' or exponent become Int64 (bjkInt), everything else Double (bjkFloat);
-// Int64 overflow falls back to float. \uXXXX escapes handle surrogate
-// pairs. Nesting depth is capped so hostile input cannot blow the stack.
-// Duplicate member names keep the last value, like JavaScript.
-//
-// On pre-Unicode compilers strings are AnsiString in the system codepage:
-// \uXXXX escapes convert through WideString (chars outside the codepage
-// become '?') and the parser assumes a single-byte codepage such as 1251.
-// ToJson(True) escapes every char above #127 as \uXXXX, producing pure
-// ASCII output that is safe to send anywhere regardless of codepage.
+// JSON reader/writer for Delphi 7/2007+ (RFC 8259). One class, TbpJsonValue,
+// is the whole tree; Parse returns the root and freeing it frees the tree.
+// Typed accessors follow the TbpStrDictionary convention; FindPath walks
+// dotted paths like 'data.items[0].name'. The parser is strict: leading
+// zeros, trailing commas, control chars and trailing junk all fail.
 
 type
   // raised on parse errors, kind mismatches and missing object members

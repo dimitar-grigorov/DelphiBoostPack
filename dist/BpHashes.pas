@@ -7,7 +7,7 @@ unit BpHashes;
 //   src\Core\Classes\BpMD5.pas
 //   src\Core\Classes\BpHMACSHA256.pas
 //   src\Core\Classes\BpPasswordHash.pas
-// Source commit 2677e2a, generated 2026-07-24 by tools\Amalgamate.ps1.
+// Source commit 8a29519, generated 2026-07-24 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   powershell -ExecutionPolicy Bypass -File tools\Amalgamate.ps1
 // Notes:
@@ -25,13 +25,10 @@ uses
 // BpBase64.pas - interface
 // ==================================================================
 
-// Base64 encode/decode per RFC 4648, standard and url-safe alphabets.
-// Encoding computes the exact output size and builds the result with a single
-// allocation. Standard encode pads with '='; Base64url encode omits padding
-// (the common form in tokens, e.g. JWT).
-// Decoding uses one shared reverse lookup table that accepts both alphabets,
-// tolerates missing padding and skips whitespace (so MIME output with CRLF
-// line breaks decodes fine). Any other character raises EbpBase64.
+// Base64 encode/decode (RFC 4648), standard and url-safe alphabets. Encoding
+// is a single allocation; standard pads with '=', url-safe omits it. Decoding
+// accepts either alphabet, tolerates missing padding and skips whitespace
+// (so MIME line breaks are fine); any other character raises EbpBase64.
 
 type
   EbpBase64 = class(Exception);
@@ -49,18 +46,10 @@ function Base64DecodeStr(const aBase64: string): AnsiString;
 // BpSHA256.pas - interface
 // ==================================================================
 
-// SHA-256 per FIPS 180-4, pure Pascal, for Delphi 7/2007 and later.
-//
-// Streaming interface (Create or Init, Update in chunks, Final) so large
-// inputs such as files never need to fit in memory; class function one-shots
-// cover the common buffer/bytes/string/file cases with hex or Base64 output.
-// Update compresses full 64-byte blocks straight from the caller's buffer
-// (the partial-block copy only happens at chunk boundaries), Final resets the
-// state so an instance can be reused for the next message.
-//
-// Verified in the DUnit suite against the FIPS 180-4 known-answer vectors
-// (including the one-million-'a' streaming vector) and cross-checked against
-// Windows CryptoAPI on random data.
+// SHA-256 (FIPS 180-4), pure Pascal, for Delphi 7/2007+. Streaming (Init,
+// Update in chunks, Final) so large files need not fit in memory, plus
+// one-shot class functions for buffer/bytes/string/file, hex or Base64.
+// Final resets the state so an instance can be reused for the next message.
 
 // hash arithmetic relies on Cardinal wraparound mod 2^32
 {$Q-}
@@ -98,15 +87,9 @@ type
 // BpMD5.pas - interface
 // ==================================================================
 
-// MD5 per RFC 1321, pure Pascal, for Delphi 7/2007 and later.
-//
-// Same interface as BpSHA256: streaming (Create or Init, Update in chunks,
-// Final) plus class function one-shots for buffer/bytes/string/file with hex
-// or Base64 output. MD5 is cryptographically broken for signatures but stays
-// useful for legacy checksums, ETags and content fingerprints.
-//
-// Verified in the DUnit suite against the RFC 1321 test vectors and
-// cross-checked against Windows CryptoAPI on random data.
+// MD5 (RFC 1321), pure Pascal, for Delphi 7/2007+. Same interface as
+// BpSHA256: streaming Update plus one-shot class functions, hex or Base64.
+// Broken for signatures; fine for checksums, ETags and fingerprints.
 
 // hash arithmetic relies on Cardinal wraparound mod 2^32
 {$Q-}
@@ -144,20 +127,10 @@ type
 // BpHMACSHA256.pas - interface
 // ==================================================================
 
-// HMAC-SHA256 per RFC 2104 / FIPS 198-1, built on BpSHA256.
-//
-// HMAC is a keyed hash: only someone holding the shared secret can produce
-// (or verify) the code, which is what API signature schemes use (AWS SigV4,
-// webhook signatures, JWT HS256). Result = SHA256(opad || SHA256(ipad || msg))
-// where ipad/opad are the key xor $36 / $5C; keys longer than the 64-byte
-// block are hashed down first, shorter ones are zero-padded.
-//
-// Streaming like the hash classes: Create with the key, Update in chunks,
-// Final; Final re-arms the instance for the next message with the same key.
-// Class function one-shots cover the common string/bytes cases.
-//
-// Verified in the DUnit suite against the RFC 4231 test vectors and against
-// a by-definition construction over BpSHA256 on random keys and messages.
+// HMAC-SHA256 (RFC 2104), built on BpSHA256, for keyed message
+// authentication (API signatures, webhook verification, JWT HS256).
+// Streaming like the hash classes: Create with the key, Update, Final;
+// Final re-arms with the same key. One-shot class functions too.
 
 type
   TbpHMACSHA256 = class
@@ -185,10 +158,9 @@ type
 // BpPasswordHash.pas - interface
 // ==================================================================
 
-// Approved password hashing: PBKDF2-HMAC-SHA256 (RFC 2898 / NIST SP 800-132)
-// built on BpHMACSHA256. Salts come from the Windows CSPRNG (CryptGenRandom),
-// verification compares in constant time, and the stored record describes
-// itself, so iteration counts can grow without breaking old hashes:
+// Password hashing with PBKDF2-HMAC-SHA256 (RFC 2898), built on BpHMACSHA256.
+// Salt from the Windows CSPRNG, constant-time verify, and a self-describing
+// record so the work factor can grow without breaking old hashes:
 //   lvStored := BpHashPassword('hunter2');  // $pbkdf2-sha256$600000$<salt>$<hash>
 //   if BpVerifyPassword('hunter2', lvStored) then ...
 

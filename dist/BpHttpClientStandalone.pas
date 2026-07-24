@@ -4,7 +4,7 @@ unit BpHttpClientStandalone;
 // Single-file bundle amalgamated from the DelphiBoostPack modular units:
 //   src\Core\Units\BpBase64.pas
 //   src\Core\Classes\BpHttpClient.pas
-// Source commit 2677e2a, generated 2026-07-24 by tools\Amalgamate.ps1.
+// Source commit 8a29519, generated 2026-07-24 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   powershell -ExecutionPolicy Bypass -File tools\Amalgamate.ps1
 // Notes:
@@ -22,13 +22,10 @@ uses
 // BpBase64.pas - interface
 // ==================================================================
 
-// Base64 encode/decode per RFC 4648, standard and url-safe alphabets.
-// Encoding computes the exact output size and builds the result with a single
-// allocation. Standard encode pads with '='; Base64url encode omits padding
-// (the common form in tokens, e.g. JWT).
-// Decoding uses one shared reverse lookup table that accepts both alphabets,
-// tolerates missing padding and skips whitespace (so MIME output with CRLF
-// line breaks decodes fine). Any other character raises EbpBase64.
+// Base64 encode/decode (RFC 4648), standard and url-safe alphabets. Encoding
+// is a single allocation; standard pads with '=', url-safe omits it. Decoding
+// accepts either alphabet, tolerates missing padding and skips whitespace
+// (so MIME line breaks are fine); any other character raises EbpBase64.
 
 type
   EbpBase64 = class(Exception);
@@ -46,29 +43,9 @@ function Base64DecodeStr(const aBase64: string): AnsiString;
 // BpHttpClient.pas - interface
 // ==================================================================
 
-// HTTP/HTTPS over WinInet for Delphi 7/2007 and later. TLS comes from
-// Schannel: no OpenSSL, no DLLs to ship. Sync requests, streaming downloads
-// with progress and cancellation, and an async download task.
-//
-//   // requests
-//   lvBody := TbpHttpClient.FetchUrl('https://api.example.com/v1/items');
-//   lvClient := TbpHttpClient.Create;
-//   try
-//     lvClient.BearerToken := 'secret';
-//     lvResp := lvClient.PostJson('https://api.example.com/v1/items', '{"a":1}');
-//     if BpHttpResponseIsSuccess(lvResp) then ...
-//     // sync download: blocks, so run it on a worker thread; lvToken.Cancel
-//     // (from anywhere) or aCancel in HandleProgress aborts it promptly
-//     lvClient.DownloadToFile('https://host/big.zip', 'c:\tmp\big.zip',
-//       HandleProgress, lvToken);
-//   finally
-//     lvClient.Free;
-//   end;
-//
-//   // async download: returns immediately, events arrive on this thread;
-//   // FTask.Cancel any time, FTask.Free when done
-//   FTask := BpDownloadAsync('https://host/big.zip', 'c:\tmp\big.zip',
-//     HandleProgress, HandleComplete);
+// HTTP/HTTPS over WinInet for Delphi 7/2007+. TLS comes from Schannel, so no
+// OpenSSL DLLs to ship. Sync verbs, streaming downloads with progress and
+// cancellation, and an async download task. See the README for examples.
 
 type
   TbpHttpMethod = (hmGet, hmPost, hmPut, hmDelete);

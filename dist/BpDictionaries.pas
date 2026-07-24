@@ -6,7 +6,7 @@ unit BpDictionaries;
 //   src\Core\Units\BpVariantUtils.pas
 //   src\Core\Classes\BpStrDictionary.pas
 //   src\Core\Classes\BpIntDictionary.pas
-// Source commit 2677e2a, generated 2026-07-24 by tools\Amalgamate.ps1.
+// Source commit 8a29519, generated 2026-07-24 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   powershell -ExecutionPolicy Bypass -File tools\Amalgamate.ps1
 // Notes:
@@ -24,20 +24,11 @@ uses
 // BpHashBobJenkins.pas - interface
 // ==================================================================
 
-// Bob Jenkins lookup3 hash (http://burtleburtle.net/bob/c/lookup3.c) for
-// Delphi 7/2007 and later.
-//
-// The implementation is a faithful port of HashLittle from Delphi XE6
-// System.Generics.Defaults (the engine behind BobJenkinsHash and, later,
-// System.Hash.THashBobJenkins), including Embarcadero's deviation from
-// canonical lookup3: the initial state uses (Len shl 2) instead of Len.
-// This keeps hash values byte-for-byte identical with the modern RTL, so
-// results can be verified against any Delphi XE+ installation.
-//
-// Note for cross-version use: hashing a *string* hashes its bytes, so an
-// AnsiString on Delphi 2007 and a UnicodeString on XE6 produce different
-// hashes for the same text. Byte-oriented known-answer tests must use the
-// untyped-buffer overload of GetHashValue.
+// Bob Jenkins lookup3 hash (a public-domain algorithm) for Delphi 7/2007+.
+// The seed is chosen so results interoperate with the RTL's BobJenkinsHash
+// across compiler versions. Note: hashing a string hashes its bytes, so Ansi
+// (D2007) and Unicode builds differ - use the buffer overload for portable
+// known-answer tests.
 
 {$IF CompilerVersion >= 18}
   {$DEFINE Delphi_2007_UP}
@@ -99,20 +90,11 @@ function BpTryVarToIntArray(const aValue: Variant; out aResult: TbpIntegerDynArr
 // BpStrDictionary.pas - interface
 // ==================================================================
 
-// Lightweight string-key dictionary for Delphi 7/2007 and later (no generics).
-//
-// Design follows Delphi XE6 System.Generics.Collections.TDictionary:
-// open addressing with linear probing over a single flat item array,
-// power-of-two capacity, cached hash codes (EMPTY_HASH sentinel marks free
-// slots), growth at 75% load and tombstone-free backward-shift deletion.
-// Keys are hashed with the Bob Jenkins lookup3 port in BpHashBobJenkins.
-//
-// Values are stored as Variant. Typed accessors with validation live in
-// the same class (GetInt, TryGetInt, GetIntDef, SetInt and friends).
-//
-// Case sensitivity: keys are case-sensitive by default; pass True to the
-// constructor for case-insensitive mode (keys are then hashed over their
-// AnsiUpperCase form and compared with AnsiSameText, locale-aware).
+// String-key dictionary for Delphi 7/2007+ (no generics), with a familiar
+// TDictionary-style API. Open addressing with linear probing, power-of-two
+// capacity and backward-shift deletion. Keys hashed via BpHashBobJenkins.
+// Values are Variant, with strict typed accessors. Case-insensitive mode is
+// opt-in (constructor arg), folding keys with AnsiUpperCase.
 
 type
   // raised for missing keys, duplicate keys and failed typed conversions
@@ -138,7 +120,7 @@ type
     function HashOf(const aKey: string): Integer;
     function KeysEqual(const aKey1, aKey2: string): Boolean;
     // returns the slot index (>= 0) when found, otherwise the bitwise
-    // complement of the first empty slot (always negative), XE6-style
+    // complement of the first empty slot (always negative)
     function GetBucketIndex(const aKey: string; aHashCode: Integer): Integer;
     procedure DoAdd(aHashCode, aIndex: Integer; const aKey: string; const aValue: Variant);
     procedure Grow;
@@ -158,10 +140,8 @@ type
     procedure SetCapacity(aCapacity: Integer);
     procedure ForEach(aCallback: TbpStrDictForEach);
     procedure GetKeys(aList: TStrings);
-    // typed accessors with validation. GetX raises on a missing key or a
-    // wrong stored type, GetXDef returns aDefault instead, TryGetX never
-    // raises. Conversion is strict: no boolean-to-int, no numeric strings,
-    // no float-to-int truncation
+    // typed accessors; GetX raises on missing key or wrong type, GetXDef
+    // returns aDefault, TryGetX never raises. No coercion between types.
     procedure SetInt(const aKey: string; aValue: Integer);
     function GetInt(const aKey: string): Integer;
     function GetIntDef(const aKey: string; aDefault: Integer): Integer;
@@ -196,21 +176,10 @@ type
 // BpIntDictionary.pas - interface
 // ==================================================================
 
-// Lightweight Int64-key dictionary for Delphi 7/2007 and later (no generics).
-//
-// Same engine as TbpStrDictionary (which follows Delphi XE6
-// System.Generics.Collections.TDictionary): open addressing with linear
-// probing over a single flat item array, power-of-two capacity, cached hash
-// codes (EMPTY_HASH sentinel marks free slots), growth at 75% load and
-// tombstone-free backward-shift deletion.
-// Keys are hashed with the Thomas Wang 64-bit to 32-bit integer mix, which
-// spreads sequential ids (the typical database key pattern) across buckets.
-//
-// Values are stored as Variant with the same strict typed accessors as
-// TbpStrDictionary (GetInt, TryGetInt, GetIntDef, SetInt and friends).
-//
-// Typical use: an in-memory index over a TDataSet or an id-to-data cache,
-//   lvIndex.SetInt(lvQuery.FieldByName('ID').AsInteger, lvQuery.RecNo);
+// Int64-key dictionary for Delphi 7/2007+ (no generics). Same open-addressing
+// engine as TbpStrDictionary; keys hashed with the Thomas Wang 64-bit mix,
+// which spreads sequential ids across buckets. Values are Variant, with the
+// same strict typed accessors (GetInt, TryGetInt, GetIntDef, SetInt).
 
 type
   // raised for missing keys, duplicate keys and failed typed conversions
@@ -235,7 +204,7 @@ type
     FCount: Integer;
     FGrowThreshold: Integer;
     // returns the slot index (>= 0) when found, otherwise the bitwise
-    // complement of the first empty slot (always negative), XE6-style
+    // complement of the first empty slot (always negative)
     function GetBucketIndex(aKey: Int64; aHashCode: Integer): Integer;
     procedure DoAdd(aHashCode, aIndex: Integer; aKey: Int64; const aValue: Variant);
     procedure Grow;
@@ -255,10 +224,8 @@ type
     procedure SetCapacity(aCapacity: Integer);
     procedure ForEach(aCallback: TbpIntDictForEach);
     function GetKeys: TbpInt64DynArray;
-    // typed accessors with validation. GetX raises on a missing key or a
-    // wrong stored type, GetXDef returns aDefault instead, TryGetX never
-    // raises. Conversion is strict: no boolean-to-int, no numeric strings,
-    // no float-to-int truncation
+    // typed accessors; GetX raises on missing key or wrong type, GetXDef
+    // returns aDefault, TryGetX never raises. No coercion between types.
     procedure SetInt(aKey: Int64; aValue: Integer);
     function GetInt(aKey: Int64): Integer;
     function GetIntDef(aKey: Int64; aDefault: Integer): Integer;
@@ -395,13 +362,10 @@ begin
   Move(FHash, Result[0], 4);
 end;
 
-// Port of Delphi XE6 System.Generics.Defaults.HashLittle.
-// - the last full 12-byte block is NOT mixed in the loop: it is added to
-//   a/b/c and folded by Final(), exactly like the reference
-// - Len = 0 exits early WITHOUT Final(), exactly like the reference
-// - the tail never reads past Data: the aligned path uses masked 32-bit
-//   reads (cannot cross a page boundary), the unaligned path reads only
-//   the remaining bytes one by one
+// Implements the lookup3 mix and final. The last 12-byte block is folded by
+// Final rather than in the loop, Len = 0 exits before Final, and the tail
+// never reads past Data (masked 32-bit reads when aligned, byte reads
+// otherwise).
 class function TbpHashBobJenkins.HashLittle(const Data; Len, InitVal: Integer): Integer;
 var
   a, b, c: Cardinal;
@@ -814,9 +778,8 @@ function TbpStrDictionary.Remove(const aKey: string): Boolean;
 var
   lvGap, lvIndex, lvHC, lvBucket, lvLen: Integer;
 
-  // wrap-aware test whether aItem's home bucket lies in (aBottom, aTopInc],
-  // decides if an entry may slide back into the gap; nested (not unit-level)
-  // so amalgamated bundles can embed both dictionaries without a name clash
+  // wrap-aware test whether aItem's home bucket lies in (aBottom, aTopInc];
+  // nested so both dictionaries can be amalgamated without a name clash
   function InCircularRange(aBottom, aItem, aTopInc: Integer): Boolean;
   begin
     Result := ((aBottom < aItem) and (aItem <= aTopInc)) or
@@ -1278,9 +1241,8 @@ function TbpIntDictionary.Remove(aKey: Int64): Boolean;
 var
   lvGap, lvIndex, lvHC, lvBucket, lvLen: Integer;
 
-  // wrap-aware test whether aItem's home bucket lies in (aBottom, aTopInc],
-  // decides if an entry may slide back into the gap; nested (not unit-level)
-  // so amalgamated bundles can embed both dictionaries without a name clash
+  // wrap-aware test whether aItem's home bucket lies in (aBottom, aTopInc];
+  // nested so both dictionaries can be amalgamated without a name clash
   function InCircularRange(aBottom, aItem, aTopInc: Integer): Boolean;
   begin
     Result := ((aBottom < aItem) and (aItem <= aTopInc)) or
