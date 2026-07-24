@@ -65,6 +65,7 @@ Full descriptions and examples in the [feature guide](docs/FEATURES.md).
 | [BpDateUtils](docs/FEATURES.md#bpdateutils) | ISO 8601 / RFC 3339 and Unix time both ways, in `Int64` - what D2007 has no `ISO8601ToDate` for |
 | [TbpStrDictionary](docs/FEATURES.md#tbpstrdictionary) / [TbpIntDictionary](docs/FEATURES.md#tbpintdictionary) | real hash maps for compilers with no generics, `TDictionary`-style API, typed accessors that refuse to coerce |
 | [TbpIntList](docs/FEATURES.md#tbpintlist) | a list of integers that behaves like `TStringList` |
+| [TbpInt64List](docs/FEATURES.md#tbpint64list) | the same list for `Int64` - keys, file sizes, millisecond timestamps |
 
 **Strings**
 

@@ -10,7 +10,7 @@ Each unit is standalone. Add it to `uses` and go - no packages, no DLLs, no base
 [TbpHttpClient](#tbphttpclient) · [TbpHttpDownloadTask](#tbphttpdownloadtask) · [TbpCancellationToken](#tbpcancellationtoken) · [TbpTask](#tbptask)
 
 **Data**
-[TbpJsonValue](#tbpjsonvalue) · [BpDateUtils](#bpdateutils) · [TbpStrDictionary](#tbpstrdictionary) · [TbpIntDictionary](#tbpintdictionary) · [TbpIntList](#tbpintlist)
+[TbpJsonValue](#tbpjsonvalue) · [BpDateUtils](#bpdateutils) · [TbpStrDictionary](#tbpstrdictionary) · [TbpIntDictionary](#tbpintdictionary) · [TbpIntList](#tbpintlist) · [TbpInt64List](#tbpint64list)
 
 **Strings**
 [TbpStringBuilder](#tbpstringbuilder) · [BpStrUtils](#bpstrutils)
@@ -481,6 +481,25 @@ end;
 ```
 
 `Sorted := True` sorts and keeps insertions ordered, which is what makes `BinarySearch` worth reaching for on big lists; `IndexOf` is the linear fallback and works either way. Sorting is an in-place quicksort over a plain `array of Integer` - no `TList` of casted pointers, no boxing. The class implements `IBpIntList` if you prefer interface lifetimes, and `TIntegerList` / `TIntList` are aliases for older code.
+
+### TbpInt64List
+
+`BpInt64List.pas` - the same list, storing `Int64`. Reach for it when the values are database keys, file sizes, Unix timestamps in milliseconds or anything else that outgrows 32 bits.
+
+```pascal
+uses BpInt64List;
+
+lvIds := TbpInt64List.Create;
+try
+  lvIds.CommaText := '9223372036854775807,-2147483649,42';
+  lvIds.Sort;                                   // -2147483649,42,9223372036854775807
+  Log(lvIds.DelimitedText);
+finally
+  lvIds.Free;
+end;
+```
+
+Same API as `TbpIntList` - `Add`, `Delete`, `Insert`, `IndexOf`, `BinarySearch`, `Sorted`, `CommaText`, `DelimitedText`, load and save - over an `array of Int64`, with `CompareInt64` in place of `CompareInt`. Parsing goes through `TryStrToInt64`, so text outside the `Int64` range raises `EConvertError` instead of quietly wrapping. It implements `IBpInt64List` for interface lifetimes.
 
 ---
 
