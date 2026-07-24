@@ -64,13 +64,13 @@ finally
 end;
 ```
 
-Downloading with progress and cancel. The callback gets `Int64` counters (`ATotal` is `-1` when the server sent no `Content-Length`) and can abort inline; a `TbpCancellationToken` aborts from outside, promptly, even while a read blocks:
+Downloading with progress and cancel. The callback gets `Int64` counters (`aTotal` is `-1` when the server sent no `Content-Length`) and can abort inline; a `TbpCancellationToken` aborts from outside, promptly, even while a read blocks:
 
 ```pascal
-procedure TMainForm.HandleProgress(ASender: TObject; const AReceived, ATotal: Int64;
-  var ACancel: Boolean);
+procedure TMainForm.HandleProgress(aSender: TObject; const aReceived, aTotal: Int64;
+  var aCancel: Boolean);
 begin
-  ProgressBar1.Position := BpHttpProgressPercent(AReceived, ATotal);  // -1 = unknown
+  ProgressBar1.Position := BpHttpProgressPercent(aReceived, aTotal);  // -1 = unknown
 end;
 
 // blocking, so run it on a worker thread; the file is deleted on error or cancel
@@ -95,9 +95,9 @@ Need auth or timeouts on an async download? Create `TbpHttpDownloadTask` yoursel
 The same task shape works for arbitrary work, not just downloads. `BpRunAsync` (in `BpTasks.pas`) runs a method on a worker thread and delivers `OnComplete` back on the thread that made the call; the work polls the token to honour a cancel:
 
 ```pascal
-procedure TMainForm.DoCrunch(ASender: TObject; AToken: TbpTaskToken);
+procedure TMainForm.DoCrunch(aSender: TObject; aToken: TbpTaskToken);
 begin
-  while HasWorkLeft and not AToken.IsCancellationRequested do
+  while HasWorkLeft and not aToken.IsCancellationRequested do
     CrunchNextChunk;   // worker thread; no UI calls here
 end;
 
@@ -163,6 +163,7 @@ RunTests_D2007.cmd
 If you send a patch, match the house style:
 
 - Locals start with `lv`, globals with `gv`, local constants with `lc`, global constants with `gc`.
+- Parameters start with a lowercase `a`, e.g. `aValue`, `aKeyLen`.
 - Classes get the `Tbp` prefix (Boost Pack), e.g. `TbpStringBuilder`.
 - One class per unit where it makes sense, and the unit is named after it (`TbpIntList` lives in `BpIntList.pas`).
 - Comments are `//` lines. Braces `{ }` are for compiler directives only.
