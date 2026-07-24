@@ -18,6 +18,7 @@ uses
   BpIntDictionary in 'Core\Classes\BpIntDictionary.pas',
   BpJson in 'Core\Classes\BpJson.pas',
   BpMD5 in 'Core\Classes\BpMD5.pas',
+  BpPasswordHash in 'Core\Classes\BpPasswordHash.pas',
   BpSHA256 in 'Core\Classes\BpSHA256.pas',
   BpBase64 in 'Core\Units\BpBase64.pas',
   BpStrUtils in 'Core\Units\BpStrUtils.pas',
