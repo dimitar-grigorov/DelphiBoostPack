@@ -687,12 +687,12 @@ end;
 
 procedure TBpJsonTests.ParseDeepNesting;
 var
-  lvI: Integer;
+  lvIdx: Integer;
   lvText: string;
 begin
   // 600 levels, past the 512 guard, must fail rather than crash the stack
   lvText := '';
-  for lvI := 1 to 600 do
+  for lvIdx := 1 to 600 do
     lvText := lvText + '[';
   TbpJsonValue.Parse(lvText).Free;
 end;

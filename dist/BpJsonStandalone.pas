@@ -4,7 +4,7 @@ unit BpJsonStandalone;
 // Single-file bundle amalgamated from the DelphiBoostPack modular units:
 //   src\Core\Classes\BpStringBuilder.pas
 //   src\Core\Classes\BpJson.pas
-// Source commit 8a29519, generated 2026-07-24 by tools\Amalgamate.ps1.
+// Source commit c48ac0c, generated 2026-07-25 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   powershell -ExecutionPolicy Bypass -File tools\Amalgamate.ps1
 // Notes:
@@ -491,11 +491,11 @@ end;
 // parses exactly four hex digits, the XXXX of a \uXXXX escape
 function BpJsonHexQuad(var aReader: TbpJsonReader): Integer;
 var
-  lvI, lvDigit: Integer;
+  lvIdx, lvDigit: Integer;
 begin
   Result := 0;
   lvDigit := 0;
-  for lvI := 1 to 4 do
+  for lvIdx := 1 to 4 do
   begin
     case aReader.Cur^ of
       '0'..'9': lvDigit := Ord(aReader.Cur^) - Ord('0');
@@ -703,11 +703,11 @@ end;
 
 procedure BpJsonExpectWord(var aReader: TbpJsonReader; const aWord: string);
 var
-  lvI: Integer;
+  lvIdx: Integer;
 begin
-  for lvI := 1 to Length(aWord) do
+  for lvIdx := 1 to Length(aWord) do
   begin
-    if aReader.Cur^ <> aWord[lvI] then
+    if aReader.Cur^ <> aWord[lvIdx] then
       BpJsonFail(aReader, 'Invalid JSON value');
     Inc(aReader.Cur);
   end;
@@ -832,7 +832,7 @@ end;
 procedure BpJsonAppendQuoted(aSb: TbpStringBuilder; const aValue: string;
   aEscapeNonAscii: Boolean);
 var
-  lvI, lvLen, lvRun: Integer;
+  lvIdx, lvLen, lvRun: Integer;
   lvC: Char;
 {$IF CompilerVersion < 20.0}
   lvWide: WideString;
@@ -860,9 +860,9 @@ begin
   begin
     // escape everything outside printable ASCII, output needs no codepage
 {$IF CompilerVersion >= 20.0}
-    for lvI := 1 to Length(aValue) do
+    for lvIdx := 1 to Length(aValue) do
     begin
-      lvC := aValue[lvI];
+      lvC := aValue[lvIdx];
       if (lvC >= #32) and (lvC < #127) and (lvC <> '"') and (lvC <> '\') then
         aSb.Append(lvC)
       else
@@ -870,9 +870,9 @@ begin
     end;
 {$ELSE}
     lvWide := WideString(aValue);
-    for lvI := 1 to Length(lvWide) do
+    for lvIdx := 1 to Length(lvWide) do
     begin
-      lvWC := lvWide[lvI];
+      lvWC := lvWide[lvIdx];
       if (lvWC >= #32) and (lvWC < #127) and (lvWC <> '"') and (lvWC <> '\') then
         aSb.Append(Char(lvWC))
       else
@@ -885,15 +885,15 @@ begin
     // copy runs of plain chars, escape only what RFC 8259 requires
     lvLen := Length(aValue);
     lvRun := 1;
-    for lvI := 1 to lvLen do
+    for lvIdx := 1 to lvLen do
     begin
-      lvC := aValue[lvI];
+      lvC := aValue[lvIdx];
       if (lvC < #32) or (lvC = '"') or (lvC = '\') then
       begin
-        if lvI > lvRun then
-          aSb.Append(Copy(aValue, lvRun, lvI - lvRun));
+        if lvIdx > lvRun then
+          aSb.Append(Copy(aValue, lvRun, lvIdx - lvRun));
         AppendEscape(Ord(lvC));
-        lvRun := lvI + 1;
+        lvRun := lvIdx + 1;
       end;
     end;
     if lvLen >= lvRun then
@@ -1005,7 +1005,7 @@ end;
 
 function TbpJsonValue.Clone: TbpJsonValue;
 var
-  lvI: Integer;
+  lvIdx: Integer;
 begin
   Result := TbpJsonValue.Create;
   try
@@ -1014,11 +1014,11 @@ begin
     Result.FInt := FInt;
     Result.FFloat := FFloat;
     Result.FStr := FStr;
-    for lvI := 0 to FCount - 1 do
+    for lvIdx := 0 to FCount - 1 do
       if FKind = bjkObject then
-        Result.InternalAdd(FNames[lvI], FItems[lvI].Clone)
+        Result.InternalAdd(FNames[lvIdx], FItems[lvIdx].Clone)
       else
-        Result.InternalAdd('', FItems[lvI].Clone);
+        Result.InternalAdd('', FItems[lvIdx].Clone);
   except
     Result.Free;
     raise;
@@ -1138,17 +1138,17 @@ end;
 
 procedure TbpJsonValue.Delete(aIndex: Integer);
 var
-  lvI: Integer;
+  lvIdx: Integer;
 begin
   if (aIndex < 0) or (aIndex >= FCount) then
     raise EbpJson.CreateFmt('Index %d out of range (count %d)',
       [aIndex, FCount]);
   FItems[aIndex].Free;
-  for lvI := aIndex to FCount - 2 do
+  for lvIdx := aIndex to FCount - 2 do
   begin
-    FItems[lvI] := FItems[lvI + 1];
+    FItems[lvIdx] := FItems[lvIdx + 1];
     if FKind = bjkObject then
-      FNames[lvI] := FNames[lvI + 1];
+      FNames[lvIdx] := FNames[lvIdx + 1];
   end;
   Dec(FCount);
   FItems[FCount] := nil;
@@ -1158,10 +1158,10 @@ end;
 
 procedure TbpJsonValue.Clear;
 var
-  lvI: Integer;
+  lvIdx: Integer;
 begin
-  for lvI := 0 to FCount - 1 do
-    FItems[lvI].Free;
+  for lvIdx := 0 to FCount - 1 do
+    FItems[lvIdx].Free;
   FCount := 0;
   SetLength(FItems, 0);
   SetLength(FNames, 0);
@@ -1494,7 +1494,7 @@ end;
 procedure TbpJsonValue.WriteTo(aSb: TbpStringBuilder;
   aEscapeNonAscii: Boolean; aIndentSize, aLevel: Integer);
 var
-  lvI: Integer;
+  lvIdx: Integer;
   lvPretty: Boolean;
 
   procedure Indent(aDepth: Integer);
@@ -1522,13 +1522,13 @@ begin
       else
       begin
         aSb.Append('[');
-        for lvI := 0 to FCount - 1 do
+        for lvIdx := 0 to FCount - 1 do
         begin
-          if lvI > 0 then
+          if lvIdx > 0 then
             aSb.Append(',');
           if lvPretty then
             Indent(aLevel + 1);
-          FItems[lvI].WriteTo(aSb, aEscapeNonAscii, aIndentSize, aLevel + 1);
+          FItems[lvIdx].WriteTo(aSb, aEscapeNonAscii, aIndentSize, aLevel + 1);
         end;
         if lvPretty then
           Indent(aLevel);
@@ -1540,17 +1540,17 @@ begin
       else
       begin
         aSb.Append('{');
-        for lvI := 0 to FCount - 1 do
+        for lvIdx := 0 to FCount - 1 do
         begin
-          if lvI > 0 then
+          if lvIdx > 0 then
             aSb.Append(',');
           if lvPretty then
             Indent(aLevel + 1);
-          BpJsonAppendQuoted(aSb, FNames[lvI], aEscapeNonAscii);
+          BpJsonAppendQuoted(aSb, FNames[lvIdx], aEscapeNonAscii);
           aSb.Append(':');
           if lvPretty then
             aSb.Append(' ');
-          FItems[lvI].WriteTo(aSb, aEscapeNonAscii, aIndentSize, aLevel + 1);
+          FItems[lvIdx].WriteTo(aSb, aEscapeNonAscii, aIndentSize, aLevel + 1);
         end;
         if lvPretty then
           Indent(aLevel);
