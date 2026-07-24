@@ -1,19 +1,22 @@
 # DelphiBoostPack
 
-**The modern RTL Delphi 2007 never shipped - as drop-in units, not a framework.**
+**The bits of the modern RTL that Delphi 2007 never got - as drop-in units, not a framework.**
 
-HTTP, JSON, hash dictionaries, SHA-256, background tasks. Pure Pascal, no DLLs, no packages to register. Drop in a unit and go.
+HTTP, JSON, hash dictionaries, SHA-256, background tasks. Pure Pascal source, no third-party DLLs, no packages to register. Copy in a unit and use it.
 
 ![Delphi](https://img.shields.io/badge/Delphi-7%20to%2011.3-E62431)
 ![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
 ![Tests](https://img.shields.io/badge/tests-DUnit-blue)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 
-## Quick start
+## Install
 
-Copy the unit you want out of [src/Core/](src/Core/) into your project - or clone the repo and add `src\Core\Classes` and `src\Core\Units` to your library path. That is the whole install.
+There is nothing to install - pick whichever of these two suits you:
 
-An HTTPS call and a JSON parse, on a 2007 compiler, with nothing installed:
+- **Modular.** Add `src\Core\Classes` and `src\Core\Units` to your library path (or your project's search path), or just copy the units you use into the project. Most units are single files with nothing behind them; a few want a companion - the dictionaries want `BpVariantUtils` and `BpHashBobJenkins`, `BpJson` wants `BpStringBuilder`, `BpHttpClient` and the hashes want `BpBase64`.
+- **One file.** Copy a bundle out of [dist/](dist/) instead, or put `dist` on the library path. Each bundle already contains everything it needs, so do not also use the modular units it embeds.
+
+An HTTPS call and a JSON parse, on a 2007 compiler, with nothing else installed:
 
 ```pascal
 uses BpHttpClient, BpJson;
@@ -37,9 +40,9 @@ Worker thread, progress and completion events on the main thread, no `ProcessMes
 
 ## Why
 
-Rewriting a 300-unit legacy app just to get a `TDictionary` is not a plan. This is the missing RTL as loose units you can lift one at a time: it targets Delphi 2007 first and stays clean from Delphi 7 to 11.3, so the same code compiles wherever your codebase happens to live.
+Rewriting a 300-unit legacy app just to get a `TDictionary` is not a plan. This is the missing RTL as loose units you can lift one at a time: it targets Delphi 2007 first and is written to compile unchanged from Delphi 7 to 11.3, so it goes wherever your codebase happens to live. The build and test scripts here drive Delphi 2007.
 
-Everything has DUnit tests, and the crypto and hash units are checked against the published standard vectors (FIPS, RFC) and the Windows CryptoAPI, so the numbers match other implementations.
+Nearly every unit has a DUnit test unit behind it, and the crypto and hash units are checked against the published standard vectors (FIPS, RFC) and the Windows CryptoAPI, so the numbers match other implementations.
 
 ## What's inside
 
@@ -67,7 +70,7 @@ Full descriptions and examples in the [feature guide](docs/FEATURES.md).
 
 | Unit | What you get |
 |------|--------------|
-| [TbpStringBuilder](docs/FEATURES.md#tbpstringbuilder) | the XE6 `TStringBuilder` API, minus the slow `Length` setter it appends through |
+| [TbpStringBuilder](docs/FEATURES.md#tbpstringbuilder) | the XE6 `TStringBuilder` API on compilers that never got it; appends through a cached buffer pointer instead of resizing the string every time |
 | [BpStrUtils](docs/FEATURES.md#bpstrutils) | `Split`, `Join`, `StartsWith` / `EndsWith`, and a `FastStringReplace` that stays linear where `StringReplace` goes quadratic |
 
 **Hashing and encoding**
@@ -90,7 +93,7 @@ Full descriptions and examples in the [feature guide](docs/FEATURES.md).
 
 ## One file instead of ten
 
-`dist\` holds amalgamated builds, SQLite style: `BpDictionaries.pas`, `BpHashes.pas`, `BpHttpClientStandalone.pas`, `BpJsonStandalone.pas`. Each is self-contained - take the one you need and nothing else. Use at most one bundle per project, and treat them as build artifacts: fix the real unit and regenerate. [Details ->](docs/FEATURES.md#single-file-bundles)
+[dist/](dist/) holds amalgamated builds, SQLite style: [BpDictionaries.pas](dist/BpDictionaries.pas), [BpHashes.pas](dist/BpHashes.pas), [BpHttpClientStandalone.pas](dist/BpHttpClientStandalone.pas), [BpJsonStandalone.pas](dist/BpJsonStandalone.pas). Each is self-contained - take the one you need and nothing else. They can be combined, with one exception: the hashes and HTTP bundles both embed Base64, so pick one of those two. Treat them as build artifacts: fix the real unit and regenerate. [Details ->](docs/FEATURES.md#single-file-bundles)
 
 ## Building and testing
 

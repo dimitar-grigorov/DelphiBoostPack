@@ -488,7 +488,7 @@ end;
 
 ### TbpStringBuilder
 
-`BpStringBuilder.pas` - the XE6 `TStringBuilder` API without the slow part. The RTL routes every append through the `Length` setter; this one writes through a cached buffer pointer, so building a large string is markedly faster.
+`BpStringBuilder.pas` - the XE6 `TStringBuilder` API on the compilers that never got it. Appends write through a cached pointer into the buffer and grow it geometrically, instead of resizing the string on every call. [BpStringBuilderBenchmark.pas](../tests/Benchmarks/BpStringBuilderBenchmark.pas) measures it against naive `s := s + x` concatenation, honest caveats included.
 
 ```pascal
 uses BpStringBuilder;
@@ -724,19 +724,21 @@ Log(Format('%.2f ms', [lvSw.ElapsedMilliseconds]));
 
 ## Single-file bundles
 
-Do not want to add ten units to your project? Take one file from `dist\` instead. Each bundle is self-contained - drop it in, `uses` it, done:
+Do not want to add ten units to your project? Take one file from [dist/](../dist/) instead. Each bundle is self-contained - drop it in, `uses` it, done:
 
 | Bundle | Contains |
 |--------|----------|
-| `BpDictionaries.pas` | both dictionaries, with the hash and Variant helpers baked in |
-| `BpHashes.pas` | SHA-256, MD5, HMAC-SHA256, PBKDF2 password hashing, Base64 |
-| `BpHttpClientStandalone.pas` | HTTP client, streaming downloads, async download task, cancellation token, Base64 |
-| `BpJsonStandalone.pas` | JSON reader/writer with the string builder baked in |
+| [BpDictionaries.pas](../dist/BpDictionaries.pas) | both dictionaries, with the hash and Variant helpers baked in |
+| [BpHashes.pas](../dist/BpHashes.pas) | SHA-256, MD5, HMAC-SHA256, PBKDF2 password hashing, Base64 |
+| [BpHttpClientStandalone.pas](../dist/BpHttpClientStandalone.pas) | HTTP client, streaming downloads, async download task, cancellation token, Base64 |
+| [BpJsonStandalone.pas](../dist/BpJsonStandalone.pas) | JSON reader/writer with the string builder baked in |
 
-They are generated from the modular units, SQLite amalgamation style, by `tools\Amalgamate.ps1`. That makes them build artifacts: do not patch them by hand - fix the real unit and regenerate.
+They are generated from the modular units, SQLite amalgamation style, by [tools/Amalgamate.ps1](../tools/Amalgamate.ps1), from a manifest per bundle in [tools/bundles/](../tools/bundles/). That makes them build artifacts: do not patch them by hand - fix the real unit and regenerate.
 
 ```
 powershell -ExecutionPolicy Bypass -File tools\Amalgamate.ps1
 ```
 
-One catch: use at most one bundle per project, since two bundles that embed the same helper would collide on duplicate identifiers. Mix a bundle with modular units from the same area and you get the same clash. `tools\VerifyBundles.cmd` compiles each bundle on its own and runs a smoke test against known-answer vectors, so what ships is known to build and to be correct.
+One catch: two bundles that embed the same helper declare its identifiers twice, and which one you get then depends on `uses` order - `EbpBase64` raised inside one is not the `EbpBase64` the other one catches. Today that affects exactly one pair, `BpHashes` and `BpHttpClientStandalone`, since both embed `BpBase64`; use one or the other. The same clash appears if you mix a bundle with the modular units it already contains.
+
+[tools/VerifyBundles.cmd](../tools/VerifyBundles.cmd) compiles each bundle on its own and runs a smoke test against known-answer vectors, so what ships is known to build and to be correct.
