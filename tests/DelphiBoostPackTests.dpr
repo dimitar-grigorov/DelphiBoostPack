@@ -69,6 +69,8 @@ uses
   BpStrUtils in '..\src\Core\Units\BpStrUtils.pas',
   BpSysUtilsTests in 'Core\BpSysUtilsTests.pas',
   BpSysUtils in '..\src\Core\Units\BpSysUtils.pas',
+  BpTasksTests in 'Core\BpTasksTests.pas',
+  BpTasks in '..\src\Core\Classes\BpTasks.pas',
   BpVariantUtils in '..\src\Core\Units\BpVariantUtils.pas';
 
 {$R *.RES}
