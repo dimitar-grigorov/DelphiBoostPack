@@ -2,7 +2,7 @@
 
 *The modern RTL Delphi 2007 never shipped, as drop-in units instead of a framework.*
 
-Hash dictionaries, a fast StringBuilder, SHA-256 / MD5 / HMAC, Base64, a WinInet HTTP client with async streaming downloads, and a JSON parser, all in pure Pascal. No DLLs, no packages to register. Drop in a unit and go.
+Hash dictionaries, a fast StringBuilder, SHA-256 / MD5 / HMAC, Base64, a WinInet HTTP client with async streaming downloads, background tasks with cooperative cancellation, and a JSON parser, all in pure Pascal. No DLLs, no packages to register. Drop in a unit and go.
 
 It targets Delphi 2007 first and stays clean from Delphi 7 all the way to 11.3, because rewriting a 300-unit legacy app just to get a `TDictionary` is not a plan. If you are stuck on an old compiler and keep reaching for things it does not have, help yourself to whatever is useful here.
 
@@ -28,9 +28,10 @@ Everything has DUnit tests, and the crypto and hash units are cross-checked agai
 - **`BpHashBobJenkins`** - the Bob Jenkins lookup3 hash, byte-for-byte identical to the XE+ `BobJenkinsHash`. It is what powers the string dictionary.
 - **`BpBase64`** - Base64 and Base64url (RFC 4648). One allocation to encode; the decoder eats either alphabet, forgives missing padding and skips whitespace, so MIME-wrapped input just works.
 
-### HTTP and JSON
+### HTTP, JSON and tasks
 - **`TbpHttpClient`** - HTTP and HTTPS over WinInet. TLS comes from Schannel, which means no OpenSSL DLLs shipping alongside your exe. `Get` / `Post` / `Put` / `Delete` hand back a response record; bearer tokens, basic auth and persistent headers are one call each, and `PostJson` sets the content type for you. `Download` / `DownloadToFile` stream a body of any size to a `TStream` or a file in constant memory, with `Int64` progress callbacks and cooperative cancellation; `DownloadToFile` deletes the partial file on any failure or cancel, so an error page never masquerades as the payload.
 - **`TbpHttpDownloadTask`** - the non-blocking wrapper, shaped like a C# `Task` or a JS promise: `Start` returns immediately, the download runs on its own worker thread (no `ProcessMessages` anywhere), progress and completion arrive as events on the main thread, and `Cancel` aborts promptly even while the worker sits in a blocked read. The destructor cancels, joins and cleans up, whatever state the task died in.
+- **`TbpTask` / `BpRunAsync`** - the download task generalized (`BpTasks.pas`, a self-contained unit with no dependencies): run any method on an owned worker thread, get completion (and failure, with the exception's message and class name) as events on the creating thread, cancel cooperatively through a lightweight `TbpTaskToken`, and the destructor cancels, joins and cleans up in any state. One thread per task, no pool - a scoped AsyncCalls replacement for the everyday case.
 - **`TbpCancellationToken`** - the C# `CancellationToken` / JS `AbortController` idea for Delphi 7: one side calls `Cancel`, the working side polls or registers a cleanup that runs inside the cancel. Thread-safe, one-shot, transport-agnostic.
 - **`TbpJsonValue`** - a JSON reader and writer (RFC 8259). One class is the whole tree, tagged by `Kind`. The parser is strict on purpose: leading zeros, raw control characters, trailing commas and junk after the value all fail, and the error tells you the line and column. Pull values out with the same typed accessors as the dictionaries, reach deep with `FindPath('data.items[0].name')`, and write it back with `ToJson` or `ToJsonPretty`. No RTTI, no data binding, just the tree.
 - **`BpDateUtils`** - the ISO 8601 / RFC 3339 date handling the RTL skipped until XE6 (D2007 has no `ISO8601ToDate` at all), the natural companion to the JSON unit since every JSON API dates in ISO 8601. Parses date-only values, `T`-or-space timestamps, fractional seconds and every zone form (`Z`, `+hh:mm`, `+hhmm`, `+hh`) into a UTC `TDateTime`, and strictly: malformed input is rejected, not guessed at. Formats back to a `Z` string or local wall-clock with a numeric offset, and converts Unix epoch seconds and milliseconds both ways in `Int64`, so dates before 1970 and past 2038 round-trip cleanly.
@@ -88,6 +89,23 @@ FTask.Cancel;                         // partial file cleaned up
 ```
 
 Need auth or timeouts on an async download? Create `TbpHttpDownloadTask` yourself, configure its `Client` (the full `TbpHttpClient` surface), set `Url` + `DestFileName`/`DestStream`, wire the events, `Start`. Console apps pass `Create(False)` / `BpDownloadAsync(..., False)` and get events on the worker thread. Resume is one header away: send `'Range: bytes=123456-'` and append on a 206.
+
+## Running any work in the background
+
+The same task shape works for arbitrary work, not just downloads. `BpRunAsync` (in `BpTasks.pas`) runs a method on a worker thread and delivers `OnComplete` back on the thread that made the call; the work polls the token to honour a cancel:
+
+```pascal
+procedure TMainForm.DoCrunch(ASender: TObject; AToken: TbpTaskToken);
+begin
+  while HasWorkLeft and not AToken.IsCancellationRequested do
+    CrunchNextChunk;   // worker thread; no UI calls here
+end;
+
+FTask := BpRunAsync(DoCrunch, HandleDone);  // returns immediately
+// in HandleDone check FTask.State: tskSucceeded / tskFailed / tskCancelled;
+// on failure ErrorMessage and ErrorClass carry the exception. FTask.Cancel
+// any time; FTask.Free cancels, joins and cleans up in any state.
+```
 
 ## Keeping secrets out of config files
 
