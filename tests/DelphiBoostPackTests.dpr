@@ -56,6 +56,8 @@ uses
   BpJson in '..\src\Core\Classes\BpJson.pas',
   BpMD5Tests in 'Core\BpMD5Tests.pas',
   BpMD5 in '..\src\Core\Classes\BpMD5.pas',
+  BpPasswordHashTests in 'Core\BpPasswordHashTests.pas',
+  BpPasswordHash in '..\src\Core\Classes\BpPasswordHash.pas',
   BpSHA256Tests in 'Core\BpSHA256Tests.pas',
   BpSHA256 in '..\src\Core\Classes\BpSHA256.pas',
   BpCryptoApiHash in 'Core\BpCryptoApiHash.pas',
