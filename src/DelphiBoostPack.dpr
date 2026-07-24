@@ -22,6 +22,7 @@ uses
   BpPasswordHash in 'Core\Classes\BpPasswordHash.pas',
   BpSHA256 in 'Core\Classes\BpSHA256.pas',
   BpBase64 in 'Core\Units\BpBase64.pas',
+  BpDateUtils in 'Core\Units\BpDateUtils.pas',
   BpStrUtils in 'Core\Units\BpStrUtils.pas',
   BpSysUtils in 'Core\Units\BpSysUtils.pas',
   BpVariantUtils in 'Core\Units\BpVariantUtils.pas',

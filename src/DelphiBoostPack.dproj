@@ -57,6 +57,7 @@
     <DCCReference Include="Core\Interfaces\BpIntListIntf.pas" />
     <DCCReference Include="Core\Interfaces\UniqueIdIntf.pas" />
     <DCCReference Include="Core\Units\BpBase64.pas" />
+    <DCCReference Include="Core\Units\BpDateUtils.pas" />
     <DCCReference Include="Core\Units\BpStrUtils.pas" />
     <DCCReference Include="Core\Units\BpSysUtils.pas" />
     <DCCReference Include="Core\Units\BpVariantUtils.pas" />
