@@ -7,6 +7,8 @@ uses
   Classes,
   BpIntList in 'Core\Classes\BpIntList.pas',
   BpIntListIntf in 'Core\Interfaces\BpIntListIntf.pas',
+  BpInt64List in 'Core\Classes\BpInt64List.pas',
+  BpInt64ListIntf in 'Core\Interfaces\BpInt64ListIntf.pas',
   BpObjectComparer in 'Core\Classes\BpObjectComparer.pas',
   UniqueIdIntf in 'Core\Interfaces\UniqueIdIntf.pas',
   InterfacedCollectionItem in 'Core\Classes\InterfacedCollectionItem.pas',

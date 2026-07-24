@@ -42,6 +42,7 @@
       <MainSource>MainSource</MainSource>
     </DelphiCompile>
     <DCCReference Include="Core\Classes\BpHashBobJenkins.pas" />
+    <DCCReference Include="Core\Classes\BpInt64List.pas" />
     <DCCReference Include="Core\Classes\BpIntList.pas" />
     <DCCReference Include="Core\Classes\BpObjectComparer.pas" />
     <DCCReference Include="Core\Classes\BpStrDictionary.pas" />
@@ -55,6 +56,7 @@
     <DCCReference Include="Core\Classes\BpStringBuilder.pas" />
     <DCCReference Include="Core\Classes\BpTasks.pas" />
     <DCCReference Include="Core\Classes\InterfacedCollectionItem.pas" />
+    <DCCReference Include="Core\Interfaces\BpInt64ListIntf.pas" />
     <DCCReference Include="Core\Interfaces\BpIntListIntf.pas" />
     <DCCReference Include="Core\Interfaces\UniqueIdIntf.pas" />
     <DCCReference Include="Core\Units\BpBase64.pas" />
