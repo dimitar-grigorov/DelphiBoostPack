@@ -11,11 +11,19 @@ unit BpHttpClient;
 // of a header, so they also answer proxy and 401 challenges.
 // Failures raise EbpHttpClient carrying the WinInet error code, and
 // BpClassifyHttpError turns either error dimension into a user-facing string.
+//
+// Download/DownloadToFile stream a body of any size to a TStream or file in
+// constant memory, reporting Int64 progress and honouring cooperative
+// cancellation through TbpCancellationToken (see BpCancellationToken.pas).
+// A cancel closes the WinInet request handle, so even a thread blocked in
+// connect or read aborts promptly; the failure surfaces as the typed
+// EbpHttpClientCancelled. For the non-blocking wrapper that runs a download
+// on a worker thread see BpHttpDownloadTask.pas.
 
 interface
 
 uses
-  Classes, SysUtils, Windows, WinInet;
+  Classes, SysUtils, Windows, WinInet, BpCancellationToken;
 
 type
   TbpHttpMethod = (hmGet, hmPost, hmPut, hmDelete);
@@ -31,12 +39,25 @@ type
     property WinInetError: DWORD read FWinInetError;
   end;
 
+  // raised when a download is aborted through a token or a progress callback;
+  // WinInetError is gcErrOperationCancelled
+  EbpHttpClientCancelled = class(EbpHttpClient);
+
   TbpHttpResponse = record
     StatusCode: Integer;
     StatusText: string;
-    Headers: string;     // raw response headers, CRLF separated
-    Body: AnsiString;    // raw bytes as received
+    Headers: string;         // raw response headers, CRLF separated
+    Body: AnsiString;        // raw bytes as received; empty for Download
+    ContentLength: Int64;    // from the Content-Length header, -1 when absent
   end;
+
+  // progress callback for downloads, fired synchronously on the thread that
+  // runs the download: once after the headers arrive (AReceived = 0) and then
+  // after every chunk. ATotal is -1 when the server sent no Content-Length
+  // (chunked transfer). Set ACancel to True to abort; the download raises
+  // EbpHttpClientCancelled and, for DownloadToFile, deletes the partial file.
+  TbpHttpProgressEvent = procedure(ASender: TObject; const AReceived,
+    ATotal: Int64; var ACancel: Boolean) of object;
 
   TbpHttpClient = class
   private
@@ -62,6 +83,9 @@ type
     function ReadResponseStatus(ARequest: HINTERNET): Integer;
     function ReadResponseHeaders(ARequest: HINTERNET): string;
     function ReadResponseBody(ARequest: HINTERNET): AnsiString;
+    procedure ReadBodyToStream(ARequest: HINTERNET; ADest: TStream;
+      const ATotal: Int64; AProgress: TbpHttpProgressEvent;
+      AToken: TbpCancellationToken);
   public
     constructor Create;
     destructor Destroy; override;
@@ -76,6 +100,22 @@ type
       const AHeaders: string = ''): TbpHttpResponse;
     function Delete(const AUrl: string; const AHeaders: string = ''): TbpHttpResponse;
     class function FetchUrl(const AUrl: string; const AHeaders: string = ''): AnsiString;
+
+    // streams the response body to ADest in constant memory; the returned
+    // record carries status/headers with an empty Body. The body is written
+    // to ADest whatever the status code, so check BpHttpResponseIsSuccess.
+    // Cancellation (token or ACancel in the progress callback) raises
+    // EbpHttpClientCancelled; ADest keeps whatever arrived before the abort.
+    // Resume/Range: pass e.g. 'Range: bytes=1024-' in AHeaders and expect 206.
+    function Download(const AUrl: string; ADest: TStream;
+      AProgress: TbpHttpProgressEvent = nil; AToken: TbpCancellationToken = nil;
+      const AHeaders: string = ''; const AMethod: string = 'GET'): TbpHttpResponse;
+    // Download convenience that manages the file itself: the file only
+    // survives when the download completed with a 2xx status; on any error,
+    // cancel or non-success status the partial file is deleted
+    function DownloadToFile(const AUrl, AFileName: string;
+      AProgress: TbpHttpProgressEvent = nil; AToken: TbpCancellationToken = nil;
+      const AHeaders: string = ''): TbpHttpResponse;
 
     // persistent headers sent with every request; setting a name again replaces it
     procedure AddHeader(const AName, AValue: string);
@@ -105,8 +145,16 @@ function BpHttpResponseIsSuccess(const AResponse: TbpHttpResponse): Boolean;
 function BpHttpResponseBodyAsUtf8(const AResponse: TbpHttpResponse): WideString;
 // value of a header line from a raw CRLF header block, '' when absent
 function BpHttpHeaderValue(const AHeaders, AName: string): string;
+// Content-Length parsed from a raw header block; -1 when absent or invalid
+function BpHttpContentLength(const AHeaders: string): Int64;
+// whole percent 0..100 for a progress pair; -1 when the total is unknown
+function BpHttpProgressPercent(const AReceived, ATotal: Int64): Integer;
 // user-facing categorization; pass 0 for the dimension that does not apply
 function BpClassifyHttpError(AWinInetError: DWORD; AHttpStatus: Integer): string;
+
+const
+  // WinInet ERROR_INTERNET_OPERATION_CANCELLED, missing from D2007's WinInet.pas
+  gcErrOperationCancelled = 12017;
 
 implementation
 
@@ -115,8 +163,22 @@ uses
 
 const
   gcBufferSize = 8192;
+  gcDownloadBufferSize = 65536;  // bigger chunks pay off on large bodies
   gcDefaultTimeout = 8000;  // milliseconds
   gcDefaultUserAgent = 'DelphiBoostPack/1.0';
+
+// registered with a TbpCancellationToken so Cancel aborts a blocked WinInet
+// call by closing its request handle (fails over with error 12017)
+procedure BpCloseInetHandleCleanup(AData: Pointer);
+begin
+  InternetCloseHandle(HINTERNET(AData));
+end;
+
+procedure RaiseDownloadCancelled;
+begin
+  raise EbpHttpClientCancelled.Create('Operation cancelled', 0,
+    gcErrOperationCancelled);
+end;
 
 // appends a header line with a CRLF separator between lines
 procedure AppendHeaderLine(var AHeaders: string; const ALine: string);
@@ -190,6 +252,31 @@ begin
   end;
 end;
 
+function BpHttpContentLength(const AHeaders: string): Int64;
+var
+  lvValue: string;
+begin
+  Result := -1;
+  lvValue := BpHttpHeaderValue(AHeaders, 'Content-Length');
+  if lvValue = '' then
+    Exit;
+  Result := StrToInt64Def(lvValue, -1);
+  if Result < 0 then
+    Result := -1;
+end;
+
+function BpHttpProgressPercent(const AReceived, ATotal: Int64): Integer;
+begin
+  if ATotal <= 0 then
+    Result := -1
+  else if AReceived <= 0 then
+    Result := 0
+  else if AReceived >= ATotal then
+    Result := 100
+  else
+    Result := (AReceived * 100) div ATotal;
+end;
+
 function BpClassifyHttpError(AWinInetError: DWORD; AHttpStatus: Integer): string;
 const
   // some of these are missing from D2007's WinInet.pas, so declared inline
@@ -209,6 +296,8 @@ begin
         Result := 'Cannot reach server (DNS or network issue)';
       lcErrTimeout:
         Result := 'Connection timed out';
+      gcErrOperationCancelled:
+        Result := 'Operation cancelled';
       lcErrCannotConnect:
         Result := 'Cannot connect to server';
       lcErrConnectionReset:
@@ -588,6 +677,144 @@ begin
   end;
 end;
 
+procedure TbpHttpClient.ReadBodyToStream(ARequest: HINTERNET; ADest: TStream;
+  const ATotal: Int64; AProgress: TbpHttpProgressEvent;
+  AToken: TbpCancellationToken);
+var
+  lvBuffer: array[0..gcDownloadBufferSize - 1] of Byte;
+  lvBytesRead, lvErr: DWORD;
+  lvReceived: Int64;
+  lvCancel: Boolean;
+begin
+  lvReceived := 0;
+  if Assigned(AProgress) then
+  begin
+    // headers are in; announce the total before the first byte
+    lvCancel := False;
+    AProgress(Self, 0, ATotal, lvCancel);
+    if lvCancel then
+      RaiseDownloadCancelled;
+  end;
+
+  repeat
+    if (AToken <> nil) and AToken.IsCancellationRequested then
+      RaiseDownloadCancelled;
+
+    if not InternetReadFile(ARequest, @lvBuffer[0], gcDownloadBufferSize,
+      lvBytesRead) then
+    begin
+      lvErr := GetLastError;
+      raise EbpHttpClient.Create(
+        'Failed to read HTTP response: ' + GetWinInetErrorMessage(lvErr),
+        0, lvErr);
+    end;
+
+    if lvBytesRead > 0 then
+    begin
+      ADest.WriteBuffer(lvBuffer[0], lvBytesRead);
+      Inc(lvReceived, lvBytesRead);
+      if Assigned(AProgress) then
+      begin
+        lvCancel := False;
+        AProgress(Self, lvReceived, ATotal, lvCancel);
+        if lvCancel then
+          RaiseDownloadCancelled;
+      end;
+    end;
+  until lvBytesRead = 0;
+end;
+
+function TbpHttpClient.Download(const AUrl: string; ADest: TStream;
+  AProgress: TbpHttpProgressEvent; AToken: TbpCancellationToken;
+  const AHeaders: string; const AMethod: string): TbpHttpResponse;
+var
+  lvSession, lvConnection, lvRequest: HINTERNET;
+  lvServerName, lvResource: string;
+  lvPort: Integer;
+  lvSecure, lvOwnsRequest: Boolean;
+  lvCleanupId: Integer;
+begin
+  if ADest = nil then
+    raise EbpHttpClient.Create('Download destination stream is nil');
+  if (AToken <> nil) and AToken.IsCancellationRequested then
+    RaiseDownloadCancelled;
+  if not ParseUrl(AUrl, lvServerName, lvResource, lvPort, lvSecure) then
+    raise EbpHttpClient.Create('Invalid URL: ' + AUrl);
+
+  lvSession := CreateSession;
+  try
+    lvConnection := CreateConnection(lvSession, lvServerName, lvPort);
+    try
+      lvRequest := CreateRequest(lvConnection, AMethod, lvResource, lvSecure);
+      // hand the request handle to the token: Cancel closes it, which makes
+      // a blocked connect/read fail over immediately with error 12017
+      lvOwnsRequest := True;
+      lvCleanupId := 0;
+      if AToken <> nil then
+        if not AToken.RegisterCleanup(BpCloseInetHandleCleanup, lvRequest,
+          lvCleanupId) then
+        begin
+          // cancelled between the check above and here
+          InternetCloseHandle(lvRequest);
+          RaiseDownloadCancelled;
+        end;
+      try
+        try
+          ApplyAuthentication(lvRequest);
+          SendHttpRequest(lvRequest, BuildHeaders(AHeaders), '');
+
+          Result.StatusCode := ReadResponseStatus(lvRequest);
+          Result.Headers := ReadResponseHeaders(lvRequest);
+          Result.StatusText := Format('HTTP %d', [Result.StatusCode]);
+          Result.Body := '';
+          Result.ContentLength := BpHttpContentLength(Result.Headers);
+
+          ReadBodyToStream(lvRequest, ADest, Result.ContentLength, AProgress,
+            AToken);
+        except
+          // a WinInet failure caused by Cancel closing the handle surfaces
+          // as the typed cancellation, not as a generic network error
+          on E: EbpHttpClient do
+            if (AToken <> nil) and AToken.IsCancellationRequested and
+              not (E is EbpHttpClientCancelled) then
+              RaiseDownloadCancelled
+            else
+              raise;
+        end;
+      finally
+        if AToken <> nil then
+          lvOwnsRequest := AToken.UnregisterCleanup(lvCleanupId);
+        if lvOwnsRequest then
+          InternetCloseHandle(lvRequest);
+      end;
+    finally
+      InternetCloseHandle(lvConnection);
+    end;
+  finally
+    InternetCloseHandle(lvSession);
+  end;
+end;
+
+function TbpHttpClient.DownloadToFile(const AUrl, AFileName: string;
+  AProgress: TbpHttpProgressEvent; AToken: TbpCancellationToken;
+  const AHeaders: string): TbpHttpResponse;
+var
+  lvFile: TFileStream;
+  lvKeep: Boolean;
+begin
+  lvKeep := False;
+  lvFile := TFileStream.Create(AFileName, fmCreate);
+  try
+    Result := Download(AUrl, lvFile, AProgress, AToken, AHeaders);
+    lvKeep := BpHttpResponseIsSuccess(Result);
+  finally
+    lvFile.Free;
+    // never leave a partial or error-page file behind
+    if not lvKeep then
+      SysUtils.DeleteFile(AFileName);
+  end;
+end;
+
 function TbpHttpClient.Execute(const AUrl: string; AMethod: TbpHttpMethod;
   const AHeaders: string; const ABody: AnsiString): TbpHttpResponse;
 var
@@ -611,6 +838,7 @@ begin
 
         Result.StatusCode := ReadResponseStatus(lvRequest);
         Result.Headers := ReadResponseHeaders(lvRequest);
+        Result.ContentLength := BpHttpContentLength(Result.Headers);
         Result.Body := ReadResponseBody(lvRequest);
         Result.StatusText := Format('HTTP %d', [Result.StatusCode]);
       finally
