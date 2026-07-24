@@ -47,6 +47,8 @@ uses
   BpHMACSHA256Tests in 'Core\BpHMACSHA256Tests.pas',
   BpHMACSHA256 in '..\src\Core\Classes\BpHMACSHA256.pas',
   BpCancellationTokenTests in 'Core\BpCancellationTokenTests.pas',
+  BpCredentialsTests in 'Core\BpCredentialsTests.pas',
+  BpCredentials in '..\src\Core\Classes\BpCredentials.pas',
   BpHttpClientTests in 'Core\BpHttpClientTests.pas',
   BpHttpClient in '..\src\Core\Classes\BpHttpClient.pas',
   BpHttpDownloadTests in 'Core\BpHttpDownloadTests.pas',
