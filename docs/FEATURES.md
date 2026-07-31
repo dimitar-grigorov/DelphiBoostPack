@@ -55,13 +55,15 @@ end;
 
 | Call | Notes |
 |------|-------|
-| `Get(aUrl, aHeaders)` | |
-| `Post(aUrl, aBody, aHeaders)` | raw body, you set the content type |
-| `PostJson(aUrl, aJson)` | sets `Content-Type: application/json` |
-| `Put(aUrl, aBody, aHeaders)` | |
-| `Delete(aUrl, aHeaders)` | |
-| `Execute(aUrl, aMethod, aHeaders, aBody)` | the one they all call |
+| `Get(aUrl, aHeaders, aToken)` | |
+| `Post(aUrl, aBody, aHeaders, aToken)` | raw body, you set the content type |
+| `PostJson(aUrl, aJson, aToken)` | sets `Content-Type: application/json` |
+| `Put(aUrl, aBody, aHeaders, aToken)` | |
+| `Delete(aUrl, aHeaders, aToken)` | |
+| `Execute(aUrl, aMethod, aHeaders, aBody, aToken)` | the one they all call |
 | `FetchUrl(aUrl, aHeaders)` | class function, body only |
+
+Everything after the URL is optional, so `Get(lvUrl)` is a complete call.
 
 Every verb returns a `TbpHttpResponse`:
 
@@ -101,6 +103,12 @@ lvClient.BearerToken := TbpCredentials.GetPassword('MyApp', 'api');
 
 Proxy settings come from WinInet, so Internet Options and WPAD are honoured with no code.
 
+#### Connection reuse
+
+One client owns one WinInet session, opened on the first request and closed with the instance. WinInet keeps its connections alive on that session, so every request after the first to the same host skips the TCP and TLS handshake - the same reason C# `HttpClient` is meant to be kept rather than newed per call. Hold the instance for the life of the form or the service; `FetchUrl` and a `Create` / `Free` around every call pay the handshake each time.
+
+Setting `UserAgent` drops the session, since `InternetOpen` bakes the agent string into it. The timeouts are re-applied to a live session as you assign them, and take effect from the next request.
+
 #### Errors
 
 ```pascal
@@ -115,6 +123,18 @@ end;
 ```
 
 `BpClassifyHttpError` turns a WinInet code or an HTTP status into a sentence you can show a user - no internet connection, the server took too long, not found. Pass 0 for the dimension that does not apply.
+
+#### Cancelling a request
+
+Every verb takes a [TbpCancellationToken](#tbpcancellationtoken) as its last argument. `Cancel` closes the WinInet handle from the other thread, so a request blocked in connect, send or receive aborts at once instead of waiting out the timeout, and the call raises `EbpHttpClientCancelled`:
+
+```pascal
+lvResp := FClient.PostJson(lcApiUrl, lvQuery, FToken);   // worker thread
+...
+FToken.Cancel;                                           // UI thread, on close
+```
+
+That is what makes a worker joinable at shutdown: without a token the join waits for `ReceiveTimeout`.
 
 #### Streaming downloads
 
@@ -202,7 +222,7 @@ All result properties are lock-guarded, so reading them from any thread is safe.
 
 ### [TbpCancellationToken](../src/Core/Classes/BpHttpClient.pas)
 
-`BpHttpClient.pas` - the C# `CancellationToken` / JS `AbortController` idea for Delphi 7. One side calls `Cancel`, the working side polls - and a registered cleanup runs inside the `Cancel` itself, which is how a download aborts a read that is already blocked instead of waiting for it to time out.
+`BpHttpClient.pas` - the C# `CancellationToken` / JS `AbortController` idea for Delphi 7. One side calls `Cancel`, the working side polls - and a registered cleanup runs inside the `Cancel` itself, which is how a request or download aborts a read that is already blocked instead of waiting for it to time out.
 
 ```pascal
 FToken := TbpCancellationToken.Create;
