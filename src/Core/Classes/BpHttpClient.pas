@@ -82,7 +82,6 @@ type
     procedure SetReceiveTimeout(aValue: DWORD);
     function GetWinInetErrorMessage(aErrorCode: DWORD): string;
     function CreateSession: HINTERNET;
-    function AcquireSession: HINTERNET;
     procedure CloseSession;
     procedure ApplyTimeoutsToSession;
     function CreateConnection(aSession: HINTERNET; const aServerName: string;
@@ -148,6 +147,9 @@ type
       out aPort: Integer; out aSecure: Boolean): Boolean;
     function BuildHeaders(const aRequestHeaders: string): string;
     class function MethodToString(aMethod: TbpHttpMethod): string;
+
+    // the WinInet session, opened on demand
+    function SessionHandle: HINTERNET;
 
     // changing it drops the session, so set it before the first request
     property UserAgent: string read FUserAgent write SetUserAgent;
@@ -281,6 +283,7 @@ const
   gcDownloadBufferSize = 65536;  // bigger chunks pay off on large bodies
   gcDefaultTimeout = 8000;  // milliseconds
   gcDefaultUserAgent = 'DelphiBoostPack/1.0';
+  gcRequestContext = 1;  // non-zero, or WinInet skips its status callbacks
   gcWmTaskProgress = WM_APP + 1;
   gcWmTaskDone = WM_APP + 2;
 
@@ -603,7 +606,7 @@ begin
 end;
 
 // lazy, one per client; WinInet pools its keep-alive connections here
-function TbpHttpClient.AcquireSession: HINTERNET;
+function TbpHttpClient.SessionHandle: HINTERNET;
 begin
   EnterCriticalSection(FSessionLock);
   try
@@ -656,7 +659,7 @@ begin
     nil,
     INTERNET_SERVICE_HTTP,
     0,
-    0);
+    gcRequestContext);
 
   if Result = nil then
   begin
@@ -691,7 +694,7 @@ begin
     nil,
     nil,
     lvFlags,
-    0);
+    gcRequestContext);
 
   if Result = nil then
   begin
@@ -867,7 +870,7 @@ begin
     raise EbpHttpClient.Create('Invalid URL: ' + aUrl);
 
   // the instance owns the session; it is not closed here
-  lvConnection := CreateConnection(AcquireSession, lvServerName, lvPort);
+  lvConnection := CreateConnection(SessionHandle, lvServerName, lvPort);
   try
     lvRequest := CreateRequest(lvConnection, aMethod, lvResource, lvSecure);
     // Cancel closes this handle, so a blocked call fails over at once

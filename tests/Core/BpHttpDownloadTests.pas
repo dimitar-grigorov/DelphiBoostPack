@@ -5,7 +5,7 @@ unit BpHttpDownloadTests;
 interface
 
 uses
-  TestFramework, SysUtils, Classes, Windows, WinSock, BpHttpClient;
+  TestFramework, SysUtils, Classes, Windows, WinSock, BpHttpClient, BpHttpTrace;
 
 type
   // offline tests: progress math, header parsing, error classification,
@@ -54,6 +54,7 @@ type
     procedure TestSyncCancelViaProgressCallback;
     procedure TestSyncRequestCancelMidFlight;
     procedure TestAsyncCancelMidFlight;
+    procedure TestTraceSinkSeesTheWire;
   end;
 
   // integration tests against stable public endpoints; each test is skipped
@@ -124,6 +125,15 @@ var
 begin
   GetTempPath(MAX_PATH, lvBuffer);
   Result := IncludeTrailingPathDelimiter(lvBuffer) + aName;
+end;
+
+var
+  // the sink is a bare procedure, so the log is unit level
+  gvTraceLog: string;
+
+procedure CollectTraceLine(aHandle: Pointer; const aLine: string);
+begin
+  gvTraceLog := gvTraceLog + aLine + #13#10;
 end;
 
 type
@@ -587,6 +597,44 @@ begin
     end;
   finally
     lvToken.Free;
+  end;
+end;
+
+// the sink must see the phases, and nothing once detached
+procedure TBpHttpDownloadCancelTests.TestTraceSinkSeesTheWire;
+var
+  lvStream: TMemoryStream;
+  lvOffLength: Integer;
+begin
+  lvStream := TMemoryStream.Create;
+  try
+    gvTraceLog := '';
+    FCancelAtFirstData := True;  // the server never ends on its own
+    TbpHttpTrace.Attach(FClient, CollectTraceLine);
+    try
+      try
+        FClient.Download(ServerUrl, lvStream, HandleProgress);
+      except
+        on EbpHttpClientCancelled do ; // expected
+      end;
+    finally
+      TbpHttpTrace.Detach(FClient);
+    end;
+
+    Check(Pos('connecting to', gvTraceLog) > 0, 'connect phase: ' + gvTraceLog);
+    Check(Pos('sending request', gvTraceLog) > 0, 'send phase: ' + gvTraceLog);
+    Check(Pos('request sent', gvTraceLog) > 0, 'byte count: ' + gvTraceLog);
+    Check(Pos('response received', gvTraceLog) > 0, 'read phase: ' + gvTraceLog);
+
+    lvOffLength := Length(gvTraceLog);
+    try
+      FClient.Download(ServerUrl, lvStream, HandleProgress);
+    except
+      on EbpHttpClientCancelled do ;
+    end;
+    CheckEquals(lvOffLength, Length(gvTraceLog), 'detached must be silent');
+  finally
+    lvStream.Free;
   end;
 end;
 
