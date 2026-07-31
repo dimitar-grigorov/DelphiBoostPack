@@ -52,6 +52,7 @@ type
     procedure TearDown; override;
   published
     procedure TestSyncCancelViaProgressCallback;
+    procedure TestSyncRequestCancelMidFlight;
     procedure TestAsyncCancelMidFlight;
   end;
 
@@ -123,6 +124,33 @@ var
 begin
   GetTempPath(MAX_PATH, lvBuffer);
   Result := IncludeTrailingPathDelimiter(lvBuffer) + aName;
+end;
+
+type
+  // cancels a token after a delay, from outside the blocked call
+  TDelayedCancelThread = class(TThread)
+  private
+    FToken: TbpCancellationToken;
+    FDelayMs: Cardinal;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(aToken: TbpCancellationToken; aDelayMs: Cardinal);
+  end;
+
+constructor TDelayedCancelThread.Create(aToken: TbpCancellationToken;
+  aDelayMs: Cardinal);
+begin
+  FToken := aToken;
+  FDelayMs := aDelayMs;
+  FreeOnTerminate := False;
+  inherited Create(False);
+end;
+
+procedure TDelayedCancelThread.Execute;
+begin
+  Sleep(FDelayMs);
+  FToken.Cancel;
 end;
 
 { TSlowHttpServer }
@@ -526,6 +554,39 @@ begin
       'the download must not run to completion');
   finally
     lvStream.Free;
+  end;
+end;
+
+// a plain Get blocked in a read must abort on a cancel from another thread
+procedure TBpHttpDownloadCancelTests.TestSyncRequestCancelMidFlight;
+var
+  lvToken: TbpCancellationToken;
+  lvCanceller: TDelayedCancelThread;
+  lvStart, lvElapsed: Cardinal;
+begin
+  lvToken := TbpCancellationToken.Create;
+  try
+    // the server dribbles for minutes, so only the cancel can end this
+    FClient.ReceiveTimeout := 30000;
+    lvCanceller := TDelayedCancelThread.Create(lvToken, 300);
+    try
+      lvStart := GetTickCount;
+      try
+        FClient.Get(ServerUrl, '', lvToken);
+        Fail('expected EbpHttpClientCancelled');
+      except
+        on E: EbpHttpClientCancelled do
+          CheckEquals(gcErrOperationCancelled, E.WinInetError);
+      end;
+      lvElapsed := GetTickCount - lvStart;
+      Check(lvElapsed < 10000,
+        Format('cancel must not wait for the timeout, took %d ms', [lvElapsed]));
+    finally
+      lvCanceller.WaitFor;
+      lvCanceller.Free;
+    end;
+  finally
+    lvToken.Free;
   end;
 end;
 

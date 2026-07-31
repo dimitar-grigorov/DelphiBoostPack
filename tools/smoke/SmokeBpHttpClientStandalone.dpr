@@ -93,6 +93,36 @@ begin
   end;
 end;
 
+// a pre-cancelled token stops a verb before any network access, so this
+// checks the token parameter reached the bundle without going online
+function CheckRequestCancellation: Boolean;
+var
+  lvClient: TbpHttpClient;
+  lvToken: TbpCancellationToken;
+begin
+  Result := False;
+  lvClient := TbpHttpClient.Create;
+  lvToken := TbpCancellationToken.Create;
+  try
+    lvToken.Cancel;
+    try
+      lvClient.Post('https://example.com/graphql', '{}', '', lvToken);
+      Writeln('FAIL: cancelled token did not stop Post');
+    except
+      on E: EbpHttpClientCancelled do
+        if E.WinInetError = gcErrOperationCancelled then
+          Result := True
+        else
+          Writeln('FAIL: cancelled Post carries the wrong WinInet error');
+      on EbpHttpClient do
+        Writeln('FAIL: cancelled Post raised the generic error');
+    end;
+  finally
+    lvToken.Free;
+    lvClient.Free;
+  end;
+end;
+
 function CheckDownloadTask: Boolean;
 var
   lvTask: TbpHttpDownloadTask;
@@ -130,7 +160,7 @@ end;
 begin
   ExitCode := 1;
   if CheckClient and CheckDownloadHelpers and CheckCancellationToken and
-    CheckDownloadTask then
+    CheckRequestCancellation and CheckDownloadTask then
   begin
     Writeln('OK: BpHttpClientStandalone');
     ExitCode := 0;

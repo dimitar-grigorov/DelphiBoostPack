@@ -24,6 +24,7 @@ type
     procedure TestIsSuccess;
     procedure TestBodyAsUtf8;
     procedure TestClassifyHttpError;
+    procedure TestVerbsHonourPreCancelledToken;
   end;
 
 implementation
@@ -194,6 +195,42 @@ begin
   CheckEquals('Server error', BpClassifyHttpError(0, 503));
   CheckEquals('HTTP error 418', BpClassifyHttpError(0, 418));
   CheckEquals('Unknown error', BpClassifyHttpError(0, 0));
+end;
+
+procedure TBpHttpClientTests.TestVerbsHonourPreCancelledToken;
+const
+  lcUrl = 'https://example.com/';
+  lcVerbs: array[0..5] of string =
+    ('Execute', 'Get', 'Post', 'PostJson', 'Put', 'Delete');
+var
+  lvToken: TbpCancellationToken;
+  i: Integer;
+begin
+  // the token check comes before any network activity, so this is offline
+  lvToken := TbpCancellationToken.Create;
+  try
+    lvToken.Cancel;
+    for i := Low(lcVerbs) to High(lcVerbs) do
+    begin
+      try
+        case i of
+          0: FClient.Execute(lcUrl, hmGet, '', '', lvToken);
+          1: FClient.Get(lcUrl, '', lvToken);
+          2: FClient.Post(lcUrl, 'body', '', lvToken);
+          3: FClient.PostJson(lcUrl, '{}', lvToken);
+          4: FClient.Put(lcUrl, 'body', '', lvToken);
+          5: FClient.Delete(lcUrl, '', lvToken);
+        end;
+        Fail(lcVerbs[i] + ' must raise EbpHttpClientCancelled');
+      except
+        on E: EbpHttpClientCancelled do
+          CheckEquals(gcErrOperationCancelled, E.WinInetError,
+            lcVerbs[i] + ' error code');
+      end;
+    end;
+  finally
+    lvToken.Free;
+  end;
 end;
 
 initialization

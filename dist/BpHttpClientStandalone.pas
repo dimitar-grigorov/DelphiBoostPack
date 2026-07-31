@@ -4,7 +4,7 @@ unit BpHttpClientStandalone;
 // Single-file bundle amalgamated from the DelphiBoostPack modular units:
 //   src\Core\Units\BpBase64.pas
 //   src\Core\Classes\BpHttpClient.pas
-// Source commit 8a29519, generated 2026-07-24 by tools\Amalgamate.ps1.
+// Source commit 8ee7bd1, generated 2026-07-31 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   powershell -ExecutionPolicy Bypass -File tools\Amalgamate.ps1
 // Notes:
@@ -44,8 +44,8 @@ function Base64DecodeStr(const aBase64: string): AnsiString;
 // ==================================================================
 
 // HTTP/HTTPS over WinInet for Delphi 7/2007+. TLS comes from Schannel, so no
-// OpenSSL DLLs to ship. Sync verbs, streaming downloads with progress and
-// cancellation, and an async download task. See the README for examples.
+// OpenSSL DLLs to ship. Cancellable sync verbs, streaming downloads with
+// progress, and an async download task. See the README for examples.
 
 type
   TbpHttpMethod = (hmGet, hmPost, hmPut, hmDelete);
@@ -61,7 +61,7 @@ type
     property WinInetError: DWORD read FWinInetError;
   end;
 
-  // raised when a download is cancelled; WinInetError is gcErrOperationCancelled
+  // raised on cancel; WinInetError is gcErrOperationCancelled
   EbpHttpClientCancelled = class(EbpHttpClient);
 
   TbpHttpResponse = record
@@ -100,7 +100,7 @@ type
   TbpHttpProgressEvent = procedure(aSender: TObject; const aReceived,
     aTotal: Int64; var aCancel: Boolean) of object;
 
-  // synchronous client: request verbs plus streaming downloads
+  // synchronous client: verbs, streaming downloads, one reused session
   TbpHttpClient = class
   private
     FUserAgent: string;
@@ -112,8 +112,17 @@ type
     FPassword: AnsiString;
     FBearerToken: string;
     FHeaders: TStringList;  // persistent headers as Name=Value pairs
+    FSession: HINTERNET;    // reused by every request, nil until the first
+    FSessionLock: TRTLCriticalSection;  // guards FSession
+    procedure SetUserAgent(const aValue: string);
+    procedure SetConnectTimeout(aValue: DWORD);
+    procedure SetSendTimeout(aValue: DWORD);
+    procedure SetReceiveTimeout(aValue: DWORD);
     function GetWinInetErrorMessage(aErrorCode: DWORD): string;
     function CreateSession: HINTERNET;
+    function AcquireSession: HINTERNET;
+    procedure CloseSession;
+    procedure ApplyTimeoutsToSession;
     function CreateConnection(aSession: HINTERNET; const aServerName: string;
       aPort: Integer): HINTERNET;
     function CreateRequest(aConnection: HINTERNET; const aMethod, aResource: string;
@@ -124,23 +133,36 @@ type
       const aBody: AnsiString);
     function ReadResponseStatus(aRequest: HINTERNET): Integer;
     function ReadResponseHeaders(aRequest: HINTERNET): string;
-    function ReadResponseBody(aRequest: HINTERNET): AnsiString;
+    function ReadResponseBody(aRequest: HINTERNET;
+      aToken: TbpCancellationToken): AnsiString;
     procedure ReadBodyToStream(aRequest: HINTERNET; aDest: TStream;
       const aTotal: Int64; aProgress: TbpHttpProgressEvent;
       aToken: TbpCancellationToken);
+    // the one request the verbs and the downloads both go through;
+    // nil aDest buffers the body into the result instead of streaming it
+    function PerformRequest(const aUrl, aMethod, aHeaders: string;
+      const aBody: AnsiString; aDest: TStream; aProgress: TbpHttpProgressEvent;
+      aToken: TbpCancellationToken): TbpHttpResponse;
   public
     constructor Create;
     destructor Destroy; override;
 
+    // aToken aborts the call from another thread (EbpHttpClientCancelled)
     function Execute(const aUrl: string; aMethod: TbpHttpMethod = hmGet;
-      const aHeaders: string = ''; const aBody: AnsiString = ''): TbpHttpResponse;
-    function Get(const aUrl: string; const aHeaders: string = ''): TbpHttpResponse;
+      const aHeaders: string = ''; const aBody: AnsiString = '';
+      aToken: TbpCancellationToken = nil): TbpHttpResponse;
+    function Get(const aUrl: string; const aHeaders: string = '';
+      aToken: TbpCancellationToken = nil): TbpHttpResponse;
     function Post(const aUrl: string; const aBody: AnsiString;
-      const aHeaders: string = ''): TbpHttpResponse;
-    function PostJson(const aUrl: string; const aJson: AnsiString): TbpHttpResponse;
+      const aHeaders: string = '';
+      aToken: TbpCancellationToken = nil): TbpHttpResponse;
+    function PostJson(const aUrl: string; const aJson: AnsiString;
+      aToken: TbpCancellationToken = nil): TbpHttpResponse;
     function Put(const aUrl: string; const aBody: AnsiString;
-      const aHeaders: string = ''): TbpHttpResponse;
-    function Delete(const aUrl: string; const aHeaders: string = ''): TbpHttpResponse;
+      const aHeaders: string = '';
+      aToken: TbpCancellationToken = nil): TbpHttpResponse;
+    function Delete(const aUrl: string; const aHeaders: string = '';
+      aToken: TbpCancellationToken = nil): TbpHttpResponse;
     class function FetchUrl(const aUrl: string; const aHeaders: string = ''): AnsiString;
 
     // streams the body to aDest whatever the status; cancel raises
@@ -165,14 +187,15 @@ type
     function BuildHeaders(const aRequestHeaders: string): string;
     class function MethodToString(aMethod: TbpHttpMethod): string;
 
-    property UserAgent: string read FUserAgent write FUserAgent;
+    // changing it drops the session, so set it before the first request
+    property UserAgent: string read FUserAgent write SetUserAgent;
     property Username: AnsiString read FUsername write FUsername;
     property Password: AnsiString read FPassword write FPassword;
     // sent as 'Authorization: Bearer <token>' when not empty
     property BearerToken: string read FBearerToken write FBearerToken;
-    property ConnectTimeout: DWORD read FConnectTimeout write FConnectTimeout;
-    property SendTimeout: DWORD read FSendTimeout write FSendTimeout;
-    property ReceiveTimeout: DWORD read FReceiveTimeout write FReceiveTimeout;
+    property ConnectTimeout: DWORD read FConnectTimeout write SetConnectTimeout;
+    property SendTimeout: DWORD read FSendTimeout write SetSendTimeout;
+    property ReceiveTimeout: DWORD read FReceiveTimeout write SetReceiveTimeout;
     property FollowRedirects: Boolean read FFollowRedirects write FFollowRedirects;
   end;
 
@@ -526,7 +549,7 @@ begin
   InternetCloseHandle(HINTERNET(aData));
 end;
 
-procedure RaiseDownloadCancelled;
+procedure RaiseOperationCancelled;
 begin
   raise EbpHttpClientCancelled.Create('Operation cancelled', 0,
     gcErrOperationCancelled);
@@ -652,6 +675,7 @@ end;
 constructor TbpHttpClient.Create;
 begin
   inherited Create;
+  InitializeCriticalSection(FSessionLock);
   FUserAgent := gcDefaultUserAgent;
   FConnectTimeout := gcDefaultTimeout;
   FSendTimeout := gcDefaultTimeout;
@@ -662,8 +686,37 @@ end;
 
 destructor TbpHttpClient.Destroy;
 begin
+  CloseSession;
   FHeaders.Free;
+  DeleteCriticalSection(FSessionLock);
   inherited;
+end;
+
+// the agent string is baked into the session by InternetOpen
+procedure TbpHttpClient.SetUserAgent(const aValue: string);
+begin
+  if aValue = FUserAgent then
+    Exit;
+  FUserAgent := aValue;
+  CloseSession;
+end;
+
+procedure TbpHttpClient.SetConnectTimeout(aValue: DWORD);
+begin
+  FConnectTimeout := aValue;
+  ApplyTimeoutsToSession;
+end;
+
+procedure TbpHttpClient.SetSendTimeout(aValue: DWORD);
+begin
+  FSendTimeout := aValue;
+  ApplyTimeoutsToSession;
+end;
+
+procedure TbpHttpClient.SetReceiveTimeout(aValue: DWORD);
+begin
+  FReceiveTimeout := aValue;
+  ApplyTimeoutsToSession;
 end;
 
 procedure TbpHttpClient.AddHeader(const aName, aValue: string);
@@ -797,6 +850,47 @@ begin
   ApplyTimeouts(Result);
 end;
 
+// lazy, one per client; WinInet pools its keep-alive connections here
+function TbpHttpClient.AcquireSession: HINTERNET;
+begin
+  EnterCriticalSection(FSessionLock);
+  try
+    if FSession = nil then
+      FSession := CreateSession;
+    Result := FSession;
+  finally
+    LeaveCriticalSection(FSessionLock);
+  end;
+end;
+
+// drops the pooled connections; the next request opens a new session
+procedure TbpHttpClient.CloseSession;
+var
+  lvSession: HINTERNET;
+begin
+  EnterCriticalSection(FSessionLock);
+  try
+    lvSession := FSession;
+    FSession := nil;
+  finally
+    LeaveCriticalSection(FSessionLock);
+  end;
+  if lvSession <> nil then
+    InternetCloseHandle(lvSession);
+end;
+
+// timeouts live on the session handle, so a live one needs them again
+procedure TbpHttpClient.ApplyTimeoutsToSession;
+begin
+  EnterCriticalSection(FSessionLock);
+  try
+    if FSession <> nil then
+      ApplyTimeouts(FSession);
+  finally
+    LeaveCriticalSection(FSessionLock);
+  end;
+end;
+
 function TbpHttpClient.CreateConnection(aSession: HINTERNET;
   const aServerName: string; aPort: Integer): HINTERNET;
 var
@@ -827,7 +921,9 @@ function TbpHttpClient.CreateRequest(aConnection: HINTERNET;
 var
   lvFlags, lvErr: DWORD;
 begin
-  lvFlags := INTERNET_FLAG_RELOAD or INTERNET_FLAG_NO_CACHE_WRITE;
+  // keep-alive: without it WinInet may drop the pooled connection
+  lvFlags := INTERNET_FLAG_RELOAD or INTERNET_FLAG_NO_CACHE_WRITE or
+    INTERNET_FLAG_KEEP_CONNECTION;
 
   if aSecure then
     lvFlags := lvFlags or INTERNET_FLAG_SECURE;
@@ -967,7 +1063,8 @@ begin
     Result := '';
 end;
 
-function TbpHttpClient.ReadResponseBody(aRequest: HINTERNET): AnsiString;
+function TbpHttpClient.ReadResponseBody(aRequest: HINTERNET;
+  aToken: TbpCancellationToken): AnsiString;
 var
   lvBuffer: array[0..gcBufferSize - 1] of Byte;
   lvBytesRead, lvErr: DWORD;
@@ -976,6 +1073,9 @@ begin
   lvStream := TMemoryStream.Create;
   try
     repeat
+      if (aToken <> nil) and aToken.IsCancellationRequested then
+        RaiseOperationCancelled;
+
       if not InternetReadFile(aRequest, @lvBuffer[0], gcBufferSize, lvBytesRead) then
       begin
         lvErr := GetLastError;
@@ -999,71 +1099,109 @@ begin
   end;
 end;
 
-function TbpHttpClient.Execute(const aUrl: string; aMethod: TbpHttpMethod;
-  const aHeaders: string; const aBody: AnsiString): TbpHttpResponse;
+function TbpHttpClient.PerformRequest(const aUrl, aMethod, aHeaders: string;
+  const aBody: AnsiString; aDest: TStream; aProgress: TbpHttpProgressEvent;
+  aToken: TbpCancellationToken): TbpHttpResponse;
 var
-  lvSession, lvConnection, lvRequest: HINTERNET;
+  lvConnection, lvRequest: HINTERNET;
   lvServerName, lvResource: string;
   lvPort: Integer;
-  lvSecure: Boolean;
+  lvSecure, lvOwnsRequest: Boolean;
+  lvCleanupId: Integer;
 begin
+  if (aToken <> nil) and aToken.IsCancellationRequested then
+    RaiseOperationCancelled;
   if not ParseUrl(aUrl, lvServerName, lvResource, lvPort, lvSecure) then
     raise EbpHttpClient.Create('Invalid URL: ' + aUrl);
 
-  lvSession := CreateSession;
+  // the instance owns the session; it is not closed here
+  lvConnection := CreateConnection(AcquireSession, lvServerName, lvPort);
   try
-    lvConnection := CreateConnection(lvSession, lvServerName, lvPort);
+    lvRequest := CreateRequest(lvConnection, aMethod, lvResource, lvSecure);
+    // Cancel closes this handle, so a blocked call fails over at once
+    lvOwnsRequest := True;
+    lvCleanupId := 0;
+    if aToken <> nil then
+      if not aToken.RegisterCleanup(BpCloseInetHandleCleanup, lvRequest,
+        lvCleanupId) then
+      begin
+        // cancelled between the check above and here
+        InternetCloseHandle(lvRequest);
+        RaiseOperationCancelled;
+      end;
     try
-      lvRequest := CreateRequest(lvConnection, MethodToString(aMethod),
-        lvResource, lvSecure);
       try
         ApplyAuthentication(lvRequest);
         SendHttpRequest(lvRequest, BuildHeaders(aHeaders), aBody);
 
         Result.StatusCode := ReadResponseStatus(lvRequest);
         Result.Headers := ReadResponseHeaders(lvRequest);
-        Result.ContentLength := BpHttpContentLength(Result.Headers);
-        Result.Body := ReadResponseBody(lvRequest);
         Result.StatusText := Format('HTTP %d', [Result.StatusCode]);
-      finally
-        InternetCloseHandle(lvRequest);
+        Result.ContentLength := BpHttpContentLength(Result.Headers);
+        Result.Body := '';
+
+        if aDest <> nil then
+          ReadBodyToStream(lvRequest, aDest, Result.ContentLength, aProgress,
+            aToken)
+        else
+          Result.Body := ReadResponseBody(lvRequest, aToken);
+      except
+        // a failure caused by Cancel surfaces as the typed cancellation
+        on E: EbpHttpClient do
+          if (aToken <> nil) and aToken.IsCancellationRequested and
+            not (E is EbpHttpClientCancelled) then
+            RaiseOperationCancelled
+          else
+            raise;
       end;
     finally
-      InternetCloseHandle(lvConnection);
+      // Unregister hands the handle back, unless Cancel already closed it
+      if aToken <> nil then
+        lvOwnsRequest := aToken.UnregisterCleanup(lvCleanupId);
+      if lvOwnsRequest then
+        InternetCloseHandle(lvRequest);
     end;
   finally
-    InternetCloseHandle(lvSession);
+    InternetCloseHandle(lvConnection);
   end;
 end;
 
-function TbpHttpClient.Get(const aUrl: string;
-  const aHeaders: string): TbpHttpResponse;
+function TbpHttpClient.Execute(const aUrl: string; aMethod: TbpHttpMethod;
+  const aHeaders: string; const aBody: AnsiString;
+  aToken: TbpCancellationToken): TbpHttpResponse;
 begin
-  Result := Execute(aUrl, hmGet, aHeaders, '');
+  Result := PerformRequest(aUrl, MethodToString(aMethod), aHeaders, aBody,
+    nil, nil, aToken);
+end;
+
+function TbpHttpClient.Get(const aUrl: string; const aHeaders: string;
+  aToken: TbpCancellationToken): TbpHttpResponse;
+begin
+  Result := Execute(aUrl, hmGet, aHeaders, '', aToken);
 end;
 
 function TbpHttpClient.Post(const aUrl: string; const aBody: AnsiString;
-  const aHeaders: string): TbpHttpResponse;
+  const aHeaders: string; aToken: TbpCancellationToken): TbpHttpResponse;
 begin
-  Result := Execute(aUrl, hmPost, aHeaders, aBody);
+  Result := Execute(aUrl, hmPost, aHeaders, aBody, aToken);
 end;
 
-function TbpHttpClient.PostJson(const aUrl: string;
-  const aJson: AnsiString): TbpHttpResponse;
+function TbpHttpClient.PostJson(const aUrl: string; const aJson: AnsiString;
+  aToken: TbpCancellationToken): TbpHttpResponse;
 begin
-  Result := Execute(aUrl, hmPost, 'Content-Type: application/json', aJson);
+  Result := Execute(aUrl, hmPost, 'Content-Type: application/json', aJson, aToken);
 end;
 
 function TbpHttpClient.Put(const aUrl: string; const aBody: AnsiString;
-  const aHeaders: string): TbpHttpResponse;
+  const aHeaders: string; aToken: TbpCancellationToken): TbpHttpResponse;
 begin
-  Result := Execute(aUrl, hmPut, aHeaders, aBody);
+  Result := Execute(aUrl, hmPut, aHeaders, aBody, aToken);
 end;
 
-function TbpHttpClient.Delete(const aUrl: string;
-  const aHeaders: string): TbpHttpResponse;
+function TbpHttpClient.Delete(const aUrl: string; const aHeaders: string;
+  aToken: TbpCancellationToken): TbpHttpResponse;
 begin
-  Result := Execute(aUrl, hmDelete, aHeaders, '');
+  Result := Execute(aUrl, hmDelete, aHeaders, '', aToken);
 end;
 
 class function TbpHttpClient.FetchUrl(const aUrl: string;
@@ -1097,12 +1235,12 @@ begin
     lvCancel := False;
     aProgress(Self, 0, aTotal, lvCancel);
     if lvCancel then
-      RaiseDownloadCancelled;
+      RaiseOperationCancelled;
   end;
 
   repeat
     if (aToken <> nil) and aToken.IsCancellationRequested then
-      RaiseDownloadCancelled;
+      RaiseOperationCancelled;
 
     if not InternetReadFile(aRequest, @lvBuffer[0], gcDownloadBufferSize,
       lvBytesRead) then
@@ -1122,7 +1260,7 @@ begin
         lvCancel := False;
         aProgress(Self, lvReceived, aTotal, lvCancel);
         if lvCancel then
-          RaiseDownloadCancelled;
+          RaiseOperationCancelled;
       end;
     end;
   until lvBytesRead = 0;
@@ -1131,72 +1269,11 @@ end;
 function TbpHttpClient.Download(const aUrl: string; aDest: TStream;
   aProgress: TbpHttpProgressEvent; aToken: TbpCancellationToken;
   const aHeaders: string; const aMethod: string): TbpHttpResponse;
-var
-  lvSession, lvConnection, lvRequest: HINTERNET;
-  lvServerName, lvResource: string;
-  lvPort: Integer;
-  lvSecure, lvOwnsRequest: Boolean;
-  lvCleanupId: Integer;
 begin
   if aDest = nil then
     raise EbpHttpClient.Create('Download destination stream is nil');
-  if (aToken <> nil) and aToken.IsCancellationRequested then
-    RaiseDownloadCancelled;
-  if not ParseUrl(aUrl, lvServerName, lvResource, lvPort, lvSecure) then
-    raise EbpHttpClient.Create('Invalid URL: ' + aUrl);
-
-  lvSession := CreateSession;
-  try
-    lvConnection := CreateConnection(lvSession, lvServerName, lvPort);
-    try
-      lvRequest := CreateRequest(lvConnection, aMethod, lvResource, lvSecure);
-      // hand the request handle to the token: Cancel closes it, which makes
-      // a blocked connect/read fail over immediately with error 12017
-      lvOwnsRequest := True;
-      lvCleanupId := 0;
-      if aToken <> nil then
-        if not aToken.RegisterCleanup(BpCloseInetHandleCleanup, lvRequest,
-          lvCleanupId) then
-        begin
-          // cancelled between the check above and here
-          InternetCloseHandle(lvRequest);
-          RaiseDownloadCancelled;
-        end;
-      try
-        try
-          ApplyAuthentication(lvRequest);
-          SendHttpRequest(lvRequest, BuildHeaders(aHeaders), '');
-
-          Result.StatusCode := ReadResponseStatus(lvRequest);
-          Result.Headers := ReadResponseHeaders(lvRequest);
-          Result.StatusText := Format('HTTP %d', [Result.StatusCode]);
-          Result.Body := '';
-          Result.ContentLength := BpHttpContentLength(Result.Headers);
-
-          ReadBodyToStream(lvRequest, aDest, Result.ContentLength, aProgress,
-            aToken);
-        except
-          // a WinInet failure caused by Cancel closing the handle surfaces
-          // as the typed cancellation, not as a generic network error
-          on E: EbpHttpClient do
-            if (aToken <> nil) and aToken.IsCancellationRequested and
-              not (E is EbpHttpClientCancelled) then
-              RaiseDownloadCancelled
-            else
-              raise;
-        end;
-      finally
-        if aToken <> nil then
-          lvOwnsRequest := aToken.UnregisterCleanup(lvCleanupId);
-        if lvOwnsRequest then
-          InternetCloseHandle(lvRequest);
-      end;
-    finally
-      InternetCloseHandle(lvConnection);
-    end;
-  finally
-    InternetCloseHandle(lvSession);
-  end;
+  Result := PerformRequest(aUrl, aMethod, aHeaders, '', aDest, aProgress,
+    aToken);
 end;
 
 function TbpHttpClient.DownloadToFile(const aUrl, aFileName: string;

@@ -52,7 +52,7 @@ Full descriptions and examples in the [feature guide](docs/FEATURES.md).
 
 | Unit | What you get |
 |------|--------------|
-| [TbpHttpClient](docs/FEATURES.md#tbphttpclient) | `Get` / `Post` / `PostJson` / `Put` / `Delete`, bearer and basic auth, streaming downloads. WinInet, so TLS comes from Windows and no OpenSSL DLLs ride along |
+| [TbpHttpClient](docs/FEATURES.md#tbphttpclient) | `Get` / `Post` / `PostJson` / `Put` / `Delete`, all cancellable, bearer and basic auth, streaming downloads, keep-alive. WinInet, so TLS comes from Windows and no OpenSSL DLLs ride along |
 | [TbpHttpDownloadTask](docs/FEATURES.md#tbphttpdownloadtask) | non-blocking downloads with progress, prompt cancel and partial-file cleanup |
 | [TbpTask](docs/FEATURES.md#tbptask) | run any method on a worker thread, completion and failure as events on the calling thread |
 | [TbpCancellationToken](docs/FEATURES.md#tbpcancellationtoken) | the C# `CancellationToken` idea, for Delphi 7 |
