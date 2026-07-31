@@ -54,7 +54,7 @@ begin
   lvDurationRatio := 0;
   lvMemoryRatio := 0;
   lvMemStatus.dwLength := SizeOf(TMemoryStatus);
-  GlobalMemoryStatus(lvMemStatus); // Retrieve the memory status
+  GlobalMemoryStatus(lvMemStatus);
   if (lvMemStatus.dwAvailPhys < lcTwoGB) then
   begin
     // skip instead of fail: a busy machine is not a regression
@@ -65,7 +65,6 @@ begin
   lvProcessMemoryBefore.cb := SizeOf(lvProcessMemoryBefore);
   lvProcessMemoryAfter.cb := SizeOf(lvProcessMemoryAfter);
 
-  // Test TbpIntList
   lvIntList := TbpIntList.Create;
   try
     GetProcessMemoryInfo(GetCurrentProcess(), @lvProcessMemoryBefore, SizeOf(lvProcessMemoryBefore));
@@ -80,13 +79,11 @@ begin
     lvIntList.Free;
   end;
 
-  // Reset memory measurement for TStringList
   FillChar(lvProcessMemoryBefore, SizeOf(lvProcessMemoryBefore), 0);
   FillChar(lvProcessMemoryAfter, SizeOf(lvProcessMemoryAfter), 0);
   lvProcessMemoryBefore.cb := SizeOf(lvProcessMemoryBefore);
   lvProcessMemoryAfter.cb := SizeOf(lvProcessMemoryAfter);
 
-  // Test TStringList
   lvStrList := TStringList.Create;
   try
     GetProcessMemoryInfo(GetCurrentProcess(), @lvProcessMemoryBefore, SizeOf(lvProcessMemoryBefore));
@@ -101,13 +98,11 @@ begin
     lvStrList.Free;
   end;
 
-  // Calculate the ratios
   if (lvDurationIntList > 0) then
     lvDurationRatio := lvDurationStrList / lvDurationIntList;
   if (lvMemoryIntList > 0) then
     lvMemoryRatio := lvMemoryStrList / lvMemoryIntList;
 
-  // Output results
   Status(Format('Integers count: %d', [lcIntegersToAdd]));
   Status(EmptyStr);
   Status(Format('TbpIntList Duration: %d ms', [lvDurationIntList]));
@@ -127,7 +122,7 @@ var
 const
   lcSearchValues: array[0..19] of Integer = (1, 50, 250, 500, 750, 1000, 2500, 5000,
     7500, 10000, 20000, 30000, 40000, 50000, 60000, 70000, 80000, 90000, 95000, 100000);
-  lcRepeatCount = 50; // Number of times to repeat the search to average the timings
+  lcRepeatCount = 50;
 begin
   for I := 1 to 2000000 do
     FBpIntList.Add(I);
@@ -138,10 +133,9 @@ begin
   TotalStepsIndexOf := 0;
   TotalStepsBinarySearch := 0;
 
-  // Testing IndexOf
-  // Set Sorted to be false, to force the linear search
+  // toggling Sorted true then false forces the linear search path
   FBpIntList.Sorted := True;
-  FBpIntList.Sorted := False;    
+  FBpIntList.Sorted := False;
   for J := 1 to lcRepeatCount do
   begin
     QueryPerformanceCounter(lvStartTick);
@@ -157,7 +151,6 @@ begin
   Status(Format('IndexOf Average Time: %f ms', [ElapsedTimeIndexOf / lcRepeatCount]));
   Status(Format('IndexOf Average Steps: %f', [TotalStepsIndexOf / (lcRepeatCount * Length(lcSearchValues))]));
 
-  // Testing BinarySearch
   FBpIntList.Sorted := True;
   for J := 1 to lcRepeatCount do
   begin
@@ -182,8 +175,8 @@ var
   ElapsedTimeIndexOf, ElapsedTimeBinarySearch, SingleRunTime: Double;
   SearchValues: array of Integer;
 const
-  lcRepeatCount = 50; // Number of times to repeat the search to average the timings
-  lcNumSearchValues = 50; // Total number of search values
+  lcRepeatCount = 50;
+  lcNumSearchValues = 50;
 begin
   Randomize;
   SetLength(SearchValues, lcNumSearchValues);
@@ -207,10 +200,9 @@ begin
   TotalStepsIndexOf := 0;
   TotalStepsBinarySearch := 0;
 
-  // Testing IndexOf
-  // Set Sorted to be false, to force the linear search
+  // toggling Sorted true then false forces the linear search path
   FBpIntList.Sorted := True;
-  FBpIntList.Sorted := False;  
+  FBpIntList.Sorted := False;
   for J := 1 to lcRepeatCount do
   begin
     QueryPerformanceCounter(lvStartTick);
@@ -226,8 +218,7 @@ begin
   Status(Format('IndexOf Average Time: %f ms', [ElapsedTimeIndexOf / lcRepeatCount]));
   Status(Format('IndexOf Average Steps: %f', [TotalStepsIndexOf / (lcRepeatCount * lcNumSearchValues)]));
 
-  // Testing BinarySearch
-  FBpIntList.Sorted := True;  
+  FBpIntList.Sorted := True;
   for J := 1 to lcRepeatCount do
   begin
     QueryPerformanceCounter(lvStartTick);
@@ -252,31 +243,27 @@ var
 begin
   QueryPerformanceFrequency(lvFrequency);
 
-  // Test inserting into a sorted list
   FBpIntList.Clear;
   FBpIntList.Sorted := True;
   QueryPerformanceCounter(lvStartTick);
   for I := 0 to 100000 do
-    FBpIntList.Insert(Random(I + 1), I);  // Insert with sorting maintained during each insertion
+    FBpIntList.Insert(Random(I + 1), I);
   QueryPerformanceCounter(lvEndTick);
   lvElapsedTimeSorted := (lvEndTick - lvStartTick) * 1000.0 / lvFrequency;
 
-  // Test inserting into an unsorted list and then sorting
   FBpIntList.Clear;
   FBpIntList.Sorted := False;
   QueryPerformanceCounter(lvStartTick);
   for I := 0 to 100000 do
-    FBpIntList.Insert(Random(I + 1), I);  // Insert without sorting
+    FBpIntList.Insert(Random(I + 1), I);
   QueryPerformanceCounter(lvEndTick);
   lvElapsedTimeUnsorted := (lvEndTick - lvStartTick) * 1000.0 / lvFrequency;
 
-  // Measure the time taken to sort the list after population
   QueryPerformanceCounter(lvStartTick);
-  FBpIntList.Sort;  // Sort the entire list
+  FBpIntList.Sort;
   QueryPerformanceCounter(lvEndTick);
   lvElapsedTimeSorting := (lvEndTick - lvStartTick) * 1000.0 / lvFrequency;
 
-  // Output the results
   Status(Format('Insert into Sorted List Time: %f ms', [lvElapsedTimeSorted]));
   Status(Format('Insert into Unsorted List Time: %f ms', [lvElapsedTimeUnsorted]));
   Status(Format('Time to Sort After Insertion: %f ms', [lvElapsedTimeSorting]));

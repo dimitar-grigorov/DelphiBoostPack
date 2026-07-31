@@ -7,7 +7,7 @@ unit BpHashes;
 //   src\Core\Classes\BpMD5.pas
 //   src\Core\Classes\BpHMACSHA256.pas
 //   src\Core\Classes\BpPasswordHash.pas
-// Source commit 8a29519, generated 2026-07-24 by tools\Amalgamate.ps1.
+// Source commit 3c8f51c, generated 2026-07-31 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   powershell -ExecutionPolicy Bypass -File tools\Amalgamate.ps1
 // Notes:

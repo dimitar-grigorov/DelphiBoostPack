@@ -178,7 +178,7 @@ var
 begin
   if aL < aR then
   begin
-    lvPivot := FList[(aL + aR) div 2]; // Choose the pivot element
+    lvPivot := FList[(aL + aR) div 2];
     I := aL;
     J := aR;
     repeat
@@ -188,13 +188,11 @@ begin
         Dec(J);
       if I <= J then
       begin
-        // Swap elements
         ExchangeItems(I, J);
         Inc(I);
         Dec(J);
       end;
     until I > J;
-    // Recursively sort the partitions
     QuickSort(aL, J);
     QuickSort(I, aR);
   end;
@@ -291,22 +289,18 @@ begin
   while P^ <> #0 do
   begin
     lvStart := P;
-    // Search for the next delimiter, end of string, or newline character
     while (P^ <> #0) and (P^ <> Delimiter) and not CharInSet(P^, [#10, #13]) do
       Inc(P);
 
-    // Extract the substring from the start of the number to the delimiter
     SetString(lvS, lvStart, P - lvStart);
     if lvS <> '' then
     begin
-      // Try to convert the substring into a number and add it to the list
       if TryStrToInt(lvS, lvNum) then
         Add(lvNum)
       else
         raise EConvertError.CreateFmt('Cannot convert string "%s" to integer', [lvS]);
     end;
 
-    // Skip the delimiter and any trailing newline characters or spaces
     while (P^ = Delimiter) or CharInSet(P^, [#10, #13, ' ']) do
       Inc(P);
   end;
@@ -332,9 +326,8 @@ var
 begin
   Clear;
   SetLength(lvBuffer, aStream.Size);
-  aStream.Position := 0; // Ensure the stream's read pointer is at the beginning.
+  aStream.Position := 0;
   aStream.Read(lvBuffer[0], aStream.Size);
-  // Convert buffer into string
   SetString(lvS, PAnsiChar(@lvBuffer[0]), Length(lvBuffer));
   SetDelimitedText(lvS);
 end;
@@ -379,7 +372,6 @@ begin
   end
   else
   begin
-    // If the list is not sorted, use the linear search approach
     for lvFoundIndex := 0 to FCount - 1 do
     begin
       {$IFDEF BENCHMARK}
@@ -465,7 +457,6 @@ begin
   if Count = Length(FList) then
     Grow;
 
-  // Shift elements to make space for the new item.
   if aIndex < Count then
     System.Move(FList[aIndex], FList[aIndex + 1], (Count - aIndex) * SizeOf(Integer));
 

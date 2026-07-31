@@ -26,8 +26,7 @@ type
 
   TPropDifference = class(TInterfacedObject, IPropDifference)
   private
-    // Old and New prop path are typically the same.
-    // They are different when compared collection items that supports IUniqueID
+    // old and new paths differ only for IUniqueId collection items, where the item moved index
     FOldPropPath: string;
     FNewPropPath: string;
     FOldValue: Variant;
@@ -35,7 +34,7 @@ type
     FIdx: string;
   public
     constructor Create(const aPropPath: string; const aOldValue, aNewValue: Variant); overload;
-    // Used for collection item difference
+    // used for collection item differences
     constructor Create(const aOldPropPath, aNewPropPath: string; const aOldValue, aNewValue: Variant; const aIdx: string = ''); overload;
     function GetOldPropPath: string;
     function GetNewPropPath: string;
@@ -159,10 +158,10 @@ begin
               CompareCollectionItems(TCollection(GetObjectProp(aOld, lvPropInfo)),
                 TCollection(GetObjectProp(aNew, lvPropInfo)), lvOldPropPath, lvNewPropPath, Result);
             end;
-            Continue; // Skip the AppendDifference call for collections, as CompareCollectionItems handles it.
+            Continue; // CompareCollectionItems already appended these, not AppendDifference
           end;
       else
-        Continue; // Skip properties that don't match any handled types.
+        Continue; // unhandled property kinds are ignored, not diffed
       end;
 
       if (lvOldValue <> lvNewValue) then
@@ -211,18 +210,14 @@ var
   end;
 
 begin
-  // Compare collection item counts
   if (aOldColl.Count <> aNewColl.Count) then
     AppendDifference(aDiffs, TPropDifference.Create(aOldPropPath + '.Count', aOldColl.Count, aNewColl.Count));
 
-  // Initialize a list to track processed items in the new collection
-  lvProcessedItems := TStringList.Create;
+  lvProcessedItems := TStringList.Create; // new-collection indices already matched, so leftovers can be reported below
   try
-    // Compare items from the old collection to the new collection
     for I := 0 to aOldColl.Count - 1 do
     begin
       lvItem1 := aOldColl.Items[I] as TPersistent;
-      // IUniqueId
       if Supports(lvItem1, IUniqueId, lvUniqueIdIntf) then
       begin
         lvUniqueId := lvUniqueIdIntf.GetUniqueId;
@@ -240,7 +235,7 @@ begin
             'Exists in old', 'Missing in new', lvUniqueId));
         end;
       end
-      else  // Index based comparison
+      else  // index based comparison
       begin
         if (I < aNewColl.Count) then
         begin
@@ -258,7 +253,6 @@ begin
       end;
     end;
 
-    // Check for items in the new collection that are not in the old collection
     for I := 0 to aNewColl.Count - 1 do
     begin
       if lvProcessedItems.IndexOf(IntToStr(I)) = -1 then

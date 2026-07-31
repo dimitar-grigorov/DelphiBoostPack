@@ -136,6 +136,36 @@ FToken.Cancel;                                           // UI thread, on close
 
 That is what makes a worker joinable at shutdown: without a token the join waits for `ReceiveTimeout`.
 
+#### Wire trace
+
+An in-process `ssh -v` for when a request misbehaves in the field, in an optional companion unit: [BpHttpTrace.pas](../src/Core/Classes/BpHttpTrace.pas). Nothing references it, it is not in the standalone bundle, and `BpHttpClient` knows nothing about it - copy the file next to the client only when you need it.
+
+```pascal
+uses BpHttpTrace;
+
+procedure MyTrace(aHandle: Pointer; const aLine: string);
+begin
+  Log(Format('[http %p] %s', [aHandle, aLine]));
+end;
+
+TbpHttpTrace.Attach(FClient, MyTrace);   // any thread, any time
+TbpHttpTrace.Detach(FClient);
+```
+
+```
+[http 00CC0A18] resolving api.example.com
+[http 00CC0A18] connected to 93.184.216.34:443
+[http 00CC0A18] sending request
+[http 00CC0A18] request sent (412 bytes)
+[http 00CC0A18] response received (1460 bytes)
+```
+
+`Attach` installs a WinInet status callback on the client's session, which is all the client contributes: `SessionHandle` and a non-zero request context. Detached, there is no callback, so an untraced build pays nothing.
+
+The sink is a bare procedure - no method pointers, no logging unit anywhere near the client - and it runs on the thread doing the I/O, so keep it quick and thread-safe. The method, the URL and the HTTP status are yours already, at the call site; this covers only what happens in between.
+
+Headers never pass through it, so no `Authorization` value can reach a log, and `SanitizeUrl` strips `user:pass@` from a redirect target. A token in a query string is still a query string - that one is yours to keep out.
+
 #### Streaming downloads
 
 `Download` streams to any `TStream`, `DownloadToFile` to a file. Both run in constant memory whatever the size, report progress in `Int64`, and take a cancellation token. They block, so call them from a worker thread - or use [TbpHttpDownloadTask](#tbphttpdownloadtask).

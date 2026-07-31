@@ -8,8 +8,6 @@ uses
   TestFramework, Classes, BpIntList, SysUtils;
 
 type
-  // Test methods for class TbpIntList
-
   TBpIntListTests = class(TTestCase)
   private
     FBpIntList: TbpIntList;
@@ -17,27 +15,20 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    //Add
     procedure TestAdd;
-    //Delete
     procedure TestDelete;
     procedure TestDeleteFirstItem;
     procedure TestDeleteLastItem;
     procedure TestDeleteWithInvalidIndex;
-    //Clear
     procedure TestClear;
-    //IndexOf
     procedure TestIndexOf;
-    //BinarySearch
     procedure TestBinarySearchEmptyList;
     procedure TestBinarySearchSingleElement;
     procedure TestBinarySearchMultipleElements;
-    //Exchange
     procedure TestExchangeValidIndices;
     procedure TestExchangeSameIndex;
     procedure TestExchangeInvalidIndex;
     procedure TestExchangeWithEmptyList;
-    //Insert
     procedure TestInsert;
     procedure TestInsertAtBeginning;
     procedure TestInsertAtEnd;
@@ -45,25 +36,20 @@ type
     procedure TestInsertRandomPositions;
     procedure TestInsertIntoEmptyList;
     procedure TestSortedInsert;
-    //Sorted
     procedure TestSortedPropertySetTrue;
     procedure TestSortedPropertySetFalse;
     procedure TestAddItemWhenSorted;
     procedure TestSetItemWhenSorted;
-    //Items
     procedure TestSetItem;
     procedure TestGetItemWithInvalidIndex;
     procedure TestSetGetItem;
-    //CommaText
     procedure TestSetCommaTextBasic;
     procedure TestGetCommaTextBasic;
     procedure TestSetCommaTextWithSpaces;
     procedure TestCommaTextWithQuotesRaisesException;
-    //Count
     procedure TestCountAfterAdd;
     procedure TestCountAfterMultipleAdds;
     procedure TestCountAfterDelete;
-    //DelimitedText
     procedure TestSetDelimitedText;
     procedure TestGetDelimitedTextWithDefaultDelimiter;
     procedure TestSetDelimiterAndDelimitedText;
@@ -73,24 +59,19 @@ type
     procedure TestDelimitedTextOnlyDelimiters;
     procedure TestLargeQuantities;
     procedure TestDelimitedTextWithConsecutiveDelimiters;
-    //Sort
     procedure TestSortWithFewItems;
     procedure TestSortWithIdenticalItems;
     procedure TestSortWithNegativeItems;
     procedure TestSortAlreadySorted;
-    //LoadFromFile
     procedure TestLoadFromFileBasic;
     procedure TestLoadFromFileNonExisting;
     procedure TestLoadFromFileWithInvalidFormat;
-    //SaveToFile
     procedure TestSaveToFileBasic;
     procedure TestSaveToFileWithDelimiterChange;
     procedure TestSaveToFileEmptyList;
-    //LoadFromStream
     procedure TestLoadFromStreamBasic;
     procedure TestLoadFromStreamEmpty;
     procedure TestLoadFromStreamWithInvalidFormat;
-    //SaveToStream
     procedure TestSaveToStreamBasic;
     procedure TestSaveToStreamEmptyList;
   end;
@@ -131,7 +112,7 @@ procedure TBpIntListTests.TestDeleteFirstItem;
 begin
   FBpIntList.Add(10);
   FBpIntList.Add(20);
-  FBpIntList.Delete(0); // Delete first item
+  FBpIntList.Delete(0);
   CheckEquals(1, FBpIntList.Count, 'Count should be 1 after deleting first item');
   CheckEquals(20, FBpIntList.Items[0], 'The first item should now be 20');
 end;
@@ -140,7 +121,7 @@ procedure TBpIntListTests.TestDeleteLastItem;
 begin
   FBpIntList.Add(10);
   FBpIntList.Add(20);
-  FBpIntList.Delete(FBpIntList.Count - 1); // Delete last item
+  FBpIntList.Delete(FBpIntList.Count - 1);
   CheckEquals(1, FBpIntList.Count, 'Count should be 1 after deleting last item');
   CheckEquals(10, FBpIntList.Items[0], 'The remaining item should be 10');
 end;
@@ -148,11 +129,11 @@ end;
 procedure TBpIntListTests.TestDeleteWithInvalidIndex;
 begin
   try
-    FBpIntList.Delete(-1); // Attempt to delete with an invalid index
+    FBpIntList.Delete(-1);
     Fail('Expected EListError not raised for invalid index');
   except
     on E: EListError do
-      ; // Pass the test
+      ; // expected
   end;
 end;
 
@@ -236,22 +217,22 @@ procedure TBpIntListTests.TestExchangeInvalidIndex;
 begin
   FBpIntList.Add(1);
   try
-    FBpIntList.Exchange(0, 2); // Invalid index
+    FBpIntList.Exchange(0, 2);
     Fail('Expected EListError not raised for invalid index');
   except
     on E: EListError do
-      ; // Pass the test
+      ; // expected
   end;
 end;
 
 procedure TBpIntListTests.TestExchangeWithEmptyList;
 begin
   try
-    FBpIntList.Exchange(0, 1); // Attempt to exchange in an empty list
+    FBpIntList.Exchange(0, 1);
     Fail('Expected EListError not raised for empty list');
   except
     on E: EListError do
-      ; // Pass the test
+      ; // expected
   end;
 end;
 
@@ -259,7 +240,7 @@ procedure TBpIntListTests.TestInsert;
 begin
   FBpIntList.Add(10);
   FBpIntList.Add(30);
-  FBpIntList.Insert(1, 20); // Insert 20 at index 1
+  FBpIntList.Insert(1, 20);
   CheckEquals(3, FBpIntList.Count, 'Count should be 3 after insert');
   CheckEquals(20, FBpIntList.Items[1], 'The inserted item should be at index 1');
 end;
@@ -267,14 +248,14 @@ end;
 procedure TBpIntListTests.TestInsertAtBeginning;
 begin
   FBpIntList.Add(10);
-  FBpIntList.Insert(0, 5); // Insert at the beginning
+  FBpIntList.Insert(0, 5);
   CheckEquals(5, FBpIntList.Items[0], 'The inserted item should be the first item');
 end;
 
 procedure TBpIntListTests.TestInsertAtEnd;
 begin
   FBpIntList.Add(10);
-  FBpIntList.Insert(1, 20); // Insert at the end
+  FBpIntList.Insert(1, 20);
   CheckEquals(20, FBpIntList.Items[1], 'The inserted item should be the last item');
 end;
 
@@ -282,19 +263,16 @@ procedure TBpIntListTests.TestInsertRandomPositions;
 var
   I, Pos: Integer;
 begin
-  // Populate list with initial data
   for I := 1 to 100 do
     FBpIntList.Add(I * 10);
 
-  // Insert at random positions
   for I := 1 to 20 do
   begin
     Pos := Random(FBpIntList.Count + 1);
-    FBpIntList.Insert(Pos, 999);  // Insert a specific value to check later
+    FBpIntList.Insert(Pos, 999);
   end;
 
   CheckEquals(120, FBpIntList.Count, 'Count should be 120 after inserts');
-  // Further checks can be added to verify positions if necessary
 end;
 
 procedure TBpIntListTests.TestInsertIntoEmptyList;
@@ -318,11 +296,11 @@ end;
 procedure TBpIntListTests.TestInsertWithInvalidIndex;
 begin
   try
-    FBpIntList.Insert(-1, 10); // Attempt to insert with an invalid index
+    FBpIntList.Insert(-1, 10);
     Fail('Expected EListError not raised for invalid index');
   except
     on E: EListError do
-      ; // Test passes
+      ; // expected
   end;
 end;
 
@@ -355,25 +333,25 @@ begin
   FBpIntList.Add(1);
   FBpIntList.Add(3);
   FBpIntList.Sorted := True;
-  FBpIntList.Items[1] := 2; // This should either raise an exception or require a re-sort
+  FBpIntList.Items[1] := 2; // behavior is unspecified: may raise or force a re-sort
   CheckEquals(2, FBpIntList.Items[1], 'Setting item in a sorted list should maintain order');
 end;
 
 procedure TBpIntListTests.TestSetItem;
 begin
   FBpIntList.Add(10);
-  FBpIntList.Items[0] := 20; // Set item at index 0 to 20
+  FBpIntList.Items[0] := 20;
   CheckEquals(20, FBpIntList.Items[0], 'Item at index 0 should be set to 20');
 end;
 
 procedure TBpIntListTests.TestGetItemWithInvalidIndex;
 begin
   try
-    FBpIntList.Items[-1]; // Attempt to access with an invalid index
+    FBpIntList.Items[-1];
     Fail('Expected EListError not raised for invalid index');
   except
     on E: EListError do
-      ; // Pass the test
+      ; // expected
   end;
 end;
 
@@ -553,16 +531,15 @@ var
   SavedText: TStringList;
 begin
   FileName := 'testfile.txt';
-  // Prepare the file with known content
   SavedText := TStringList.Create;
   try
     SavedText.Text := '1,2,3';
     SavedText.SaveToFile(FileName);
-    
+
     FBpIntList.LoadFromFile(FileName);
     CheckEquals(3, FBpIntList.Count, 'Count should be 3 after loading from file');
   finally
-    SysUtils.DeleteFile(FileName); // Delete the file after test
+    SysUtils.DeleteFile(FileName);
     SavedText.Free;
   end;
 end;
@@ -590,14 +567,13 @@ begin
 
   FBpIntList.SaveToFile(FileName);
 
-  // Verify the file content
   SavedText := TStringList.Create;
   try
     SavedText.LoadFromFile(FileName);
     CheckEquals('1,2,3', TrimRight(SavedText.Text), 'File content should match the list content');
   finally
     SavedText.Free;
-    SysUtils.DeleteFile(FileName); // Delete the file after test
+    SysUtils.DeleteFile(FileName);
   end;
 end;
 
@@ -614,14 +590,13 @@ begin
 
   FBpIntList.SaveToFile(FileName);
 
-  // Verify the file content
   SavedText := TStringList.Create;
   try
     SavedText.LoadFromFile(FileName);
     CheckEquals('1;2;3', TrimRight(SavedText.Text), 'File content should respect the changed delimiter');
   finally
     SavedText.Free;
-    SysUtils.DeleteFile(FileName); // Delete the file after test
+    SysUtils.DeleteFile(FileName);
   end;
 end;
 
@@ -633,14 +608,13 @@ begin
   FileName := 'emptylisttest.txt';
   FBpIntList.SaveToFile(FileName);
 
-  // Verify the file is empty
   SavedText := TStringList.Create;
   try
     SavedText.LoadFromFile(FileName);
     CheckEquals('', TrimRight(SavedText.Text), 'File content should be empty for an empty list');
   finally
     SavedText.Free;
-    SysUtils.DeleteFile(FileName); // Delete the file after test
+    SysUtils.DeleteFile(FileName);
   end;
 end;
 
@@ -650,7 +624,6 @@ var
   SavedText: TStringList;
 begin
   FileName := 'invalidformat.txt';
-  // Prepare the file with invalid content
   SavedText := TStringList.Create;
   try
     SavedText.Text := 'not,a,number';
@@ -664,7 +637,7 @@ begin
         Check(True, 'Exception raised as expected for invalid content');
     end;
   finally
-    SysUtils.DeleteFile(FileName); // Delete the file after test
+    SysUtils.DeleteFile(FileName);
     SavedText.Free;
   end;
 end;
@@ -677,7 +650,6 @@ begin
   InputText := '1,2,3';
   MemoryStream := TMemoryStream.Create;
   try
-    // Prepare the stream with known content
     with TStringList.Create do
     try
       Text := InputText;
@@ -685,7 +657,7 @@ begin
     finally
       Free;
     end;
-    MemoryStream.Position := 0; // Reset stream position for reading
+    MemoryStream.Position := 0; // reading must start after the write left it at the end
 
     FBpIntList.LoadFromStream(MemoryStream);
   finally
@@ -717,7 +689,6 @@ begin
   InputText := 'invalid,data';
   MemoryStream := TMemoryStream.Create;
   try
-    // Prepare the stream with invalid content
     with TStringList.Create do
     try
       Text := InputText;
@@ -725,7 +696,7 @@ begin
     finally
       Free;
     end;
-    MemoryStream.Position := 0; // Reset stream position for reading
+    MemoryStream.Position := 0; // reading must start after the write left it at the end
 
     try
       FBpIntList.LoadFromStream(MemoryStream);
