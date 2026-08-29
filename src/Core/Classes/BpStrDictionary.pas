@@ -7,7 +7,7 @@ unit BpStrDictionary;
 interface
 
 uses
-  Windows, SysUtils, Classes, Variants, BpVariantUtils;
+  Windows, SysUtils, Classes, Variants, BpVariantUtils, BpKeyFold;
 
 type
   // raised for missing keys, duplicate keys and failed typed conversions
@@ -107,12 +107,21 @@ end;
 
 function TbpStrDictionary.HashOf(const aKey: string): Integer;
 var
+  lvStack: array[0..255] of Char;
+  lvFoldedLen: Integer;
   lvFolded: string;
 begin
   if FCaseInsensitive then
   begin
-    lvFolded := AnsiUpperCase(aKey);
-    Result := TbpHashBobJenkins.GetHashValue(Pointer(lvFolded)^, Length(lvFolded) * SizeOf(Char), 0);
+    lvFoldedLen := BpFoldInto(aKey, lvStack, Length(lvStack));
+    if lvFoldedLen >= 0 then
+      Result := TbpHashBobJenkins.GetHashValue(lvStack, lvFoldedLen * SizeOf(Char), 0)
+    else
+    begin
+      // key too long for the buffer, or a code page the table cannot fold
+      lvFolded := AnsiUpperCase(aKey);
+      Result := TbpHashBobJenkins.GetHashValue(Pointer(lvFolded)^, Length(lvFolded) * SizeOf(Char), 0);
+    end;
   end
   else
     Result := TbpHashBobJenkins.GetHashValue(Pointer(aKey)^, Length(aKey) * SizeOf(Char), 0);
@@ -123,7 +132,7 @@ end;
 function TbpStrDictionary.KeysEqual(const aKey1, aKey2: string): Boolean;
 begin
   if FCaseInsensitive then
-    Result := AnsiSameText(aKey1, aKey2)
+    Result := BpFoldedSame(aKey1, aKey2)
   else
     Result := aKey1 = aKey2;
 end;
