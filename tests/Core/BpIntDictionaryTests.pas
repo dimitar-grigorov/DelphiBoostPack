@@ -34,6 +34,7 @@ type
     procedure TestSequentialIds;
     procedure TestGrowthKeepsAllKeys;
     procedure TestSetCapacity;
+    procedure TestSetCapacityToCountKeepsAFreeSlot;
     procedure TestClearAndReuse;
     procedure TestGetKeys;
     procedure TestForEach;
@@ -124,9 +125,8 @@ var
   i, lvRound: Integer;
   lvKey: Int64;
 begin
-  // deterministic random insert/remove storm; after every round each alive
-  // key must be findable with its value and each dead key must be missing.
-  // this exercises cluster shifts and wraparound far better than fixed cases
+  // deterministic insert/remove storm: every alive key findable, every dead one
+  // gone. Exercises cluster shifts and wraparound far better than fixed cases.
   RandSeed := 20260708;
   SetLength(lvKeys, 400);
   SetLength(lvAlive, 400);
@@ -184,8 +184,7 @@ procedure TBpIntDictionaryTests.TestKeyZeroSurvivesNeighborRemoval;
 var
   i: Integer;
 begin
-  // cleared slots get Key reset to 0; a real key 0 entry must stay reachable
-  // through any amount of neighbor removal around it
+  // cleared slots reset Key to 0, so a real key 0 must stay reachable
   FDict.Add(0, 'real zero');
   for i := 1 to 100 do
     FDict.Add(i, i);
@@ -393,8 +392,7 @@ var
   lvBuckets: array of Integer;
   lvMask, lvUsed, lvMax, i, lvSlot: Integer;
 begin
-  // sequential ids are the common real-world key pattern; the Wang mix must
-  // spread them over a power-of-two table without pathological clustering
+  // sequential ids are the common pattern; the Wang mix must spread them
   lvMask := lcKeys - 1;
   SetLength(lvBuckets, lcKeys);
   for i := 1 to lcKeys do
@@ -416,6 +414,30 @@ begin
     Format('bucket occupancy too low: %d of %d', [lvUsed, lcKeys]));
   Check(lvMax <= 16, Format('worst bucket too crowded: %d entries', [lvMax]));
 end;
+
+// a table filled to 100 percent has no free slot for the probe loop to stop at
+procedure TBpIntDictionaryTests.TestSetCapacityToCountKeepsAFreeSlot;
+var
+  lvDict: TbpIntDictionary;
+  i: Integer;
+begin
+  lvDict := TbpIntDictionary.Create;
+  try
+    for i := 1 to 16 do
+      lvDict.SetInt(i, i);
+    lvDict.SetCapacity(lvDict.Count);
+    // this check comes first on purpose: without a free slot the lookups below spin
+    Check(lvDict.Capacity > lvDict.Count, 'the probe loop needs a free slot to stop at');
+    Check(not lvDict.ContainsKey(999), 'a miss must terminate');
+    Check(not lvDict.Remove(999), 'removing an absent key must terminate');
+    CheckEquals(16, lvDict.Count, 'no entry was lost');
+    for i := 1 to 16 do
+      CheckEquals(i, lvDict.GetInt(i), 'every key survives the resize');
+  finally
+    lvDict.Free;
+  end;
+end;
+
 
 initialization
   RegisterTest(TBpIntDictionaryTests.Suite);

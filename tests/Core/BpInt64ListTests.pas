@@ -38,6 +38,9 @@ type
     procedure TestInsertRandomPositions;
     procedure TestInsertIntoEmptyList;
     procedure TestSortedInsert;
+    procedure TestAddReturnsInsertionIndexWhenSorted;
+    procedure TestAddReturnsTailIndexWhenNotSorted;
+    procedure TestSortedAddReturnedIndexHoldsTheItem;
     procedure TestSortedPropertySetTrue;
     procedure TestSortedPropertySetFalse;
     procedure TestAddItemWhenSorted;
@@ -968,6 +971,42 @@ procedure TBpInt64ListMemoryTests.TestList(aList: IBpInt64List);
 begin
   Status(Format('IBpInt64List.Count: %d', [aList.Count]));
 end;
+
+procedure TBpInt64ListTests.TestAddReturnsInsertionIndexWhenSorted;
+begin
+  FBpInt64List.Sorted := True;
+  CheckEquals(0, FBpInt64List.Add(5), 'the first item lands at 0');
+  CheckEquals(0, FBpInt64List.Add(3), 'a smaller item lands at 0, not at the tail');
+  CheckEquals(2, FBpInt64List.Add(9), 'a larger item lands at the tail');
+  CheckEquals(0, FBpInt64List.Add(1), 'the smallest item lands at 0');
+  CheckEquals('1,3,5,9', FBpInt64List.CommaText, 'the list stays ordered');
+end;
+
+procedure TBpInt64ListTests.TestAddReturnsTailIndexWhenNotSorted;
+begin
+  CheckEquals(0, FBpInt64List.Add(7), 'first');
+  CheckEquals(1, FBpInt64List.Add(2), 'second');
+  CheckEquals(2, FBpInt64List.Add(9), 'third');
+end;
+
+// the contract is Items[Add(x)] = x, duplicates included
+procedure TBpInt64ListTests.TestSortedAddReturnedIndexHoldsTheItem;
+var
+  i, lvIndex: Integer;
+  lvValue: Int64;
+begin
+  FBpInt64List.Sorted := True;
+  RandSeed := 42;
+  for i := 1 to 200 do
+  begin
+    lvValue := Random(50);
+    lvIndex := FBpInt64List.Add(lvValue);
+    CheckEquals(lvValue, FBpInt64List.Items[lvIndex], 'Add must return the index the item landed at');
+  end;
+  for i := 1 to FBpInt64List.Count - 1 do
+    Check(FBpInt64List.Items[i - 1] <= FBpInt64List.Items[i], 'the list stays ordered');
+end;
+
 
 initialization
   RegisterTest(TBpInt64ListTests.Suite);

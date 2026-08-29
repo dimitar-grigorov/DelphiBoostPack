@@ -2,8 +2,7 @@
 
 unit BpInt64List;
 
-// A list of 64-bit integers that behaves like TStringList: sorting, delimited
-// text, the usual indexing.
+// A list of Int64 that behaves like TStringList: sorting, delimited text, indexing.
 
 interface
 
@@ -29,7 +28,9 @@ type
     procedure SetCapacity(const aNewCapacity: Integer);
     procedure ExchangeItems(aIndex1, aIndex2: Integer);
     procedure Grow;
-    procedure QuickSort(aL, aR: Integer);
+    procedure QuickSort(aL, aR, aDepthBudget: Integer);
+    procedure HeapSortRange(aL, aR: Integer);
+    function SortedInsertIndex(const aItem: Int64): Integer;
     function GetDelimitedText: string;
     procedure SetDelimitedText(const aValue: string);
     function GetDelimiter: Char;
@@ -164,14 +165,72 @@ begin
   SetCapacity(lvNewCapacity);
 end;
 
-procedure TbpInt64List.QuickSort(aL, aR: Integer);
+// sifts the subtree rooted at aRoot, indices relative to aL
+procedure TbpInt64List.HeapSortRange(aL, aR: Integer);
 var
-  I, J: Integer;
+  lvCount, lvIdx, lvRoot, lvChild, lvSwap: Integer;
+begin
+  lvCount := aR - aL + 1;
+  for lvIdx := (lvCount - 2) div 2 downto 0 do
+  begin
+    lvRoot := lvIdx;
+    while (lvRoot * 2 + 1) <= lvCount - 1 do
+    begin
+      lvChild := lvRoot * 2 + 1;
+      lvSwap := lvRoot;
+      if FList[aL + lvSwap] < FList[aL + lvChild] then
+        lvSwap := lvChild;
+      if (lvChild + 1 <= lvCount - 1) and (FList[aL + lvSwap] < FList[aL + lvChild + 1]) then
+        lvSwap := lvChild + 1;
+      if lvSwap = lvRoot then
+        Break;
+      ExchangeItems(aL + lvRoot, aL + lvSwap);
+      lvRoot := lvSwap;
+    end;
+  end;
+  for lvIdx := lvCount - 1 downto 1 do
+  begin
+    ExchangeItems(aL, aL + lvIdx);
+    lvRoot := 0;
+    while (lvRoot * 2 + 1) <= lvIdx - 1 do
+    begin
+      lvChild := lvRoot * 2 + 1;
+      lvSwap := lvRoot;
+      if FList[aL + lvSwap] < FList[aL + lvChild] then
+        lvSwap := lvChild;
+      if (lvChild + 1 <= lvIdx - 1) and (FList[aL + lvSwap] < FList[aL + lvChild + 1]) then
+        lvSwap := lvChild + 1;
+      if lvSwap = lvRoot then
+        Break;
+      ExchangeItems(aL + lvRoot, aL + lvSwap);
+      lvRoot := lvSwap;
+    end;
+  end;
+end;
+
+// introsort: recurses into the smaller side, heapsort when the pivot splits badly
+procedure TbpInt64List.QuickSort(aL, aR, aDepthBudget: Integer);
+var
+  I, J, lvMid: Integer;
   lvPivot: Int64;
 begin
-  if aL < aR then
+  while aL < aR do
   begin
-    lvPivot := FList[(aL + aR) div 2];
+    if aDepthBudget <= 0 then
+    begin
+      HeapSortRange(aL, aR);
+      Exit;
+    end;
+    Dec(aDepthBudget);
+    lvMid := aL + (aR - aL) div 2;
+    // median of three, so sorted and reverse sorted input split evenly
+    if FList[lvMid] < FList[aL] then
+      ExchangeItems(lvMid, aL);
+    if FList[aR] < FList[aL] then
+      ExchangeItems(aR, aL);
+    if FList[aR] < FList[lvMid] then
+      ExchangeItems(aR, lvMid);
+    lvPivot := FList[lvMid];
     I := aL;
     J := aR;
     repeat
@@ -181,20 +240,53 @@ begin
         Dec(J);
       if I <= J then
       begin
-        ExchangeItems(I, J);
+        if I <> J then
+          ExchangeItems(I, J);
         Inc(I);
         Dec(J);
       end;
     until I > J;
-    QuickSort(aL, J);
-    QuickSort(I, aR);
+    if (J - aL) < (aR - I) then
+    begin
+      if aL < J then
+        QuickSort(aL, J, aDepthBudget);
+      aL := I;
+    end
+    else
+    begin
+      if I < aR then
+        QuickSort(I, aR, aDepthBudget);
+      aR := J;
+    end;
   end;
 end;
 
 function TbpInt64List.Add(const aItem: Int64): Integer;
 begin
-  Result := GetCount;
+  // on a sorted list the item lands at its ordered position, not at the end
+  if FSorted then
+    Result := SortedInsertIndex(aItem)
+  else
+    Result := FCount;
   Insert(Result, aItem);
+end;
+
+// lowest index at which aItem keeps the list ordered
+function TbpInt64List.SortedInsertIndex(const aItem: Int64): Integer;
+var
+  lvLow, lvHigh, lvMid: Integer;
+begin
+  lvLow := 0;
+  lvHigh := FCount - 1;
+  while lvLow <= lvHigh do
+  begin
+    lvMid := lvLow + (lvHigh - lvLow) div 2;
+    if FList[lvMid] < aItem then
+      lvLow := lvMid + 1
+    else
+      lvHigh := lvMid - 1;
+  end;
+  Result := lvLow;
 end;
 
 procedure TbpInt64List.Delete(const aIndex: Integer);
@@ -426,26 +518,12 @@ begin
 end;
 
 procedure TbpInt64List.Insert(aIndex: Integer; const aItem: Int64);
-var
-  lvLow, lvHigh, lvMid: Integer;
 begin
   if (aIndex < 0) or (aIndex > Count) then
     raise EListError.Create('List index out of bounds');
 
-  if Sorted then
-  begin
-    lvLow := 0;
-    lvHigh := Count - 1;
-    while lvLow <= lvHigh do
-    begin
-      lvMid := lvLow + (lvHigh - lvLow) div 2;
-      if FList[lvMid] < aItem then
-        lvLow := lvMid + 1
-      else
-        lvHigh := lvMid - 1;
-    end;
-    aIndex := lvLow;  // lvLow will be the correct insertion index
-  end;
+  if FSorted then
+    aIndex := SortedInsertIndex(aItem);
 
   if Count = Length(FList) then
     Grow;
@@ -458,9 +536,19 @@ begin
 end;
 
 procedure TbpInt64List.Sort;
+var
+  lvBudget, lvSpan: Integer;
 begin
-  if not Sorted and (FCount > 1) then
-    QuickSort(0, FCount - 1);
+  if Sorted or (FCount <= 1) then
+    Exit;
+  lvBudget := 0;
+  lvSpan := FCount;
+  while lvSpan > 1 do
+  begin
+    lvSpan := lvSpan shr 1;
+    Inc(lvBudget);
+  end;
+  QuickSort(0, FCount - 1, lvBudget * 2);
 end;
 
 end.

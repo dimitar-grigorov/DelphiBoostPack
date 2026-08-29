@@ -39,6 +39,9 @@ type
     procedure TestSortedPropertySetTrue;
     procedure TestSortedPropertySetFalse;
     procedure TestAddItemWhenSorted;
+    procedure TestAddReturnsInsertionIndexWhenSorted;
+    procedure TestAddReturnsTailIndexWhenNotSorted;
+    procedure TestSortedAddReturnedIndexHoldsTheItem;
     procedure TestSetItemWhenSorted;
     procedure TestSetItem;
     procedure TestGetItemWithInvalidIndex;
@@ -760,6 +763,42 @@ begin
   CheckEquals(N div 2, FBpIntList.Items[N div 2 - 1], 'Middle item should be ' + IntToStr(N div 2));
   CheckEquals(N, FBpIntList.Items[N - 1], 'Last item should be ' + IntToStr(N));
 end;
+
+procedure TBpIntListTests.TestAddReturnsInsertionIndexWhenSorted;
+begin
+  FBpIntList.Sorted := True;
+  CheckEquals(0, FBpIntList.Add(5), 'the first item lands at 0');
+  CheckEquals(0, FBpIntList.Add(3), 'a smaller item lands at 0, not at the tail');
+  CheckEquals(2, FBpIntList.Add(9), 'a larger item lands at the tail');
+  CheckEquals(0, FBpIntList.Add(1), 'the smallest item lands at 0');
+  CheckEquals('1,3,5,9', FBpIntList.CommaText, 'the list stays ordered');
+end;
+
+procedure TBpIntListTests.TestAddReturnsTailIndexWhenNotSorted;
+begin
+  CheckEquals(0, FBpIntList.Add(7), 'first');
+  CheckEquals(1, FBpIntList.Add(2), 'second');
+  CheckEquals(2, FBpIntList.Add(9), 'third');
+end;
+
+// the contract is Items[Add(x)] = x, duplicates included
+procedure TBpIntListTests.TestSortedAddReturnedIndexHoldsTheItem;
+var
+  i, lvIndex: Integer;
+  lvValue: Integer;
+begin
+  FBpIntList.Sorted := True;
+  RandSeed := 42;
+  for i := 1 to 200 do
+  begin
+    lvValue := Random(50);
+    lvIndex := FBpIntList.Add(lvValue);
+    CheckEquals(lvValue, FBpIntList.Items[lvIndex], 'Add must return the index the item landed at');
+  end;
+  for i := 1 to FBpIntList.Count - 1 do
+    Check(FBpIntList.Items[i - 1] <= FBpIntList.Items[i], 'the list stays ordered');
+end;
+
 
 initialization
   RegisterTest(TBpIntListTests.Suite);
