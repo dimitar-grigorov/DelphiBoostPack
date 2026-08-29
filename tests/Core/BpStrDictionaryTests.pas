@@ -42,6 +42,7 @@ type
     procedure TestDeleteThenProbe;
     procedure TestRemoveAllOneByOne;
     procedure TestInitialCapacity;
+    procedure TestSetCapacityToCountKeepsAFreeSlot;
     procedure TestSetCapacityBelowCountRaises;
     // case sensitivity
     procedure TestCaseSensitiveDefault;
@@ -207,8 +208,7 @@ procedure TBpStrDictionaryTests.TestDeleteThenProbe;
 var
   i: Integer;
 begin
-  // regression for backward-shift deletion: removing keys must not break
-  // the probe chains of the remaining keys in the same cluster
+  // regression: removing keys must not break the probe chains of the rest
   for i := 1 to 1000 do
     FDict.Add('key' + IntToStr(i), i);
   for i := 1 to 1000 do
@@ -300,8 +300,7 @@ var
   lvDict: TbpStrDictionary;
   lvUpper, lvLower: string;
 begin
-  // #$C0/#$E0 are an upper/lower pair both in cp1251 (Cyrillic A) and in
-  // Unicode (Latin A-grave), so this works on ANSI and Unicode compilers
+  // #$C0/#$E0 are an upper/lower pair in both cp1251 and Unicode
   lvUpper := #$C0#$C1#$C2;
   lvLower := #$E0#$E1#$E2;
   lvDict := TbpStrDictionary.Create(True);
@@ -477,6 +476,30 @@ begin
   FDict.SetInt('scalar', 5);
   CheckException(CallGetIntArrayOnInt, EbpStrDictionary, 'GetIntArray on a scalar must raise');
 end;
+
+// a table filled to 100 percent has no free slot for the probe loop to stop at
+procedure TBpStrDictionaryTests.TestSetCapacityToCountKeepsAFreeSlot;
+var
+  lvDict: TbpStrDictionary;
+  i: Integer;
+begin
+  lvDict := TbpStrDictionary.Create;
+  try
+    for i := 1 to 8 do
+      lvDict.SetInt(IntToStr(i), i);
+    lvDict.SetCapacity(lvDict.Count);
+    // this check comes first on purpose: without a free slot the lookups below spin
+    Check(lvDict.Capacity > lvDict.Count, 'the probe loop needs a free slot to stop at');
+    Check(not lvDict.ContainsKey('missing'), 'a miss must terminate');
+    Check(not lvDict.Remove('missing'), 'removing an absent key must terminate');
+    CheckEquals(8, lvDict.Count, 'no entry was lost');
+    for i := 1 to 8 do
+      CheckEquals(i, lvDict.GetInt(IntToStr(i)), 'every key survives the resize');
+  finally
+    lvDict.Free;
+  end;
+end;
+
 
 initialization
   RegisterTest(TBpStrDictionaryTests.Suite);

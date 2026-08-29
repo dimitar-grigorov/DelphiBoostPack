@@ -1,9 +1,8 @@
 unit BpIntDictionary;
 
-// Int64-key dictionary for Delphi 7/2007+ (no generics). Same open-addressing
-// engine as TbpStrDictionary; keys hashed with the Thomas Wang 64-bit mix,
-// which spreads sequential ids across buckets. Values are Variant, with the
-// same strict typed accessors (GetInt, TryGetInt, GetIntDef, SetInt).
+// Int64-key dictionary for Delphi 7/2007+ (no generics), same open-addressing
+// engine as TbpStrDictionary. Keys go through the Thomas Wang 64-bit mix;
+// values are Variant with the same strict typed accessors.
 
 interface
 
@@ -32,8 +31,7 @@ type
     FItems: TbpIntDictItemArray;
     FCount: Integer;
     FGrowThreshold: Integer;
-    // returns the slot index (>= 0) when found, otherwise the bitwise
-    // complement of the first empty slot (always negative)
+    // the slot index when found, else the complement of the first empty slot
     function GetBucketIndex(aKey: Int64; aHashCode: Integer): Integer;
     procedure DoAdd(aHashCode, aIndex: Integer; aKey: Int64; const aValue: Variant);
     procedure Grow;
@@ -53,8 +51,7 @@ type
     procedure SetCapacity(aCapacity: Integer);
     procedure ForEach(aCallback: TbpIntDictForEach);
     function GetKeys: TbpInt64DynArray;
-    // typed accessors; GetX raises on missing key or wrong type, GetXDef
-    // returns aDefault, TryGetX never raises. No coercion between types.
+    // GetX raises on a missing key or wrong type, GetXDef defaults, TryGetX never raises
     procedure SetInt(aKey: Int64; aValue: Integer);
     function GetInt(aKey: Int64): Integer;
     function GetIntDef(aKey: Int64; aDefault: Integer): Integer;
@@ -97,8 +94,7 @@ const
 {$Q-} // the hash mix relies on wrapping 64-bit arithmetic
 function BpHashInt64(aKey: Int64): Integer;
 begin
-  // Thomas Wang's hash64shift: avalanche mix of all 64 key bits.
-  // masks guard against sign-fill quirks of shr on Int64 in older compilers
+  // Thomas Wang hash64shift; the masks guard shr sign-fill on older compilers
   aKey := (not aKey) + (aKey shl 18);
   aKey := aKey xor ((aKey shr 31) and $00000001FFFFFFFF);
   aKey := aKey * 21;
@@ -209,10 +205,13 @@ begin
     Rehash(0)
   else
   begin
-    // round up to a power of two, minimum 4
+    // a power of two, at least 4, and never full: the probe loop needs a free slot
     lvNewCapacity := 4;
-    while lvNewCapacity < aCapacity do
+    while (lvNewCapacity > 0) and ((lvNewCapacity < aCapacity) or
+      (FCount > lvNewCapacity shr 1 + lvNewCapacity shr 2)) do
       lvNewCapacity := lvNewCapacity shl 1;
+    if lvNewCapacity <= 0 then
+      OutOfMemoryError;
     Rehash(lvNewCapacity);
   end;
 end;
@@ -276,8 +275,7 @@ function TbpIntDictionary.Remove(aKey: Int64): Boolean;
 var
   lvGap, lvIndex, lvHC, lvBucket, lvLen: Integer;
 
-  // wrap-aware test whether aItem's home bucket lies in (aBottom, aTopInc];
-  // nested so both dictionaries can be amalgamated without a name clash
+  // wrap-aware test for a home bucket in (aBottom, aTopInc]; nested to keep bundles clash free
   function InCircularRange(aBottom, aItem, aTopInc: Integer): Boolean;
   begin
     Result := ((aBottom < aItem) and (aItem <= aTopInc)) or
@@ -290,8 +288,7 @@ begin
   Result := lvIndex >= 0;
   if not Result then
     Exit;
-  // backward-shift deletion (Knuth 6.4 Algorithm R): slide the following
-  // cluster entries into the gap unless that would pass their home bucket
+  // backward-shift deletion (Knuth 6.4 R): slide cluster entries into the gap
   lvLen := Length(FItems);
   lvGap := lvIndex;
   while True do

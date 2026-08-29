@@ -1,10 +1,8 @@
 unit BpStrDictionary;
 
-// String-key dictionary for Delphi 7/2007+ (no generics), with a familiar
-// TDictionary-style API. Open addressing with linear probing, power-of-two
-// capacity and backward-shift deletion. Keys hashed via BpHashBobJenkins.
-// Values are Variant, with strict typed accessors. Case-insensitive mode is
-// opt-in (constructor arg), folding keys with AnsiUpperCase.
+// String-key dictionary for Delphi 7/2007+ (no generics), TDictionary-style API.
+// Open addressing with linear probing, power-of-two capacity, backward-shift
+// deletion, BpHashBobJenkins hashing and opt-in case-insensitive keys.
 
 interface
 
@@ -34,8 +32,7 @@ type
     FCaseInsensitive: Boolean;
     function HashOf(const aKey: string): Integer;
     function KeysEqual(const aKey1, aKey2: string): Boolean;
-    // returns the slot index (>= 0) when found, otherwise the bitwise
-    // complement of the first empty slot (always negative)
+    // the slot index when found, else the complement of the first empty slot
     function GetBucketIndex(const aKey: string; aHashCode: Integer): Integer;
     procedure DoAdd(aHashCode, aIndex: Integer; const aKey: string; const aValue: Variant);
     procedure Grow;
@@ -55,8 +52,7 @@ type
     procedure SetCapacity(aCapacity: Integer);
     procedure ForEach(aCallback: TbpStrDictForEach);
     procedure GetKeys(aList: TStrings);
-    // typed accessors; GetX raises on missing key or wrong type, GetXDef
-    // returns aDefault, TryGetX never raises. No coercion between types.
+    // GetX raises on a missing key or wrong type, GetXDef defaults, TryGetX never raises
     procedure SetInt(const aKey: string; aValue: Integer);
     function GetInt(const aKey: string): Integer;
     function GetIntDef(const aKey: string; aDefault: Integer): Integer;
@@ -96,6 +92,7 @@ uses
 const
   gcStrEmptyHash = -1;                         // sentinel: slot is free
   gcStrPositiveMask = not Integer($80000000);  // $7FFFFFFF
+
 
 constructor TbpStrDictionary.Create(aCaseInsensitive: Boolean; aInitialCapacity: Integer);
 begin
@@ -216,10 +213,13 @@ begin
     Rehash(0)
   else
   begin
-    // round up to a power of two, minimum 4
+    // a power of two, at least 4, and never full: the probe loop needs a free slot
     lvNewCapacity := 4;
-    while lvNewCapacity < aCapacity do
+    while (lvNewCapacity > 0) and ((lvNewCapacity < aCapacity) or
+      (FCount > lvNewCapacity shr 1 + lvNewCapacity shr 2)) do
       lvNewCapacity := lvNewCapacity shl 1;
+    if lvNewCapacity <= 0 then
+      OutOfMemoryError;
     Rehash(lvNewCapacity);
   end;
 end;
@@ -283,8 +283,7 @@ function TbpStrDictionary.Remove(const aKey: string): Boolean;
 var
   lvGap, lvIndex, lvHC, lvBucket, lvLen: Integer;
 
-  // wrap-aware test whether aItem's home bucket lies in (aBottom, aTopInc];
-  // nested so both dictionaries can be amalgamated without a name clash
+  // wrap-aware test for a home bucket in (aBottom, aTopInc]; nested to keep bundles clash free
   function InCircularRange(aBottom, aItem, aTopInc: Integer): Boolean;
   begin
     Result := ((aBottom < aItem) and (aItem <= aTopInc)) or
@@ -297,8 +296,7 @@ begin
   Result := lvIndex >= 0;
   if not Result then
     Exit;
-  // backward-shift deletion (Knuth 6.4 Algorithm R): slide the following
-  // cluster entries into the gap unless that would pass their home bucket
+  // backward-shift deletion (Knuth 6.4 R): slide cluster entries into the gap
   lvLen := Length(FItems);
   lvGap := lvIndex;
   while True do
