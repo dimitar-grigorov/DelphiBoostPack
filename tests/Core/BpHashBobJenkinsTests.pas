@@ -79,9 +79,7 @@ begin
   Check(hashValue1 <> hashValue2, 'Small changes in input should produce different hashes');
 end;
 
-// Known-answer vectors for the lookup3 hash with the same seed the RTL's
-// BobJenkinsHash uses. Byte-oriented (AnsiString + untyped overload) so they
-// hold on every Delphi version regardless of the size of Char.
+// Known-answer vectors, byte-oriented so they hold on every Delphi version
 procedure TBpHashBobJenkinsTests.TestKnownAnswers;
 
   procedure CheckHash(Expected: Integer; const Data: AnsiString);
@@ -94,22 +92,26 @@ var
   lvAllBytes: AnsiString;
   i: Integer;
 begin
+  // the published lookup3 self-test vector, the anchor that proves interop
+  // rather than mere self consistency: hashlittle('Four score...', 30, 0)
+  CheckHash(Integer($17770551), 'Four score and seven years ago');
+
   CheckHash(-559038737, '');              // len 0 - early exit, no Final ($DEADBEEF)
-  CheckHash(549663901, 'a');              // len 1
-  CheckHash(1080066015, 'abc');           // len 3
-  CheckHash(-997923095, 'abcd');          // len 4
-  CheckHash(1395184943, 'abcdefg');       // len 7 - OOB zone of the old implementation
-  CheckHash(2101329462, 'abcdefgh');      // len 8
-  CheckHash(618214406, 'abcdefghi');      // len 9
-  CheckHash(-646327670, 'abcdefghijkl');  // len 12 - last block must NOT be mixed in the loop
-  CheckHash(507390348, 'abcdefghijklm');  // len 13
-  CheckHash(99275851, 'Hello, World!');
-  CheckHash(-1051846834, 'The quick brown fox jumps over the lazy dog');
+  CheckHash(1490454280, 'a');             // len 1
+  CheckHash(238646833, 'abc');            // len 3
+  CheckHash(-1242265444, 'abcd');         // len 4
+  CheckHash(-1323641691, 'abcdefg');      // len 7 - OOB zone of the old implementation
+  CheckHash(697680830, 'abcdefgh');       // len 8
+  CheckHash(-1402637644, 'abcdefghi');    // len 9
+  CheckHash(1074985083, 'abcdefghijkl');  // len 12 - last block must NOT be mixed in the loop
+  CheckHash(-1837029127, 'abcdefghijklm');// len 13
+  CheckHash(-1026949535, 'Hello, World!');
+  CheckHash(1688390982, 'The quick brown fox jumps over the lazy dog');
 
   SetLength(lvAllBytes, 256);
   for i := 0 to 255 do
     lvAllBytes[i + 1] := AnsiChar(i);
-  CheckHash(221389405, lvAllBytes);       // all byte values, multi-block
+  CheckHash(-502396877, lvAllBytes);      // all byte values, multi-block
 end;
 
 procedure TBpHashBobJenkinsTests.TestKnownAnswersUnaligned;
@@ -119,14 +121,13 @@ var
   lvBuffer: array[0..31] of Byte;
   lvStart: Cardinal;
 begin
-  // place the same bytes at an odd address to exercise the unaligned path;
-  // both paths must produce identical hashes
+  // the same bytes at an odd address; both paths must hash identically
   FillChar(lvBuffer, SizeOf(lvBuffer), 0);
   lvStart := 1 + (4 - ((Cardinal(@lvBuffer[1])) and 3)) mod 4; // force misalignment
   if (Cardinal(@lvBuffer[lvStart]) and 3) = 0 then
     Inc(lvStart);
   Move(Pointer(lcSample)^, lvBuffer[lvStart], Length(lcSample));
-  CheckEquals(1395184943,
+  CheckEquals(-1323641691,
     TbpHashBobJenkins.GetHashValue(lvBuffer[lvStart], Length(lcSample)),
     'Unaligned hash must match the aligned reference value');
 end;
@@ -140,7 +141,7 @@ begin
   FHashBobJenkins.Reset;
   FHashBobJenkins.Update(Pointer(lcPart1)^, Length(lcPart1));
   FHashBobJenkins.Update(Pointer(lcPart2)^, Length(lcPart2));
-  CheckEquals(-1506960798, FHashBobJenkins.HashAsInteger,
+  CheckEquals(568380734, FHashBobJenkins.HashAsInteger,
     'Chained Update must equal HashLittle(part2, HashLittle(part1, 0))');
 end;
 
@@ -148,8 +149,7 @@ procedure TBpHashBobJenkinsTests.TestTailBytesAffectHash;
 var
   lvKey1, lvKey2: AnsiString;
 begin
-  // regression for the old bug where tail bytes 6..8 were never read:
-  // 19-byte keys differing only at byte 19 (tail byte 7) hashed equal
+  // regression: tail bytes 6..8 were once never read, so 19-byte keys collided
   lvKey1 := 'PREFIX-12345-SUF-Ax';
   lvKey2 := 'PREFIX-12345-SUF-Bx';
   lvKey1[19] := 'A';

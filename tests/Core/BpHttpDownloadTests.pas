@@ -8,8 +8,7 @@ uses
   TestFramework, SysUtils, Classes, Windows, WinSock, BpHttpClient, BpHttpTrace;
 
 type
-  // offline tests: progress math, header parsing, error classification,
-  // argument validation and the task state machine (no network access)
+  // offline: progress math, header parsing, error classification, state machine
   TBpHttpDownloadTests = class(TTestCase)
   private
     FClient: TbpHttpClient;
@@ -31,10 +30,10 @@ type
   end;
 
   TSlowHttpServer = class;
+  TShortBodyHttpServer = class;
 
-  // mid-flight cancellation tests against a loopback HTTP server that sends
-  // a burst and then dribbles: deterministic, no network needed, and the
-  // abort happens while WinInet is genuinely blocked in a read
+  // mid-flight cancellation against a loopback server that bursts then dribbles,
+  // so the abort lands while WinInet is genuinely blocked in a read
   TBpHttpDownloadCancelTests = class(TTestCase)
   private
     FClient: TbpHttpClient;
@@ -57,9 +56,21 @@ type
     procedure TestTraceSinkSeesTheWire;
   end;
 
-  // integration tests against stable public endpoints; each test is skipped
-  // (with a status note) when the network probe fails, so the suite stays
-  // green offline
+  // a server that under-delivers: the body stops early but the socket closes cleanly
+  TBpHttpShortBodyTests = class(TTestCase)
+  private
+    FClient: TbpHttpClient;
+    FServer: TShortBodyHttpServer;
+    function ServerUrl: string;
+  protected
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestShortBodyToStreamFails;
+    procedure TestShortBodyLeavesNoFile;
+  end;
+
+  // integration against public endpoints, skipped with a status note when offline
   TBpHttpDownloadOnlineTests = class(TTestCase)
   private
     FClient: TbpHttpClient;
@@ -84,10 +95,24 @@ type
     procedure TestAsyncDownloadCompletes;
   end;
 
-  // one-client-at-a-time HTTP server on 127.0.0.1: replies 200 with a large
-  // Content-Length, sends an initial burst, then dribbles small packets
-  // until the client disconnects or Shutdown is called
+  // one-client-at-a-time server on 127.0.0.1: a large Content-Length, a burst,
+  // then dribbles until the client disconnects or Shutdown is called
   TSlowHttpServer = class(TThread)
+  private
+    FListenSocket: TSocket;
+    FPort: Integer;
+    procedure ServeClient(aClient: TSocket);
+  protected
+    procedure Execute; override;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    procedure Shutdown;
+    property Port: Integer read FPort;
+  end;
+
+  // announces gcShortClaimed bytes, sends gcShortSent and closes
+  TShortBodyHttpServer = class(TThread)
   private
     FListenSocket: TSocket;
     FPort: Integer;
@@ -104,8 +129,7 @@ type
 implementation
 
 const
-  // Cloudflare's speed-test endpoint returns exactly the requested number of
-  // bytes with a Content-Length header, which makes progress checks exact
+  // this endpoint returns exactly the requested byte count, so progress is exact
   gcProbeUrl = 'https://speed.cloudflare.com/__down?bytes=16';
   gcSmallUrl = 'https://speed.cloudflare.com/__down?bytes=65536';
   gcMediumUrl = 'https://speed.cloudflare.com/__down?bytes=262144';
@@ -114,6 +138,9 @@ const
 
   gcServerClaimedTotal = 10485760;  // Content-Length the slow server advertises
   gcServerBurst = 65536;            // bytes sent immediately after the header
+
+  gcShortClaimed = 1000;            // Content-Length the short server advertises
+  gcShortSent = 500;                // what it actually delivers before closing
 
 var
   gvOnlineProbed: Boolean = False;
@@ -251,8 +278,7 @@ begin
   if send(aClient, PAnsiChar(lcHeader)^, Length(lcHeader), 0) = SOCKET_ERROR then
     Exit;
 
-  // burst so the client sees progress fast, then dribble so it stays
-  // mid-transfer long enough for a cancel to land while a read blocks
+  // burst so progress shows, then dribble so a cancel lands mid-read
   FillChar(lvBurst, SizeOf(lvBurst), $42);
   if send(aClient, lvBurst, SizeOf(lvBurst), 0) = SOCKET_ERROR then
     Exit;
@@ -490,8 +516,7 @@ var
   lvStream: TMemoryStream;
 begin
   lvStream := TMemoryStream.Create;
-  // hot task: created, wired and already started; an unparsable url makes
-  // it fail fast without touching the network
+  // hot task: an unparsable url makes it fail fast without touching the network
   lvTask := BpDownloadToStreamAsync('not a url at all', lvStream, nil, nil, False);
   try
     Check(lvTask.State in [dtsRunning, dtsFailed], 'factory returns a started task');
@@ -653,9 +678,8 @@ begin
     lvTask.OnError := HandleError;
     lvTask.Start;
 
-    // wait for the first bytes, then cancel from this thread; the token
-    // closes the WinInet handle, so the abort is prompt even while the
-    // worker sits in a blocked read waiting for the server's dribble
+    // cancel from this thread once bytes arrive; the token closes the WinInet
+    // handle, so the abort is prompt even inside a blocked read
     lvDeadline := GetTickCount + 15000;
     while (lvTask.Received = 0) and not lvTask.IsFinished and
       (GetTickCount < lvDeadline) do
@@ -836,13 +860,159 @@ begin
   end;
 end;
 
+
+constructor TShortBodyHttpServer.Create;
+var
+  lvWsaData: TWSAData;
+  lvAddr: TSockAddrIn;
+  lvAddrLen: Integer;
+begin
+  if WSAStartup($0202, lvWsaData) <> 0 then
+    raise Exception.Create('WSAStartup failed');
+  FListenSocket := socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if FListenSocket = INVALID_SOCKET then
+    raise Exception.Create('socket() failed');
+  FillChar(lvAddr, SizeOf(lvAddr), 0);
+  lvAddr.sin_family := AF_INET;
+  lvAddr.sin_port := htons(0);
+  lvAddr.sin_addr.S_addr := inet_addr('127.0.0.1');
+  if bind(FListenSocket, TSockAddr(lvAddr), SizeOf(lvAddr)) <> 0 then
+    raise Exception.Create('bind() failed');
+  if listen(FListenSocket, 1) <> 0 then
+    raise Exception.Create('listen() failed');
+  lvAddrLen := SizeOf(lvAddr);
+  if getsockname(FListenSocket, TSockAddr(lvAddr), lvAddrLen) <> 0 then
+    raise Exception.Create('getsockname() failed');
+  FPort := ntohs(lvAddr.sin_port);
+  FreeOnTerminate := False;
+  inherited Create(False);
+end;
+
+destructor TShortBodyHttpServer.Destroy;
+begin
+  Shutdown;
+  inherited Destroy;
+  WSACleanup;
+end;
+
+procedure TShortBodyHttpServer.Shutdown;
+begin
+  Terminate;
+  if FListenSocket <> INVALID_SOCKET then
+  begin
+    closesocket(FListenSocket);
+    FListenSocket := INVALID_SOCKET;
+  end;
+end;
+
+procedure TShortBodyHttpServer.Execute;
+var
+  lvClient: TSocket;
+begin
+  while not Terminated do
+  begin
+    lvClient := accept(FListenSocket, nil, nil);
+    if lvClient = INVALID_SOCKET then
+      Break;
+    try
+      ServeClient(lvClient);
+    finally
+      closesocket(lvClient);
+    end;
+  end;
+end;
+
+procedure TShortBodyHttpServer.ServeClient(aClient: TSocket);
+const
+  lcHeader: AnsiString = 'HTTP/1.1 200 OK'#13#10 +
+    'Content-Type: application/octet-stream'#13#10 +
+    'Content-Length: 1000'#13#10 +      // = gcShortClaimed
+    'Connection: close'#13#10#13#10;
+var
+  lvRequest: array[0..4095] of AnsiChar;
+  lvBody: array[0..gcShortSent - 1] of Byte;
+  lvLen: Integer;
+begin
+  lvLen := recv(aClient, lvRequest, SizeOf(lvRequest), 0);
+  if lvLen <= 0 then
+    Exit;
+  if send(aClient, PAnsiChar(lcHeader)^, Length(lcHeader), 0) = SOCKET_ERROR then
+    Exit;
+  FillChar(lvBody, SizeOf(lvBody), $41);
+  send(aClient, lvBody, SizeOf(lvBody), 0);
+  // and close without the remaining bytes
+end;
+
+procedure TBpHttpShortBodyTests.SetUp;
+begin
+  inherited;
+  FServer := TShortBodyHttpServer.Create;
+  FClient := TbpHttpClient.Create;
+  FClient.ReceiveTimeout := 5000;
+end;
+
+procedure TBpHttpShortBodyTests.TearDown;
+begin
+  FreeAndNil(FClient);
+  if FServer <> nil then
+  begin
+    FServer.Shutdown;
+    FServer.WaitFor;
+    FreeAndNil(FServer);
+  end;
+  inherited;
+end;
+
+function TBpHttpShortBodyTests.ServerUrl: string;
+begin
+  Result := Format('http://127.0.0.1:%d/short', [FServer.Port]);
+end;
+
+procedure TBpHttpShortBodyTests.TestShortBodyToStreamFails;
+var
+  lvStream: TMemoryStream;
+begin
+  lvStream := TMemoryStream.Create;
+  try
+    try
+      FClient.Download(ServerUrl, lvStream);
+      Fail('a body shorter than Content-Length must not be reported as success');
+    except
+      on E: EbpHttpClient do
+        Check(Pos('Incomplete', E.Message) > 0,
+          'the error must say the response was incomplete, got: ' + E.Message);
+    end;
+  finally
+    lvStream.Free;
+  end;
+end;
+
+procedure TBpHttpShortBodyTests.TestShortBodyLeavesNoFile;
+var
+  lvFileName: string;
+begin
+  lvFileName := TempFilePath('BpShortBody.tmp');
+  if FileExists(lvFileName) then
+    SysUtils.DeleteFile(lvFileName);
+  try
+    FClient.DownloadToFile(ServerUrl, lvFileName);
+    Fail('a truncated download must not be reported as success');
+  except
+    on E: EbpHttpClient do
+      Check(not FileExists(lvFileName),
+        'the partial file must not be left behind');
+  end;
+  if FileExists(lvFileName) then
+    SysUtils.DeleteFile(lvFileName);
+end;
+
 initialization
   // offline unit tests always run
   RegisterTest(TBpHttpDownloadTests.Suite);
 {$IFNDEF NO_INTEGRATION}
-  // integration tests, on by default: loopback server plus live network.
-  // Build with NO_INTEGRATION defined for a fast, socket-free unit-only run.
+  // integration, on by default; NO_INTEGRATION gives a socket-free run
   RegisterTest(TBpHttpDownloadCancelTests.Suite);
+  RegisterTest(TBpHttpShortBodyTests.Suite);
   RegisterTest(TBpHttpDownloadOnlineTests.Suite);
 {$ENDIF}
 

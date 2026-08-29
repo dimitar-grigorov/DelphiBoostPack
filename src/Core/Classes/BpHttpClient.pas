@@ -80,6 +80,7 @@ type
     procedure SetConnectTimeout(aValue: DWORD);
     procedure SetSendTimeout(aValue: DWORD);
     procedure SetReceiveTimeout(aValue: DWORD);
+    procedure SetBearerToken(const aValue: string);
     function GetWinInetErrorMessage(aErrorCode: DWORD): string;
     function CreateSession: HINTERNET;
     procedure CloseSession;
@@ -99,8 +100,7 @@ type
     procedure ReadBodyToStream(aRequest: HINTERNET; aDest: TStream;
       const aTotal: Int64; aProgress: TbpHttpProgressEvent;
       aToken: TbpCancellationToken);
-    // the one request the verbs and the downloads both go through;
-    // nil aDest buffers the body into the result instead of streaming it
+    // the one request every verb and download goes through; nil aDest buffers
     function PerformRequest(const aUrl, aMethod, aHeaders: string;
       const aBody: AnsiString; aDest: TStream; aProgress: TbpHttpProgressEvent;
       aToken: TbpCancellationToken): TbpHttpResponse;
@@ -126,8 +126,7 @@ type
       aToken: TbpCancellationToken = nil): TbpHttpResponse;
     class function FetchUrl(const aUrl: string; const aHeaders: string = ''): AnsiString;
 
-    // streams the body to aDest whatever the status; cancel raises
-    // EbpHttpClientCancelled ('Range: bytes=N-' in aHeaders resumes)
+    // streams the body whatever the status; 'Range: bytes=N-' in aHeaders resumes
     function Download(const aUrl: string; aDest: TStream;
       aProgress: TbpHttpProgressEvent = nil; aToken: TbpCancellationToken = nil;
       const aHeaders: string = ''; const aMethod: string = 'GET'): TbpHttpResponse;
@@ -156,7 +155,7 @@ type
     property Username: AnsiString read FUsername write FUsername;
     property Password: AnsiString read FPassword write FPassword;
     // sent as 'Authorization: Bearer <token>' when not empty
-    property BearerToken: string read FBearerToken write FBearerToken;
+    property BearerToken: string read FBearerToken write SetBearerToken;
     property ConnectTimeout: DWORD read FConnectTimeout write SetConnectTimeout;
     property SendTimeout: DWORD read FSendTimeout write SetSendTimeout;
     property ReceiveTimeout: DWORD read FReceiveTimeout write SetReceiveTimeout;
@@ -170,9 +169,8 @@ type
   TbpHttpDownloadErrorEvent = procedure(aSender: TObject;
     const aErrorMessage: string) of object;
 
-  // one download on an owned worker thread, C# Task style; one-shot.
-  // Events fire on the creating thread's message loop (default) or on the
-  // worker thread (Create(False)); results are thread-safe once IsFinished.
+  // one download on an owned worker thread, C# Task style, one-shot. Events fire
+  // on the creating thread, or on the worker thread with Create(False).
   TbpHttpDownloadTask = class
   private
     FClient: TbpHttpClient;        // owned; configure via Client before Start
@@ -209,8 +207,7 @@ type
     procedure FireCompletionEvents;
     procedure RunDownload;  // worker thread body
   public
-    // create on the thread that should receive the events (destructor
-    // cancels, joins the worker and frees everything)
+    // create on the thread that should receive the events
     constructor Create(aMarshalToMainThread: Boolean = True);
     destructor Destroy; override;
 
@@ -239,15 +236,14 @@ type
     property ErrorCode: DWORD read GetErrorCode;        // WinInet error, 0 if none
     property HttpStatus: Integer read GetHttpStatus;    // status of a failed response
 
-    // OnComplete fires on every terminal state (check State inside);
-    // OnError fires before it on dtsFailed
+    // OnComplete fires on every terminal state; OnError first on dtsFailed
     property OnProgress: TbpHttpProgressEvent read FOnProgress write FOnProgress;
     property OnComplete: TbpHttpDownloadCompleteEvent read FOnComplete write FOnComplete;
     property OnError: TbpHttpDownloadErrorEvent read FOnError write FOnError;
   end;
 
-// hot tasks: create, wire and start in one call; the caller frees the task.
-// Two names, not an overload: old compilers reject nil events on overloads.
+// hot tasks: create, wire and start in one call; the caller frees the task
+// two names rather than an overload: old compilers reject nil events there
 function BpDownloadAsync(const aUrl, aFileName: string;
   aOnProgress: TbpHttpProgressEvent = nil;
   aOnComplete: TbpHttpDownloadCompleteEvent = nil;
@@ -297,8 +293,7 @@ begin
   aHeaders := aHeaders + aLine;
 end;
 
-// registered with the token so Cancel aborts a blocked WinInet call by
-// closing its request handle (fails over with error 12017)
+// registered with the token so Cancel closes the handle of a blocked call
 procedure BpCloseInetHandleCleanup(aData: Pointer);
 begin
   InternetCloseHandle(HINTERNET(aData));
@@ -363,8 +358,7 @@ begin
     if FCancelled <> 0 then
       Exit;
     FCancelled := 1;
-    // run in registration order, then drop everything so a later
-    // UnregisterCleanup reports the cleanup as already executed
+    // run in registration order, then dropped so a later Unregister sees none
     for i := 0 to High(FCleanupProcs) do
       FCleanupProcs[i](FCleanupData[i]);
     SetLength(FCleanupProcs, 0);
@@ -474,9 +468,30 @@ begin
   ApplyTimeoutsToSession;
 end;
 
+// a CR or LF here starts another header line in the block sent to
+// HttpSendRequest, letting caller data override Authorization (CWE-113)
+procedure BpCheckHeaderPart(const aText, aWhat: string);
+var
+  i: Integer;
+begin
+  for i := 1 to Length(aText) do
+    if (aText[i] = #13) or (aText[i] = #10) then
+      raise EbpHttpClient.CreateFmt('Header %s must not contain CR or LF', [aWhat]);
+end;
+
 procedure TbpHttpClient.AddHeader(const aName, aValue: string);
 begin
+  BpCheckHeaderPart(aName, 'name');
+  BpCheckHeaderPart(aValue, 'value');
+  if Pos(':', aName) > 0 then
+    raise EbpHttpClient.Create('Header name must not contain a colon');
   FHeaders.Values[aName] := aValue;
+end;
+
+procedure TbpHttpClient.SetBearerToken(const aValue: string);
+begin
+  BpCheckHeaderPart(aValue, 'value');
+  FBearerToken := aValue;
 end;
 
 procedure TbpHttpClient.ClearHeaders;
@@ -1019,6 +1034,12 @@ begin
       end;
     end;
   until lvBytesRead = 0;
+
+  // a connection dying after the headers looks like a clean end of stream, so
+  // without this a truncated body counts as a successful download
+  if (aTotal >= 0) and (lvReceived <> aTotal) then
+    raise EbpHttpClient.CreateFmt(
+      'Incomplete response: received %d of %d bytes', [lvReceived, aTotal]);
 end;
 
 function TbpHttpClient.Download(const aUrl: string; aDest: TStream;
