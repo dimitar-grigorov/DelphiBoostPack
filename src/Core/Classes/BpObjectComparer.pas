@@ -1,7 +1,6 @@
 unit BpObjectComparer;
 
-// Diffs two objects by RTTI and reports which published properties changed,
-// collections included.
+// Diffs two objects by RTTI and reports the changed published properties, collections included.
 
 interface
 
@@ -141,6 +140,10 @@ begin
         lvNewPropPath := aNewPropPath + '.' + string(lvPropInfo^.Name);
 
       case lvPropInfo^.PropType^.Kind of
+        // tkUString exists from Delphi 2009 on; without it every string property is skipped
+        {$IF Declared(tkUString)}
+        tkUString,
+        {$IFEND}
         tkInteger, tkEnumeration, tkFloat, tkString, tkSet, tkLString, tkWString, tkVariant:
           begin
             lvOldValue := GetPropValue(aOld, string(lvPropInfo^.Name));

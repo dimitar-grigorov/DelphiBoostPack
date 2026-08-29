@@ -1,10 +1,8 @@
 unit BpHashBobJenkins;
 
-// Bob Jenkins lookup3 hash (a public-domain algorithm) for Delphi 7/2007+.
-// The seed is chosen so results interoperate with the RTL's BobJenkinsHash
-// across compiler versions. Note: hashing a string hashes its bytes, so Ansi
-// (D2007) and Unicode builds differ - use the buffer overload for portable
-// known-answer tests.
+// Bob Jenkins lookup3 hash (public domain) for Delphi 7/2007+, seeded to
+// interoperate with the RTL's BobJenkinsHash. Hashing a string hashes its
+// bytes, so Ansi and Unicode builds differ: use the buffer overload.
 
 interface
 
@@ -46,6 +44,10 @@ type
   end;
 
 implementation
+
+// lookup3 is defined on wrapping arithmetic, so the checks stay off here
+{$Q-}
+{$R-}
 
 type
   // three consecutive 32-bit words, for aligned block reads
@@ -148,17 +150,16 @@ begin
   Move(FHash, Result[0], 4);
 end;
 
-// Implements the lookup3 mix and final. The last 12-byte block is folded by
-// Final rather than in the loop, Len = 0 exits before Final, and the tail
-// never reads past Data (masked 32-bit reads when aligned, byte reads
-// otherwise).
+// lookup3 mix and final. The last 12-byte block is folded by Final rather
+// than in the loop, Len = 0 exits early, and the tail never reads past Data.
 class function TbpHashBobJenkins.HashLittle(const Data; Len, InitVal: Integer): Integer;
 var
   a, b, c: Cardinal;
   pd: PCardinalTriple;
   pb: PByteArray;
 begin
-  a := Cardinal($DEADBEEF) + Cardinal(Len shl 2) + Cardinal(InitVal);
+  // seed with the byte length: hashword counts words, hashlittle bytes
+  a := Cardinal($DEADBEEF) + Cardinal(Len) + Cardinal(InitVal);
   b := a;
   c := a;
 
@@ -252,8 +253,7 @@ begin
       Exit;
     end;
 
-    // cumulative tail: byte i goes to word (i div 4), shifted (i mod 4)*8 -
-    // the same fall-through mapping as the reference goto chain
+    // cumulative tail: byte i goes to word i div 4, shifted (i mod 4) * 8
     if Len >= 12 then Inc(c, Cardinal(pb^[11]) shl 24);
     if Len >= 11 then Inc(c, Cardinal(pb^[10]) shl 16);
     if Len >= 10 then Inc(c, Cardinal(pb^[9]) shl 8);
