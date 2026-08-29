@@ -29,7 +29,9 @@ uses
   BpStrUtils in 'Core\Units\BpStrUtils.pas',
   BpSysUtils in 'Core\Units\BpSysUtils.pas',
   BpVariantUtils in 'Core\Units\BpVariantUtils.pas',
-  StopWatch in 'Core\Units\StopWatch.pas';
+  StopWatch in 'Core\Units\StopWatch.pas',
+  BpKeyFold in 'Core\Units\BpKeyFold.pas',
+  BpStringList in 'Core\Classes\BpStringList.pas';
 
 begin
   System.ReportMemoryLeaksOnShutdown := True;

@@ -1,8 +1,7 @@
 program DelphiBoostPackTests;
 
-// Delphi DUnit test project.
-// Define CONSOLE_TESTRUNNER (Build_Tests_D2007.cmd does) to get the console test runner,
-// otherwise the GUI test runner is used.
+// DUnit test project; CONSOLE_TESTRUNNER (set by Build_Tests_D2007.cmd)
+// picks the console runner, otherwise the GUI runner is used.
 
 {$IFDEF CONSOLE_TESTRUNNER}
 {$APPTYPE CONSOLE}
@@ -76,7 +75,11 @@ uses
   BpSysUtils in '..\src\Core\Units\BpSysUtils.pas',
   BpTasksTests in 'Core\BpTasksTests.pas',
   BpTasks in '..\src\Core\Classes\BpTasks.pas',
-  BpVariantUtils in '..\src\Core\Units\BpVariantUtils.pas';
+  BpVariantUtils in '..\src\Core\Units\BpVariantUtils.pas',
+  BpKeyFoldTests in 'Core\BpKeyFoldTests.pas',
+  BpKeyFold in '..\src\Core\Units\BpKeyFold.pas',
+  BpStringListTests in 'Core\BpStringListTests.pas',
+  BpStringList in '..\src\Core\Classes\BpStringList.pas';
 
 {$R *.RES}
 
