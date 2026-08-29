@@ -2,15 +2,8 @@
 setlocal
 
 rem Build_Tests_D2007.cmd [Debug|Release] [/ci] [/bench] [/nointeg]  -  rebuilds tests\!bin\DelphiBoostPackTests.exe.
-rem Default config is Debug, the only config wired for the DUnit source paths.
-rem Forces CONSOLE_TESTRUNNER so the exe runs as a console test runner; IDE builds keep the GUI runner.
-rem
-rem Test kinds (see tests\DelphiBoostPackTests.dpr and BpHttpDownloadTests.pas):
-rem   unit         - always compiled and run.
-rem   integration  - loopback server plus live network, ON by default; /nointeg defines NO_INTEGRATION to skip them.
-rem   benchmarks   - performance suites, OFF by default; /bench defines BENCHMARK to include them.
-rem
-rem MSBuild treats ; in /p: values as a property separator, hence the escaped semicolons (%%3B) below.
+rem Debug is the only config wired for the DUnit source paths, and CONSOLE_TESTRUNNER is forced so the exe runs on the console.
+rem Kinds: unit always, integration unless /nointeg (NO_INTEGRATION), benchmarks only with /bench (BENCHMARK).
 rem /ci skips the pause on failure (AI agent, CI runner).
 
 if not defined BDS set "BDS=C:\Program Files (x86)\CodeGear\RAD Studio\5.0"
@@ -35,6 +28,7 @@ shift
 goto :parseargs
 :parsed
 
+rem %%3B is an escaped ;, which MSBuild would otherwise read as a property separator
 set "DEFINES=DEBUG"
 if /I "%CFG%"=="Release" set "DEFINES=RELEASE"
 set "DEFINES=%DEFINES%%%3BCONSOLE_TESTRUNNER"
@@ -54,7 +48,6 @@ exit /b 0
 
 :fail
 echo Build failed.
-endlocal
-rem Skip pause when invoked non-interactively (AI agent, CI runner).
-if /I not "%CI%"=="1" pause
+rem expand %CI% before endlocal drops it, or the pause fires even under /ci
+endlocal & if not "%CI%"=="1" pause
 exit /b 1

@@ -4,7 +4,7 @@ unit BpJsonStandalone;
 // Single-file bundle amalgamated from the DelphiBoostPack modular units:
 //   src\Core\Classes\BpStringBuilder.pas
 //   src\Core\Classes\BpJson.pas
-// Source commit 3c8f51c, generated 2026-07-31 by tools\Amalgamate.ps1.
+// Source commit ca6842a, generated 2026-08-29 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   powershell -ExecutionPolicy Bypass -File tools\Amalgamate.ps1
 // Notes:
@@ -71,11 +71,9 @@ type
 // BpJson.pas - interface
 // ==================================================================
 
-// JSON reader/writer for Delphi 7/2007+ (RFC 8259). One class, TbpJsonValue,
-// is the whole tree; Parse returns the root and freeing it frees the tree.
-// Typed accessors follow the TbpStrDictionary convention; FindPath walks
-// dotted paths like 'data.items[0].name'. The parser is strict: leading
-// zeros, trailing commas, control chars and trailing junk all fail.
+// JSON reader/writer for Delphi 7/2007+ (RFC 8259). TbpJsonValue is the whole
+// tree, so freeing the root frees it all; FindPath walks 'data.items[0].name'.
+// The parser is strict: leading zeros, trailing commas and junk all fail.
 
 type
   // raised on parse errors, kind mismatches and missing object members
@@ -126,8 +124,7 @@ type
     function IsNull: Boolean;
     property Kind: TbpJsonKind read FKind;
 
-    // strict scalar access: the wrong kind raises EbpJson;
-    // AsFloat also accepts int, nothing else converts
+    // the wrong kind raises EbpJson; AsFloat also accepts an int, nothing else converts
     function AsBool: Boolean;
     function AsInt: Int64;
     function AsFloat: Double;
@@ -140,8 +137,7 @@ type
     procedure Delete(aIndex: Integer);
     procedure Clear;
 
-    // array building; the value must be an array,
-    // AddArray and AddObject return the new empty container
+    // array building; AddArray and AddObject return the new empty container
     procedure AddNull;
     procedure AddBool(aValue: Boolean);
     procedure AddInt(aValue: Int64);
@@ -177,8 +173,7 @@ type
     function SetArray(const aName: string): TbpJsonValue;
     function SetObject(const aName: string): TbpJsonValue;
 
-    // dotted path with [n] indexing, e.g. 'data.items[0].name';
-    // nil (or the default) when any step is missing or of the wrong kind
+    // dotted path with [n] indexing; nil or the default when a step is missing
     function FindPath(const aPath: string): TbpJsonValue;
     function PathBoolDef(const aPath: string; aDefault: Boolean): Boolean;
     function PathIntDef(const aPath: string; aDefault: Int64): Int64;
@@ -638,6 +633,54 @@ begin
   end;
 end;
 
+type
+  TbpJsonNumberRange = (jnNormal, jnZero, jnOutOfRange);
+
+// jnZero when the mantissa is zero or the value underflows, jnOutOfRange when
+// the exponent is past Double range. Shorter exponents are left to Val.
+function BpJsonClassifyExponent(const aToken: string): TbpJsonNumberRange;
+var
+  i, lvDigits: Integer;
+  lvMantissaNonZero, lvNegExp: Boolean;
+begin
+  Result := jnNormal;
+  lvMantissaNonZero := False;
+  i := 1;
+  while (i <= Length(aToken)) and (aToken[i] <> 'e') and (aToken[i] <> 'E') do
+  begin
+    if (aToken[i] >= '1') and (aToken[i] <= '9') then
+      lvMantissaNonZero := True;
+    Inc(i);
+  end;
+  if i > Length(aToken) then
+  begin
+    if not lvMantissaNonZero then
+      Result := jnZero;
+    Exit;
+  end;
+  Inc(i);
+  lvNegExp := (i <= Length(aToken)) and (aToken[i] = '-');
+  if (i <= Length(aToken)) and ((aToken[i] = '+') or (aToken[i] = '-')) then
+    Inc(i);
+  while (i <= Length(aToken)) and (aToken[i] = '0') do
+    Inc(i);
+  lvDigits := 0;
+  while (i <= Length(aToken)) and (aToken[i] >= '0') and (aToken[i] <= '9') do
+  begin
+    Inc(lvDigits);
+    Inc(i);
+  end;
+  // a Double tops out near 1e308, so six exponent digits is already decisive
+  if lvDigits <= 6 then
+    Exit;
+  if not lvMantissaNonZero then
+    Result := jnZero
+  else if lvNegExp then
+    Result := jnZero
+  else
+    Result := jnOutOfRange;
+end;
+
 function BpJsonParseNumber(var aReader: TbpJsonReader): TbpJsonValue;
 var
   lvStart: PChar;
@@ -695,7 +738,24 @@ begin
     end;
     // too big for Int64, keep the value as a float
   end;
-  Val(lvToken, lvFloat, lvErr);
+  // a long exponent wraps inside Val into a plausible wrong value, so settle it here
+  case BpJsonClassifyExponent(lvToken) of
+    jnZero:
+      begin
+        Result := TbpJsonValue.CreateFloat(0);
+        Exit;
+      end;
+    jnOutOfRange:
+      BpJsonFail(aReader, 'Number out of range');
+  end;
+  // Val stores through Extended into the Double, so anything past Double range
+  // raises EOverflow, which is not EbpJson and would escape Parse and TryParse
+  try
+    Val(lvToken, lvFloat, lvErr);
+  except
+    on E: Exception do
+      BpJsonFail(aReader, 'Number out of range');
+  end;
   if lvErr <> 0 then
     BpJsonFail(aReader, 'Number out of range');
   Result := TbpJsonValue.CreateFloat(lvFloat);

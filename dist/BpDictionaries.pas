@@ -2,11 +2,12 @@ unit BpDictionaries;
 
 // BpDictionaries.pas - GENERATED FILE, DO NOT EDIT.
 // Single-file bundle amalgamated from the DelphiBoostPack modular units:
+//   src\Core\Units\BpKeyFold.pas
 //   src\Core\Classes\BpHashBobJenkins.pas
 //   src\Core\Units\BpVariantUtils.pas
 //   src\Core\Classes\BpStrDictionary.pas
 //   src\Core\Classes\BpIntDictionary.pas
-// Source commit 3c8f51c, generated 2026-07-31 by tools\Amalgamate.ps1.
+// Source commit ca6842a, generated 2026-08-29 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   powershell -ExecutionPolicy Bypass -File tools\Amalgamate.ps1
 // Notes:
@@ -18,17 +19,39 @@ unit BpDictionaries;
 interface
 
 uses
-  SysUtils, Variants, Windows, Classes;
+  Windows, SysUtils, Variants, Classes;
+
+// ==================================================================
+// BpKeyFold.pas - interface
+// ==================================================================
+
+// Case folding for hash keys without the AnsiUpperCase temporary: a table
+// built once from the active code page. Byte-at-a-time folding is only valid
+// on a single byte code page, so DBCS and Unicode fall back to the RTL.
+
+// True when the table applies: a single byte code page on a pre-Unicode compiler
+function BpKeyFoldUsable: Boolean;
+
+// upper cased through the table when that is valid, otherwise unchanged
+function BpFoldChar(aCh: Char): Char;
+
+// FNV-1a over the folded key; never returns a negative value
+function BpFoldedHash(const aKey: string): Integer;
+
+// case-insensitive equality, equivalent to AnsiSameText
+function BpFoldedSame(const aA, aB: string): Boolean;
+
+// folds aKey into aBuf for a caller running its own hash; the folded length,
+// or -1 when it will not fit or the table does not apply
+function BpFoldInto(const aKey: string; var aBuf; aBufChars: Integer): Integer;
 
 // ==================================================================
 // BpHashBobJenkins.pas - interface
 // ==================================================================
 
-// Bob Jenkins lookup3 hash (a public-domain algorithm) for Delphi 7/2007+.
-// The seed is chosen so results interoperate with the RTL's BobJenkinsHash
-// across compiler versions. Note: hashing a string hashes its bytes, so Ansi
-// (D2007) and Unicode builds differ - use the buffer overload for portable
-// known-answer tests.
+// Bob Jenkins lookup3 hash (public domain) for Delphi 7/2007+, seeded to
+// interoperate with the RTL's BobJenkinsHash. Hashing a string hashes its
+// bytes, so Ansi and Unicode builds differ: use the buffer overload.
 
 {$IF CompilerVersion >= 18}
   {$DEFINE Delphi_2007_UP}
@@ -90,11 +113,9 @@ function BpTryVarToIntArray(const aValue: Variant; out aResult: TbpIntegerDynArr
 // BpStrDictionary.pas - interface
 // ==================================================================
 
-// String-key dictionary for Delphi 7/2007+ (no generics), with a familiar
-// TDictionary-style API. Open addressing with linear probing, power-of-two
-// capacity and backward-shift deletion. Keys hashed via BpHashBobJenkins.
-// Values are Variant, with strict typed accessors. Case-insensitive mode is
-// opt-in (constructor arg), folding keys with AnsiUpperCase.
+// String-key dictionary for Delphi 7/2007+ (no generics), TDictionary-style API.
+// Open addressing with linear probing, power-of-two capacity, backward-shift
+// deletion, BpHashBobJenkins hashing and opt-in case-insensitive keys.
 
 type
   // raised for missing keys, duplicate keys and failed typed conversions
@@ -119,8 +140,7 @@ type
     FCaseInsensitive: Boolean;
     function HashOf(const aKey: string): Integer;
     function KeysEqual(const aKey1, aKey2: string): Boolean;
-    // returns the slot index (>= 0) when found, otherwise the bitwise
-    // complement of the first empty slot (always negative)
+    // the slot index when found, else the complement of the first empty slot
     function GetBucketIndex(const aKey: string; aHashCode: Integer): Integer;
     procedure DoAdd(aHashCode, aIndex: Integer; const aKey: string; const aValue: Variant);
     procedure Grow;
@@ -140,8 +160,7 @@ type
     procedure SetCapacity(aCapacity: Integer);
     procedure ForEach(aCallback: TbpStrDictForEach);
     procedure GetKeys(aList: TStrings);
-    // typed accessors; GetX raises on missing key or wrong type, GetXDef
-    // returns aDefault, TryGetX never raises. No coercion between types.
+    // GetX raises on a missing key or wrong type, GetXDef defaults, TryGetX never raises
     procedure SetInt(const aKey: string; aValue: Integer);
     function GetInt(const aKey: string): Integer;
     function GetIntDef(const aKey: string; aDefault: Integer): Integer;
@@ -176,10 +195,9 @@ type
 // BpIntDictionary.pas - interface
 // ==================================================================
 
-// Int64-key dictionary for Delphi 7/2007+ (no generics). Same open-addressing
-// engine as TbpStrDictionary; keys hashed with the Thomas Wang 64-bit mix,
-// which spreads sequential ids across buckets. Values are Variant, with the
-// same strict typed accessors (GetInt, TryGetInt, GetIntDef, SetInt).
+// Int64-key dictionary for Delphi 7/2007+ (no generics), same open-addressing
+// engine as TbpStrDictionary. Keys go through the Thomas Wang 64-bit mix;
+// values are Variant with the same strict typed accessors.
 
 type
   // raised for missing keys, duplicate keys and failed typed conversions
@@ -203,8 +221,7 @@ type
     FItems: TbpIntDictItemArray;
     FCount: Integer;
     FGrowThreshold: Integer;
-    // returns the slot index (>= 0) when found, otherwise the bitwise
-    // complement of the first empty slot (always negative)
+    // the slot index when found, else the complement of the first empty slot
     function GetBucketIndex(aKey: Int64; aHashCode: Integer): Integer;
     procedure DoAdd(aHashCode, aIndex: Integer; aKey: Int64; const aValue: Variant);
     procedure Grow;
@@ -224,8 +241,7 @@ type
     procedure SetCapacity(aCapacity: Integer);
     procedure ForEach(aCallback: TbpIntDictForEach);
     function GetKeys: TbpInt64DynArray;
-    // typed accessors; GetX raises on missing key or wrong type, GetXDef
-    // returns aDefault, TryGetX never raises. No coercion between types.
+    // GetX raises on a missing key or wrong type, GetXDef defaults, TryGetX never raises
     procedure SetInt(aKey: Int64; aValue: Integer);
     function GetInt(aKey: Int64): Integer;
     function GetIntDef(aKey: Int64; aDefault: Integer): Integer;
@@ -258,8 +274,113 @@ function BpHashInt64(aKey: Int64): Integer;
 implementation
 
 // ==================================================================
+// BpKeyFold.pas - implementation
+// ==================================================================
+
+var
+  gvKfUpcase: array[0..255] of Char;
+  gvKfUsable: Boolean;
+  gvKfReady: Boolean;
+
+procedure KfBuildTable;
+var
+  i: Integer;
+  lvBuf: array[0..255] of Char;
+  lvInfo: TCPInfo;
+begin
+  for i := 0 to 255 do
+    lvBuf[i] := Chr(i);
+  CharUpperBuff(@lvBuf[0], 256);
+  for i := 0 to 255 do
+    gvKfUpcase[i] := lvBuf[i];
+  {$IFDEF UNICODE}
+  gvKfUsable := False;
+  {$ELSE}
+  gvKfUsable := GetCPInfo(CP_ACP, lvInfo) and (lvInfo.MaxCharSize = 1);
+  {$ENDIF}
+  gvKfReady := True;
+end;
+
+function BpKeyFoldUsable: Boolean;
+begin
+  if not gvKfReady then
+    KfBuildTable;
+  Result := gvKfUsable;
+end;
+
+function BpFoldChar(aCh: Char): Char;
+begin
+  if BpKeyFoldUsable then
+    Result := gvKfUpcase[Ord(aCh) and $FF]
+  else
+    Result := aCh;
+end;
+
+function BpFoldedHash(const aKey: string): Integer;
+var
+  i: Integer;
+  lvH: Cardinal;
+  lvFolded: string;
+begin
+  lvH := 2166136261;
+  if BpKeyFoldUsable then
+  begin
+    for i := 1 to Length(aKey) do
+      lvH := (lvH xor Cardinal(Ord(gvKfUpcase[Ord(aKey[i]) and $FF]))) * 16777619;
+  end
+  else
+  begin
+    lvFolded := AnsiUpperCase(aKey);
+    for i := 1 to Length(lvFolded) do
+      lvH := (lvH xor Cardinal(Ord(lvFolded[i]))) * 16777619;
+  end;
+  Result := Integer(lvH and $7FFFFFFF);
+end;
+
+function BpFoldedSame(const aA, aB: string): Boolean;
+var
+  i: Integer;
+begin
+  if not BpKeyFoldUsable then
+  begin
+    Result := AnsiSameText(aA, aB);
+    Exit;
+  end;
+  Result := Length(aA) = Length(aB);
+  if not Result then
+    Exit;
+  for i := 1 to Length(aA) do
+    if gvKfUpcase[Ord(aA[i]) and $FF] <> gvKfUpcase[Ord(aB[i]) and $FF] then
+    begin
+      Result := False;
+      Exit;
+    end;
+end;
+
+function BpFoldInto(const aKey: string; var aBuf; aBufChars: Integer): Integer;
+var
+  i, lvLen: Integer;
+  lvOut: PChar;
+begin
+  lvLen := Length(aKey);
+  if (not BpKeyFoldUsable) or (lvLen > aBufChars) then
+  begin
+    Result := -1;
+    Exit;
+  end;
+  lvOut := PChar(@aBuf);
+  for i := 1 to lvLen do
+    lvOut[i - 1] := gvKfUpcase[Ord(aKey[i]) and $FF];
+  Result := lvLen;
+end;
+
+// ==================================================================
 // BpHashBobJenkins.pas - implementation
 // ==================================================================
+
+// lookup3 is defined on wrapping arithmetic, so the checks stay off here
+{$Q-}
+{$R-}
 
 type
   // three consecutive 32-bit words, for aligned block reads
@@ -362,17 +483,16 @@ begin
   Move(FHash, Result[0], 4);
 end;
 
-// Implements the lookup3 mix and final. The last 12-byte block is folded by
-// Final rather than in the loop, Len = 0 exits before Final, and the tail
-// never reads past Data (masked 32-bit reads when aligned, byte reads
-// otherwise).
+// lookup3 mix and final. The last 12-byte block is folded by Final rather
+// than in the loop, Len = 0 exits early, and the tail never reads past Data.
 class function TbpHashBobJenkins.HashLittle(const Data; Len, InitVal: Integer): Integer;
 var
   a, b, c: Cardinal;
   pd: PCardinalTriple;
   pb: PByteArray;
 begin
-  a := Cardinal($DEADBEEF) + Cardinal(Len shl 2) + Cardinal(InitVal);
+  // seed with the byte length: hashword counts words, hashlittle bytes
+  a := Cardinal($DEADBEEF) + Cardinal(Len) + Cardinal(InitVal);
   b := a;
   c := a;
 
@@ -466,8 +586,7 @@ begin
       Exit;
     end;
 
-    // cumulative tail: byte i goes to word (i div 4), shifted (i mod 4)*8 -
-    // the same fall-through mapping as the reference goto chain
+    // cumulative tail: byte i goes to word i div 4, shifted (i mod 4) * 8
     if Len >= 12 then Inc(c, Cardinal(pb^[11]) shl 24);
     if Len >= 11 then Inc(c, Cardinal(pb^[10]) shl 16);
     if Len >= 10 then Inc(c, Cardinal(pb^[9]) shl 8);
@@ -592,6 +711,7 @@ const
   gcStrEmptyHash = -1;                         // sentinel: slot is free
   gcStrPositiveMask = not Integer($80000000);  // $7FFFFFFF
 
+
 constructor TbpStrDictionary.Create(aCaseInsensitive: Boolean; aInitialCapacity: Integer);
 begin
   inherited Create;
@@ -605,12 +725,21 @@ end;
 
 function TbpStrDictionary.HashOf(const aKey: string): Integer;
 var
+  lvStack: array[0..255] of Char;
+  lvFoldedLen: Integer;
   lvFolded: string;
 begin
   if FCaseInsensitive then
   begin
-    lvFolded := AnsiUpperCase(aKey);
-    Result := TbpHashBobJenkins.GetHashValue(Pointer(lvFolded)^, Length(lvFolded) * SizeOf(Char), 0);
+    lvFoldedLen := BpFoldInto(aKey, lvStack, Length(lvStack));
+    if lvFoldedLen >= 0 then
+      Result := TbpHashBobJenkins.GetHashValue(lvStack, lvFoldedLen * SizeOf(Char), 0)
+    else
+    begin
+      // key too long for the buffer, or a code page the table cannot fold
+      lvFolded := AnsiUpperCase(aKey);
+      Result := TbpHashBobJenkins.GetHashValue(Pointer(lvFolded)^, Length(lvFolded) * SizeOf(Char), 0);
+    end;
   end
   else
     Result := TbpHashBobJenkins.GetHashValue(Pointer(aKey)^, Length(aKey) * SizeOf(Char), 0);
@@ -621,7 +750,7 @@ end;
 function TbpStrDictionary.KeysEqual(const aKey1, aKey2: string): Boolean;
 begin
   if FCaseInsensitive then
-    Result := AnsiSameText(aKey1, aKey2)
+    Result := BpFoldedSame(aKey1, aKey2)
   else
     Result := aKey1 = aKey2;
 end;
@@ -711,10 +840,13 @@ begin
     Rehash(0)
   else
   begin
-    // round up to a power of two, minimum 4
+    // a power of two, at least 4, and never full: the probe loop needs a free slot
     lvNewCapacity := 4;
-    while lvNewCapacity < aCapacity do
+    while (lvNewCapacity > 0) and ((lvNewCapacity < aCapacity) or
+      (FCount > lvNewCapacity shr 1 + lvNewCapacity shr 2)) do
       lvNewCapacity := lvNewCapacity shl 1;
+    if lvNewCapacity <= 0 then
+      OutOfMemoryError;
     Rehash(lvNewCapacity);
   end;
 end;
@@ -778,8 +910,7 @@ function TbpStrDictionary.Remove(const aKey: string): Boolean;
 var
   lvGap, lvIndex, lvHC, lvBucket, lvLen: Integer;
 
-  // wrap-aware test whether aItem's home bucket lies in (aBottom, aTopInc];
-  // nested so both dictionaries can be amalgamated without a name clash
+  // wrap-aware test for a home bucket in (aBottom, aTopInc]; nested to keep bundles clash free
   function InCircularRange(aBottom, aItem, aTopInc: Integer): Boolean;
   begin
     Result := ((aBottom < aItem) and (aItem <= aTopInc)) or
@@ -792,8 +923,7 @@ begin
   Result := lvIndex >= 0;
   if not Result then
     Exit;
-  // backward-shift deletion (Knuth 6.4 Algorithm R): slide the following
-  // cluster entries into the gap unless that would pass their home bucket
+  // backward-shift deletion (Knuth 6.4 R): slide cluster entries into the gap
   lvLen := Length(FItems);
   lvGap := lvIndex;
   while True do
@@ -1062,8 +1192,7 @@ const
 {$Q-} // the hash mix relies on wrapping 64-bit arithmetic
 function BpHashInt64(aKey: Int64): Integer;
 begin
-  // Thomas Wang's hash64shift: avalanche mix of all 64 key bits.
-  // masks guard against sign-fill quirks of shr on Int64 in older compilers
+  // Thomas Wang hash64shift; the masks guard shr sign-fill on older compilers
   aKey := (not aKey) + (aKey shl 18);
   aKey := aKey xor ((aKey shr 31) and $00000001FFFFFFFF);
   aKey := aKey * 21;
@@ -1174,10 +1303,13 @@ begin
     Rehash(0)
   else
   begin
-    // round up to a power of two, minimum 4
+    // a power of two, at least 4, and never full: the probe loop needs a free slot
     lvNewCapacity := 4;
-    while lvNewCapacity < aCapacity do
+    while (lvNewCapacity > 0) and ((lvNewCapacity < aCapacity) or
+      (FCount > lvNewCapacity shr 1 + lvNewCapacity shr 2)) do
       lvNewCapacity := lvNewCapacity shl 1;
+    if lvNewCapacity <= 0 then
+      OutOfMemoryError;
     Rehash(lvNewCapacity);
   end;
 end;
@@ -1241,8 +1373,7 @@ function TbpIntDictionary.Remove(aKey: Int64): Boolean;
 var
   lvGap, lvIndex, lvHC, lvBucket, lvLen: Integer;
 
-  // wrap-aware test whether aItem's home bucket lies in (aBottom, aTopInc];
-  // nested so both dictionaries can be amalgamated without a name clash
+  // wrap-aware test for a home bucket in (aBottom, aTopInc]; nested to keep bundles clash free
   function InCircularRange(aBottom, aItem, aTopInc: Integer): Boolean;
   begin
     Result := ((aBottom < aItem) and (aItem <= aTopInc)) or
@@ -1255,8 +1386,7 @@ begin
   Result := lvIndex >= 0;
   if not Result then
     Exit;
-  // backward-shift deletion (Knuth 6.4 Algorithm R): slide the following
-  // cluster entries into the gap unless that would pass their home bucket
+  // backward-shift deletion (Knuth 6.4 R): slide cluster entries into the gap
   lvLen := Length(FItems);
   lvGap := lvIndex;
   while True do
