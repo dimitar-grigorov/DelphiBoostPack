@@ -10,7 +10,7 @@ Add a unit to `uses` and go - no packages, no third-party DLLs, no base class to
 [TbpHttpClient](#tbphttpclient) · [TbpHttpDownloadTask](#tbphttpdownloadtask) · [TbpCancellationToken](#tbpcancellationtoken) · [TbpTask](#tbptask)
 
 **Data**
-[TbpJsonValue](#tbpjsonvalue) · [BpDateUtils](#bpdateutils) · [TbpStrDictionary](#tbpstrdictionary) · [TbpIntDictionary](#tbpintdictionary) · [TbpIntList](#tbpintlist) · [TbpInt64List](#tbpint64list)
+[TbpJsonValue](#tbpjsonvalue) · [BpDateUtils](#bpdateutils) · [TbpStringList](#tbpstringlist) · [TbpStrDictionary](#tbpstrdictionary) · [TbpIntDictionary](#tbpintdictionary) · [TbpIntList](#tbpintlist) · [TbpInt64List](#tbpint64list)
 
 **Strings**
 [TbpStringBuilder](#tbpstringbuilder) · [BpStrUtils](#bpstrutils)
@@ -19,7 +19,7 @@ Add a unit to `uses` and go - no packages, no third-party DLLs, no base class to
 [BpSHA256](#bpsha256) · [BpMD5](#bpmd5) · [BpHMACSHA256](#bphmacsha256) · [BpPasswordHash](#bppasswordhash) · [BpBase64](#bpbase64) · [BpHashBobJenkins](#bphashbobjenkins)
 
 **Windows and odds and ends**
-[TbpCredentials](#tbpcredentials) · [TbpObjectComparer](#tbpobjectcomparer) · [BpVariantUtils](#bpvariantutils) · [BpSysUtils](#bpsysutils) · [StopWatch](#stopwatch)
+[TbpCredentials](#tbpcredentials) · [TbpObjectComparer](#tbpobjectcomparer) · [BpKeyFold](#bpkeyfold) · [BpVariantUtils](#bpvariantutils) · [BpSysUtils](#bpsysutils) · [StopWatch](#stopwatch)
 
 **Packaging**
 [Single-file bundles](#single-file-bundles)
@@ -88,7 +88,7 @@ lvClient.AddHeader('X-Api-Version', '2');      // persistent, sent with every re
 lvClient.ClearHeaders;
 ```
 
-`AddHeader` replaces a name that is already set. Per-request headers go in the `aHeaders` argument as raw CRLF-separated lines and are merged on top of the persistent ones. Keep the token out of your config file by pulling it from [TbpCredentials](#tbpcredentials):
+`AddHeader` replaces a name that is already set, and rejects a CR or LF in the name or value (and a colon in the name) with `EbpHttpClient` - otherwise a value taken from a config file or a database column could append headers of its own and override the `Authorization` the client set. `BearerToken` is checked the same way. Per-request headers go in the `aHeaders` argument as raw CRLF-separated lines and are merged on top of the persistent ones. Keep the token out of your config file by pulling it from [TbpCredentials](#tbpcredentials):
 
 ```pascal
 lvClient.BearerToken := TbpCredentials.GetPassword('MyApp', 'api');
@@ -181,7 +181,7 @@ end;
 lvClient.DownloadToFile('https://host/big.zip', 'C:\temp\big.zip', HandleProgress, FToken);
 ```
 
-`aTotal` is `-1` when the server sent no `Content-Length`. `DownloadToFile` keeps the file only on a 2xx: on an error, a cancel or a non-2xx status it deletes the partial file, so an error page can never masquerade as the payload. Cancelling raises `EbpHttpClientCancelled`.
+`aTotal` is `-1` when the server sent no `Content-Length`. `DownloadToFile` keeps the file only on a 2xx: on an error, a cancel or a non-2xx status it deletes the partial file, so an error page can never masquerade as the payload. A body that stops short of the advertised `Content-Length` counts as an error too - a connection that dies mid-transfer looks like a clean end of stream to WinInet, so without that check a truncated file would be reported as a successful download. Cancelling raises `EbpHttpClientCancelled`.
 
 Resume is one header away - send a range and append when the server answers 206:
 
@@ -363,7 +363,7 @@ finally
 end;
 ```
 
-`Parse` raises `EbpJson` with the line and column; `TryParse` returns `False` instead. The parser is strict on purpose - leading zeros, raw control characters, trailing commas, `NaN`, single quotes and junk after the value all fail, so malformed input is a clear error rather than a surprise three screens later.
+`Parse` raises `EbpJson` with the line and column; `TryParse` returns `False` instead. That holds for numbers out of `Double` range too: a 400-digit exponent is rejected as a parse error rather than escaping as a floating point trap. The parser is strict on purpose - leading zeros, raw control characters, trailing commas, `NaN`, single quotes and junk after the value all fail, so malformed input is a clear error rather than a surprise three screens later.
 
 Arrays and objects share `Count` and `Items[]`; objects add `Names[]`:
 
@@ -428,6 +428,41 @@ lvBack := BpUnixMSToDateTime(lvMillis);
 
 It parses date-only values, `T`-or-space separators, fractional seconds and every zone form (`Z`, `+hh:mm`, `+hhmm`, `+hh`), and it parses them strictly - malformed input is rejected, not guessed at. A value with no zone comes back as written, since there is nothing to convert. Epoch conversion is `Int64` in both directions, so dates before 1970 and past 2038 round-trip cleanly.
 
+### [TbpStringList](../src/Core/Classes/BpStringList.pas)
+
+`BpStringList.pas` - a `TStringList` whose `IndexOf` and `IndexOfName` answer in constant time. It is a `TStringList` descendant, so it goes wherever a `TStrings` goes and everything you already use keeps working: `Text`, `CommaText`, `DelimitedText`, `Values`, `Names`, `Objects`, `Sorted`, `Duplicates`, `CustomSort`, `LoadFromFile`, `Assign`.
+
+```pascal
+uses BpStringList;
+
+lvList := TbpStringList.Create;        // then use it exactly like a TStringList
+try
+  lvList.Add('gamma');
+  lvList.Values['host'] := 'localhost';
+  if lvList.IndexOf('gamma') >= 0 then ...
+  lvPort := lvList.Values['port'];
+finally
+  lvList.Free;
+end;
+```
+
+The RTL gives you two bad choices for a list you search: `TStringList.IndexOf` is a linear scan, and `THashedStringList` in `IniFiles` throws its whole hash away on every change and rebuilds it on the next lookup, so a list that is both written and read goes quadratic. This one maintains the index incrementally through the hooks `TStringList` already has - `InsertItem`, `Put`, `Delete`, `Clear` - so a write costs one bucket update, not a rebuild. Only the operations that reorder the whole list (`Exchange`, `Sort`, `CustomSort`) mark it stale, and then just one lookup rebuilds it.
+
+Measured on Delphi 2007, 50,000 entries:
+
+| operation | RTL | TbpStringList |
+|-----------|-----|---------------|
+| `Add` | `TStringList` 3.12 ms | 6.21 ms |
+| `IndexOf` | `THashedStringList` 1180 ms | 17.4 ms |
+| `Add` and `IndexOf` interleaved | `THashedStringList` 139,945 ms | 21.4 ms |
+| `IndexOfName` | `TStringList` 1014 ms | 14.1 ms |
+
+Adding costs about twice a plain `TStringList`, one hash and one bucket write per row; that is the whole price, and the first search pays it back. There are two indexes, one over the line and one over the name part, and the name one is only built if you ever call `IndexOfName` or read `Values`.
+
+It wants one companion, [BpKeyFold](#bpkeyfold). Case-insensitive keys (the default, as in `TStringList`) fold through it, so a lookup allocates nothing and non-ASCII keys fold correctly - `SysUtils.SameText` is ASCII-only on the pre-Unicode compilers, which silently breaks Cyrillic keys. `CaseSensitive` and `NameValueSeparator` can still be changed at any time; the index notices and rebuilds.
+
+`IndexOf` answers with the lowest matching row, the same as `TStringList`. The tests drive the same operations into a `TStringList` and into this one and compare every answer, so the work-alike claim is checked rather than asserted.
+
 ### [TbpStrDictionary](../src/Core/Classes/BpStrDictionary.pas)
 
 `BpStrDictionary.pas` - a string-keyed hash map with a `TDictionary`-style API, for compilers with no generics. `TDictionary` arrived in Delphi 2009; before that the choice was `TStringList.Values` (linear scans, everything a string) or nothing.
@@ -484,7 +519,7 @@ Values are `Variant`, but nothing is coerced behind your back. Each type gets th
 
 The set is `Int`, `Int64`, `Str`, `Bool`, `Float`, plus `IntArray` on the string dictionary for stashing a list of ids in one slot. Every type has a matching `SetX`. The rules live in [BpVariantUtils](#bpvariantutils).
 
-Under the hood: open addressing with linear probing, power-of-two capacity, a 0.75 load factor and backward-shift deletion, so there are no tombstones to slow down later lookups. Hashing is [BpHashBobJenkins](#bphashbobjenkins). Case-insensitive mode hashes and compares the upper-cased key.
+Under the hood: open addressing with linear probing, power-of-two capacity, a 0.75 load factor and backward-shift deletion, so there are no tombstones to slow down later lookups. Hashing is [BpHashBobJenkins](#bphashbobjenkins). Case-insensitive mode folds the key through an upper-case table built once from the active code page, so a lookup allocates nothing; on a multi-byte code page, where folding one byte at a time would be wrong, it falls back to `AnsiUpperCase` and `AnsiSameText`. Folding cut a case-insensitive lookup from 9.96 ms to 2.55 ms over 20,000 keys on Delphi 2007, and an insert from 5.20 ms to 3.11 ms.
 
 ### [TbpIntDictionary](../src/Core/Classes/BpIntDictionary.pas)
 
@@ -518,7 +553,7 @@ uses BpIntList;
 lvIds := TbpIntList.Create;
 try
   lvIds.CommaText := '5,3,9,1';
-  lvIds.Sort;                                   // 1,3,5,9
+  lvIds.Sorted := True;                         // 1,3,5,9, and stays ordered
   if lvIds.BinarySearch(5, lvIndex) then
     lvIds.Delete(lvIndex);
 
@@ -530,7 +565,7 @@ finally
 end;
 ```
 
-`Sorted := True` sorts and keeps insertions ordered, which is what makes `BinarySearch` worth reaching for on big lists; `IndexOf` is the linear fallback and works either way. Sorting is an in-place quicksort over a plain `array of Integer` - no `TList` of casted pointers, no boxing. The class implements `IBpIntList` if you prefer interface lifetimes, and `TIntegerList` / `TIntList` are aliases for older code.
+`Sorted := True` sorts and keeps insertions ordered, which is what makes `BinarySearch` worth reaching for on big lists - and `BinarySearch` needs that flag, so use `Sorted := True` rather than a bare `Sort` when you intend to search; `IndexOf` is the linear fallback and works either way. Sorting is an in-place introsort over a plain `array of Integer` - no `TList` of casted pointers, no boxing. It recurses into the smaller partition only, so the stack stays logarithmic, and drops to heapsort when the pivot keeps splitting badly, so the pathological shapes stay O(n log n): 400,000 organ-pipe values sort in 31 ms where a plain middle-pivot quicksort recurses 200,000 deep and dies. The class implements `IBpIntList` if you prefer interface lifetimes, and `TIntegerList` / `TIntList` are aliases for older code.
 
 ### [TbpInt64List](../src/Core/Classes/BpInt64List.pas)
 
@@ -699,7 +734,7 @@ Encoding is a single allocation. The decoder eats either alphabet, forgives miss
 
 ### [BpHashBobJenkins](../src/Core/Classes/BpHashBobJenkins.pas)
 
-The Bob Jenkins lookup3 hash (public domain), producing the same values as the RTL's `BobJenkinsHash`, which makes it a drop-in for code that expects them.
+The Bob Jenkins lookup3 hash (public domain), producing the same values as the RTL's `BobJenkinsHash` and as the reference C implementation, which makes it a drop-in for code that expects them. The tests anchor on the published self-test vector, `hashlittle('Four score and seven years ago', 30, 0) = $17770551`, so the interoperability is checked rather than asserted.
 
 ```pascal
 uses BpHashBobJenkins;
@@ -756,6 +791,29 @@ Memo1.Text := TbpObjectComparer.CompareObjectsAsString(lvBefore, lvAfter);
 ```
 
 Each difference is an `IPropDifference` with the property path and the old and new values, so it drops straight into an audit log or a "you changed these settings" dialog. Collection items can be matched by identity rather than position when they implement `IUniqueID` (`UniqueIdIntf.pas`), which is why old and new paths are separate fields - a moved item is reported as changed, not as two unrelated edits.
+
+### [BpKeyFold](../src/Core/Units/BpKeyFold.pas)
+
+Case folding for hash table keys. `AnsiUpperCase` allocates a string on every lookup, which is most of what a case-insensitive dictionary spends its time on; this folds through a table built once from the active code page instead, so a lookup allocates nothing.
+
+```pascal
+uses BpKeyFold;
+
+if BpFoldedSame(lvKey, lvOther) then ...        // same relation as AnsiSameText
+lvBucket := BpFoldedHash(lvKey) and lcMask;     // a hash that agrees with it
+```
+
+| Function | Returns |
+|----------|---------|
+| `BpFoldedHash(aKey)` | FNV-1a over the folded key, never negative |
+| `BpFoldedSame(aA, aB)` | case-insensitive equality |
+| `BpFoldChar(aCh)` | one character, upper cased |
+| `BpFoldInto(aKey, aBuf, aBufChars)` | folded length, or `-1` when it will not fit - for callers running their own hash over the result |
+| `BpKeyFoldUsable` | whether the table applies at all |
+
+The subtlety it exists to contain: folding one byte at a time is only equivalent to `AnsiCompareText` on a single byte code page, so on a DBCS code page or a Unicode compiler every function falls back to the RTL call. That matters because a hash and an equality test that disagree would file a key in one bucket and look for it in another - the key would be present and unfindable. Note also that `SysUtils.SameText` is ASCII only on the pre-2009 compilers and does not match a Cyrillic case pair at all; `BpFoldedSame` does.
+
+Used by [TbpStrDictionary](#tbpstrdictionary) and [TbpStringList](#tbpstringlist), and worth having on its own if you keep a hash table of your own.
 
 ### [BpVariantUtils](../src/Core/Units/BpVariantUtils.pas)
 

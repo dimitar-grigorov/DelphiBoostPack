@@ -11,6 +11,7 @@ type
     FFrequency: Int64;
     FStartTime: Int64;
     FStopTime: Int64;
+    FFirstMessage: Integer;   // where this test's own messages start
   protected
     procedure InitializeBenchmark;
     procedure StartBenchmark;
@@ -38,12 +39,17 @@ procedure TBpBaseBenchmarkTestCase.SetUp;
 begin
   inherited;
   InitializeBenchmark;
+  FFirstMessage := gvSuiteBenchmarkMessages.Count;
 end;
 
+// only this test's own lines, otherwise every TearDown reprints the whole run
 procedure TBpBaseBenchmarkTestCase.TearDown;
+var
+  i: Integer;
 begin
   inherited TearDown;
-  Status(gvSuiteBenchmarkMessages.Text);
+  for i := FFirstMessage to gvSuiteBenchmarkMessages.Count - 1 do
+    Status(gvSuiteBenchmarkMessages[i]);
 end;
 
 procedure TBpBaseBenchmarkTestCase.StartBenchmark;
