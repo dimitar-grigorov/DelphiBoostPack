@@ -8,7 +8,7 @@ unit BpHMACSHA256;
 interface
 
 uses
-  SysUtils, BpSHA256;
+  SysUtils, BpSHA256, BpCompat;
 
 type
   TbpHMACSHA256 = class

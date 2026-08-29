@@ -11,13 +11,9 @@ interface
 {$IFEND}
 
 uses
-  SysUtils;
+  SysUtils, BpCompat;
 
 type
-  {$IFNDEF Delphi_2007_UP}
-  TBytes = array of Byte;
-  {$ENDIF}
-
   TbpHashBobJenkins = class
   private
     FHash: Integer;

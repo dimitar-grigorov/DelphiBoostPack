@@ -12,7 +12,7 @@ unit BpSHA256;
 interface
 
 uses
-  SysUtils;
+  SysUtils, BpCompat;
 
 type
   TbpSHA256Digest = array[0..31] of Byte;

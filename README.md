@@ -13,7 +13,7 @@ HTTP, JSON, hash dictionaries, SHA-256, background tasks. Pure Pascal source, no
 
 Nothing to install, two ways in:
 
-- **Modular.** Put `src\Core\Classes` and `src\Core\Units` on your library path, or copy the units you use. A few want a companion: the dictionaries want `BpVariantUtils`, `BpHashBobJenkins` and `BpKeyFold`, `TbpStringList` wants `BpKeyFold`, `BpJson` wants `BpStringBuilder`, `BpHttpClient` and the hashes want `BpBase64`.
+- **Modular.** Put `src\Core\Classes` and `src\Core\Units` on your library path, or copy the units you use. A few want a companion: the dictionaries want `BpVariantUtils`, `BpHashBobJenkins` and `BpKeyFold`, `TbpStringList` wants `BpKeyFold`, `BpJson` wants `BpStringBuilder`, `BpHttpClient` and the hashes want `BpBase64`, and everything that touches `TBytes` wants `BpCompat`, which declares it for compilers older than 2007.
 - **One file.** Take a bundle from [dist/](dist/) instead. Each is self-contained, so do not also use the modular units it embeds.
 
 An HTTPS call and a JSON parse, on a 2007 compiler, with nothing else installed:
@@ -40,7 +40,7 @@ Worker thread, progress and completion events on the main thread, no `ProcessMes
 
 ## Why
 
-Rewriting a 300-unit legacy app just to get a `TDictionary` is not a plan. This is the missing RTL as loose units you can lift one at a time: it targets Delphi 2007 first and is written to compile unchanged from Delphi 7 to 11.3, so it goes wherever your codebase happens to live. The build and test scripts here drive Delphi 2007.
+Rewriting a 300-unit legacy app just to get a `TDictionary` is not a plan. This is the missing RTL as loose units you can lift one at a time: it targets Delphi 2007 first and is written to compile unchanged from Delphi 7 to 11.3, so it goes wherever your codebase happens to live. The scripts here build and test on Delphi 2007 and compile the whole library on Delphi 7, so the range is checked rather than claimed.
 
 Nearly every unit has a DUnit test unit behind it, and the crypto and hash units are checked against the published standard vectors (FIPS, RFC) and the Windows CryptoAPI, so the numbers match other implementations.
 
@@ -100,16 +100,20 @@ Full descriptions and examples in the [feature guide](docs/FEATURES.md).
 
 ## Building and testing
 
-The `.cmd` scripts at the repo root drive Delphi 2007 through MSBuild:
+The `.cmd` scripts at the repo root are thin wrappers over [tools/Build_Delphi.cmd](tools/Build_Delphi.cmd), which drives MSBuild for a `.dproj`, `dcc32` for a `.dpr`, and either compiler:
 
 ```
 Build_Main_D2007.cmd Release
+Build_Main_D7.cmd             compile every unit with Delphi 7
 RunTests_D2007.cmd            unit + integration
 RunTests_D2007.cmd /nointeg   offline run
 RunTests_D2007.cmd /bench     add the benchmarks
+tools\VerifyBundles.cmd /d7   compile the dist bundles standalone on Delphi 7
 ```
 
-`RunTests_D2007.cmd` builds the DUnit runner and runs it. See [tests/README.md](tests/README.md) for the breakdown, and note that the tests are also the most complete set of examples in the repo.
+`RunTests_D2007.cmd` builds the DUnit runner and runs it. See [tests/README.md](tests/README.md) for the breakdown, and note that the tests are also the most complete set of examples in the repo. The Delphi 7 claim is a compile gate, not a test run: DUnit is not part of that install, so `Build_Main_D7.cmd` compiles every unit through `src\DelphiBoostPack.dpr`, which uses them all.
+
+Add `/ci` to any of them to skip the pause on failure. The compilers are found from `BDS` and `DELPHI7`, then the registry, then the default install path.
 
 ## Contributing
 
