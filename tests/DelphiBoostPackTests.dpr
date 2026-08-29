@@ -79,7 +79,8 @@ uses
   BpKeyFoldTests in 'Core\BpKeyFoldTests.pas',
   BpKeyFold in '..\src\Core\Units\BpKeyFold.pas',
   BpStringListTests in 'Core\BpStringListTests.pas',
-  BpStringList in '..\src\Core\Classes\BpStringList.pas';
+  BpStringList in '..\src\Core\Classes\BpStringList.pas',
+  BpCompat in '..\src\Core\Units\BpCompat.pas';
 
 {$R *.RES}
 

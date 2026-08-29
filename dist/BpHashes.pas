@@ -2,12 +2,13 @@ unit BpHashes;
 
 // BpHashes.pas - GENERATED FILE, DO NOT EDIT.
 // Single-file bundle amalgamated from the DelphiBoostPack modular units:
+//   src\Core\Units\BpCompat.pas
 //   src\Core\Units\BpBase64.pas
 //   src\Core\Classes\BpSHA256.pas
 //   src\Core\Classes\BpMD5.pas
 //   src\Core\Classes\BpHMACSHA256.pas
 //   src\Core\Classes\BpPasswordHash.pas
-// Source commit ca6842a, generated 2026-08-29 by tools\Amalgamate.ps1.
+// Source commit 3fbb305, generated 2026-08-29 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   powershell -ExecutionPolicy Bypass -File tools\Amalgamate.ps1
 // Notes:
@@ -20,6 +21,17 @@ interface
 
 uses
   SysUtils, Classes, Windows;
+
+// ==================================================================
+// BpCompat.pas - interface
+// ==================================================================
+
+// TBytes for compilers before Delphi 2007, whose SysUtils has no such type.
+
+{$IF CompilerVersion < 18.0}
+type
+  TBytes = array of Byte;
+{$IFEND}
 
 // ==================================================================
 // BpBase64.pas - interface
@@ -187,6 +199,12 @@ function BpHashPassword(const aPassword: AnsiString; aIterations: Integer): stri
 function BpVerifyPassword(const aPassword: AnsiString; const aStored: string): Boolean;
 
 implementation
+
+// ==================================================================
+// BpCompat.pas - implementation
+// ==================================================================
+
+
 
 // ==================================================================
 // BpBase64.pas - implementation

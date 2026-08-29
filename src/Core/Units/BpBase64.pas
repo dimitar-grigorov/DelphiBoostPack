@@ -8,7 +8,7 @@ unit BpBase64;
 interface
 
 uses
-  SysUtils;
+  SysUtils, BpCompat;
 
 type
   EbpBase64 = class(Exception);

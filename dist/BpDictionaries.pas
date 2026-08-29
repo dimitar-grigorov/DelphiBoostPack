@@ -2,12 +2,13 @@ unit BpDictionaries;
 
 // BpDictionaries.pas - GENERATED FILE, DO NOT EDIT.
 // Single-file bundle amalgamated from the DelphiBoostPack modular units:
+//   src\Core\Units\BpCompat.pas
 //   src\Core\Units\BpKeyFold.pas
 //   src\Core\Classes\BpHashBobJenkins.pas
 //   src\Core\Units\BpVariantUtils.pas
 //   src\Core\Classes\BpStrDictionary.pas
 //   src\Core\Classes\BpIntDictionary.pas
-// Source commit ca6842a, generated 2026-08-29 by tools\Amalgamate.ps1.
+// Source commit 3fbb305, generated 2026-08-29 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   powershell -ExecutionPolicy Bypass -File tools\Amalgamate.ps1
 // Notes:
@@ -20,6 +21,17 @@ interface
 
 uses
   Windows, SysUtils, Variants, Classes;
+
+// ==================================================================
+// BpCompat.pas - interface
+// ==================================================================
+
+// TBytes for compilers before Delphi 2007, whose SysUtils has no such type.
+
+{$IF CompilerVersion < 18.0}
+type
+  TBytes = array of Byte;
+{$IFEND}
 
 // ==================================================================
 // BpKeyFold.pas - interface
@@ -59,10 +71,6 @@ function BpFoldInto(const aKey: string; var aBuf; aBufChars: Integer): Integer;
 
 
 type
-  {$IFNDEF Delphi_2007_UP}
-  TBytes = array of Byte;
-  {$ENDIF}
-
   TbpHashBobJenkins = class
   private
     FHash: Integer;
@@ -272,6 +280,12 @@ type
 function BpHashInt64(aKey: Int64): Integer;
 
 implementation
+
+// ==================================================================
+// BpCompat.pas - implementation
+// ==================================================================
+
+
 
 // ==================================================================
 // BpKeyFold.pas - implementation

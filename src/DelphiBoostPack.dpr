@@ -31,10 +31,13 @@ uses
   BpVariantUtils in 'Core\Units\BpVariantUtils.pas',
   StopWatch in 'Core\Units\StopWatch.pas',
   BpKeyFold in 'Core\Units\BpKeyFold.pas',
-  BpStringList in 'Core\Classes\BpStringList.pas';
+  BpStringList in 'Core\Classes\BpStringList.pas',
+  BpCompat in 'Core\Units\BpCompat.pas';
 
 begin
+  {$IF CompilerVersion > 15.0}
   System.ReportMemoryLeaksOnShutdown := True;
+  {$IFEND}
 
   Readln;
 end.
