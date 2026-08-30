@@ -4,7 +4,7 @@ unit BpJsonStandalone;
 // Single-file bundle amalgamated from the DelphiBoostPack modular units:
 //   src\Core\Classes\BpStringBuilder.pas
 //   src\Core\Classes\BpJson.pas
-// Source commit 0feec9e, generated 2026-08-29 by tools\Amalgamate.ps1.
+// Source commit c561b53, generated 2026-08-30 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   powershell -ExecutionPolicy Bypass -File tools\Amalgamate.ps1
 // Notes:
@@ -1275,7 +1275,12 @@ function TbpJsonValue.Find(const aName: string): TbpJsonValue;
 var
   lvIdx: Integer;
 begin
-  RequireKind(bjkObject);
+  // nil rather than a raise, so the whole TryGetX / GetXDef family stays safe
+  if FKind <> bjkObject then
+  begin
+    Result := nil;
+    Exit;
+  end;
   lvIdx := IndexOfName(aName);
   if lvIdx >= 0 then
     Result := FItems[lvIdx]
@@ -1285,8 +1290,7 @@ end;
 
 function TbpJsonValue.Contains(const aName: string): Boolean;
 begin
-  RequireKind(bjkObject);
-  Result := IndexOfName(aName) >= 0;
+  Result := (FKind = bjkObject) and (IndexOfName(aName) >= 0);
 end;
 
 function TbpJsonValue.Remove(const aName: string): Boolean;
@@ -1468,7 +1472,11 @@ begin
           while (lvPos <= lvLen) and (aPath[lvPos] >= '0') and
             (aPath[lvPos] <= '9') do
           begin
-            lvIdx := lvIdx * 10 + Ord(aPath[lvPos]) - Ord('0');
+            // clamp, or a long run of digits wraps into a plausible index
+            if lvIdx > (MaxInt - 9) div 10 then
+              lvIdx := MaxInt
+            else
+              lvIdx := lvIdx * 10 + Ord(aPath[lvPos]) - Ord('0');
             Inc(lvPos);
           end;
           if (lvPos > lvLen) or (aPath[lvPos] <> ']') or (lvPos = lvStart) then

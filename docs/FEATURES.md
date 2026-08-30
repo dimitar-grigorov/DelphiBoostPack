@@ -88,7 +88,7 @@ lvClient.AddHeader('X-Api-Version', '2');      // persistent, sent with every re
 lvClient.ClearHeaders;
 ```
 
-`AddHeader` replaces a name that is already set, and rejects a CR or LF in the name or value (and a colon in the name) with `EbpHttpClient` - otherwise a value taken from a config file or a database column could append headers of its own and override the `Authorization` the client set. `BearerToken` is checked the same way. Per-request headers go in the `aHeaders` argument as raw CRLF-separated lines and are merged on top of the persistent ones. Keep the token out of your config file by pulling it from [TbpCredentials](#tbpcredentials):
+`AddHeader` replaces a name that is already set, and rejects a CR or LF in the name or value (and a colon in the name) with `EbpHttpClient` - otherwise a value taken from a config file or a database column could append headers of its own and override the `Authorization` the client set. `BearerToken` is checked the same way. Per-request headers go in the `aHeaders` argument as raw CRLF-separated lines and are merged on top of the persistent ones, a name in both sent once with the per-request value. Keep the token out of your config file by pulling it from [TbpCredentials](#tbpcredentials):
 
 ```pascal
 lvClient.BearerToken := TbpCredentials.GetPassword('MyApp', 'api');
@@ -382,6 +382,8 @@ if lvItems <> nil then
 | `PathStrDef(aPath, aDefault)` | `aDefault` | `aDefault` |
 | `Find(aName)` / `FindPath(aPath)` | `nil` | `nil` |
 
+A lookup on a non-object answers as if the member were missing.
+
 Same four shapes for `Bool`, `Int` (`Int64`) and `Float`. `AsFloat` accepts an int; nothing else converts.
 
 #### Writing
@@ -418,8 +420,8 @@ lvUtc := BpISO8601ToDateTime('2026-07-24T12:34:56.789+03:00');  // UTC TDateTime
 if not BpTryISO8601ToDateTime(lvJson.GetStr('created_at'), lvCreated) then
   raise Exception.Create('bad timestamp');
 
-lvText := BpDateTimeToISO8601(lvUtc);                           // 2026-07-24T09:34:56Z
-lvLocal := BpDateTimeToISO8601Local(lvUtc);                     // 2026-07-24T12:34:56+03:00
+lvText := BpDateTimeToISO8601(lvUtc);                           // 2026-07-24T09:34:56.789Z
+lvLocal := BpDateTimeToISO8601Local(lvUtc);                     // 2026-07-24T12:34:56.789+03:00
 
 lvStamp := BpDateTimeToUnix(lvUtc);                             // Int64 seconds
 lvMillis := BpDateTimeToUnixMS(lvUtc);                          // Int64 milliseconds

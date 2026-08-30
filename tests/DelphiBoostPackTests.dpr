@@ -80,7 +80,9 @@ uses
   BpKeyFold in '..\src\Core\Units\BpKeyFold.pas',
   BpStringListTests in 'Core\BpStringListTests.pas',
   BpStringList in '..\src\Core\Classes\BpStringList.pas',
-  BpCompat in '..\src\Core\Units\BpCompat.pas';
+  BpCompat in '..\src\Core\Units\BpCompat.pas',
+  BpStopWatchTests in 'Core\BpStopWatchTests.pas',
+  StopWatch in '..\src\Core\Units\StopWatch.pas';
 
 {$R *.RES}
 

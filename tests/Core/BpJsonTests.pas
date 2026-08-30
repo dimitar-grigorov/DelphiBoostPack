@@ -60,6 +60,8 @@ type
     procedure TestRoundTripComplexDocument;
     procedure TestParseErrorsRaise;
     procedure TestTryParseReturnsFalse;
+    procedure TestLookupOnANonObject;
+    procedure TestFindPathOversizedIndex;
   end;
 
 implementation
@@ -740,6 +742,44 @@ begin
   lvValue := TbpJsonValue.CreateArray;
   try
     lvValue.SetInt('a', 1);
+  finally
+    lvValue.Free;
+  end;
+end;
+
+
+procedure TBpJsonTests.TestLookupOnANonObject;
+var
+  lvValue: TbpJsonValue;
+  lvStr: string;
+begin
+  lvValue := TbpJsonValue.Parse(gcSampleJson);
+  try
+    // the receiver is an array, so a member lookup misses rather than raising
+    CheckNull(lvValue.FindPath('tags').Find('name'), 'Find');
+    CheckFalse(lvValue.FindPath('tags').Contains('name'), 'Contains');
+    CheckFalse(lvValue.FindPath('tags').TryGetStr('name', lvStr), 'TryGetStr');
+    CheckEquals('fallback',
+      lvValue.FindPath('tags').GetStrDef('name', 'fallback'), 'GetStrDef');
+    // and so does a lookup on a scalar
+    CheckNull(lvValue.FindPath('name').Find('anything'), 'scalar receiver');
+  finally
+    lvValue.Free;
+  end;
+end;
+
+procedure TBpJsonTests.TestFindPathOversizedIndex;
+var
+  lvValue: TbpJsonValue;
+begin
+  lvValue := TbpJsonValue.Parse(gcSampleJson);
+  try
+    // the accumulator must clamp, not wrap into a valid index
+    CheckNull(lvValue.FindPath('tags[2147483648]'), 'past MaxInt');
+    CheckNull(lvValue.FindPath('tags[4294967296]'), 'past Cardinal');
+    CheckNull(lvValue.FindPath('tags[99999999999999999999]'), 'twenty digits');
+    CheckNull(lvValue.FindPath('tags[abc]'), 'not a number');
+    CheckNull(lvValue.FindPath('tags[]'), 'empty index');
   finally
     lvValue.Free;
   end;
