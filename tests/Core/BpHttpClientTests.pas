@@ -100,6 +100,15 @@ begin
   CheckEquals('X-Custom: two'#13#10'Authorization: Bearer abc123'#13#10 +
     'Accept: text/plain', FClient.BuildHeaders('Accept: text/plain'));
 
+  // a per-request name replaces the persistent one instead of joining it
+  CheckEquals('Authorization: Bearer abc123'#13#10'X-Custom: three',
+    FClient.BuildHeaders('X-Custom: three'), 'persistent header overridden');
+  CheckEquals('X-Custom: two'#13#10'Authorization: Bearer other',
+    FClient.BuildHeaders('Authorization: Bearer other'), 'bearer overridden');
+  // the name match ignores case and surrounding spaces
+  CheckEquals('Authorization: Bearer abc123'#13#10'x-custom : four',
+    FClient.BuildHeaders(' x-custom : four'), 'match is case and space insensitive');
+
   FClient.ClearHeaders;
   FClient.BearerToken := '';
   CheckEquals('', FClient.BuildHeaders(''), 'clear removes everything');

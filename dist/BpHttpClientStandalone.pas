@@ -5,7 +5,7 @@ unit BpHttpClientStandalone;
 //   src\Core\Units\BpCompat.pas
 //   src\Core\Units\BpBase64.pas
 //   src\Core\Classes\BpHttpClient.pas
-// Source commit 0feec9e, generated 2026-08-29 by tools\Amalgamate.ps1.
+// Source commit c561b53, generated 2026-08-30 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   powershell -ExecutionPolicy Bypass -File tools\Amalgamate.ps1
 // Notes:
@@ -304,7 +304,7 @@ function BpDownloadToStreamAsync(const aUrl: string; aDest: TStream;
   aMarshalToMainThread: Boolean = True): TbpHttpDownloadTask;
 
 function BpHttpResponseIsSuccess(const aResponse: TbpHttpResponse): Boolean;
-// decodes the body as UTF-8 (invalid input yields an empty string)
+// decodes the body as UTF-8; invalid bytes become U+FFFD, not an error
 function BpHttpResponseBodyAsUtf8(const aResponse: TbpHttpResponse): WideString;
 // value of a header line from a raw CRLF header block, '' when absent
 function BpHttpHeaderValue(const aHeaders, aName: string): string;
@@ -557,6 +557,37 @@ begin
   if aHeaders <> '' then
     aHeaders := aHeaders + #13#10;
   aHeaders := aHeaders + aLine;
+end;
+
+// True when a raw CRLF header block carries a line with this name
+function HeaderBlockHasName(const aHeaders, aName: string): Boolean;
+var
+  lvLines: TStringList;
+  lvLine, lvWanted: string;
+  i, lvColon: Integer;
+begin
+  Result := False;
+  if (aHeaders = '') or (aName = '') then
+    Exit;
+  lvWanted := LowerCase(aName);
+  lvLines := TStringList.Create;
+  try
+    lvLines.Text := aHeaders;
+    for i := 0 to lvLines.Count - 1 do
+    begin
+      lvLine := lvLines[i];
+      lvColon := Pos(':', lvLine);
+      if lvColon = 0 then
+        Continue;
+      if LowerCase(Trim(Copy(lvLine, 1, lvColon - 1))) = lvWanted then
+      begin
+        Result := True;
+        Exit;
+      end;
+    end;
+  finally
+    lvLines.Free;
+  end;
 end;
 
 // registered with the token so Cancel closes the handle of a blocked call
@@ -855,13 +886,17 @@ end;
 function TbpHttpClient.BuildHeaders(const aRequestHeaders: string): string;
 var
   i: Integer;
+  lvRequest: string;
 begin
   Result := '';
+  lvRequest := Trim(aRequestHeaders);
+  // a per-request line replaces the persistent one, rather than joining it
   for i := 0 to FHeaders.Count - 1 do
-    AppendHeaderLine(Result, FHeaders.Names[i] + ': ' + FHeaders.ValueFromIndex[i]);
-  if FBearerToken <> '' then
+    if not HeaderBlockHasName(lvRequest, FHeaders.Names[i]) then
+      AppendHeaderLine(Result, FHeaders.Names[i] + ': ' + FHeaders.ValueFromIndex[i]);
+  if (FBearerToken <> '') and not HeaderBlockHasName(lvRequest, 'Authorization') then
     AppendHeaderLine(Result, 'Authorization: Bearer ' + FBearerToken);
-  AppendHeaderLine(Result, Trim(aRequestHeaders));
+  AppendHeaderLine(Result, lvRequest);
 end;
 
 function TbpHttpClient.CreateSession: HINTERNET;

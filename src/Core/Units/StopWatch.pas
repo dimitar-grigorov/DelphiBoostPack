@@ -17,6 +17,9 @@ type
     function GetElapsedMilliseconds: Double;
     function GetElapsedTicks: Int64;
     function GetIsRunning: Boolean;
+    property ElapsedMilliseconds: Double read GetElapsedMilliseconds;
+    property ElapsedTicks: Int64 read GetElapsedTicks;
+    property IsRunning: Boolean read GetIsRunning;
   end;
 
 type
