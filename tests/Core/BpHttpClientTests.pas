@@ -131,12 +131,20 @@ begin
 end;
 
 procedure TBpHttpClientTests.TestBasicAuth;
+var
+  lvPassword: WideString;
 begin
   FClient.BearerToken := 'stale-token';
   // 'user:pass' in Base64 is dXNlcjpwYXNz
   FClient.SetBasicAuth('user', 'pass');
   CheckEquals('Authorization: Basic dXNlcjpwYXNz', FClient.BuildHeaders(''),
     'basic auth header expected and bearer token cleared');
+
+  // RFC 7617 is UTF-8, so 'user:pa' + U+00DF is 75736572 3a7061 c39f
+  lvPassword := 'pa' + WideChar($00DF);
+  FClient.SetBasicAuth('user', lvPassword);
+  CheckEquals('Authorization: Basic dXNlcjpwYcOf', FClient.BuildHeaders(''),
+    'non-ascii credentials go out as UTF-8, not the machine code page');
 end;
 
 procedure TBpHttpClientTests.TestMethodToString;

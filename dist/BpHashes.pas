@@ -8,7 +8,7 @@ unit BpHashes;
 //   src\Core\Classes\BpMD5.pas
 //   src\Core\Classes\BpHMACSHA256.pas
 //   src\Core\Classes\BpPasswordHash.pas
-// Source commit b865c03, generated 2026-08-30 by tools\Amalgamate.ps1.
+// Source commit 1a10ff5, generated 2026-08-30 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
 // One bundle per project: two that share a helper declare it twice.
@@ -18,7 +18,7 @@ unit BpHashes;
 interface
 
 uses
-  SysUtils, Classes, Windows;
+  SysUtils, Windows, Classes;
 
 // Range and overflow checking as the consumer set it: a unit that turns
 // either off is bracketed, so its setting ends where the unit does.
@@ -28,8 +28,9 @@ uses
 // ------------------ begin BpCompat.pas interface ------------------
 
 // TBytes for compilers before Delphi 2007, whose SysUtils has no such type.
+// 18.5 is Delphi 2007; 18.0 is Delphi 2006, which does not have it either.
 
-{$IF CompilerVersion < 18.0}
+{$IF CompilerVersion < 18.5}
 type
   TBytes = array of Byte;
 {$IFEND}
@@ -41,6 +42,8 @@ type
 // is a single allocation; standard pads with '=', url-safe omits it. Decoding
 // accepts either alphabet, tolerates missing padding and skips whitespace
 // (so MIME line breaks are fine); any other character raises EbpBase64.
+// The AnsiString overloads encode bytes, they do not transcode: for text use
+// the Utf8 functions, which encode UTF-8 on every compiler.
 
 type
   EbpBase64 = class(Exception);
@@ -53,6 +56,11 @@ function Base64UrlEncode(const aBytes: TBytes): string; overload;
 function Base64UrlEncode(const aText: AnsiString): string; overload;
 function Base64Decode(const aBase64: string): TBytes;
 function Base64DecodeStr(const aBase64: string): AnsiString;
+
+// text in, UTF-8 bytes on the wire, on every compiler
+function Base64EncodeUtf8(const aText: WideString): string;
+function Base64UrlEncodeUtf8(const aText: WideString): string;
+function Base64DecodeUtf8(const aBase64: string): WideString;
 // ------------------- end BpBase64.pas interface -------------------
 
 // ------------------ begin BpSHA256.pas interface ------------------
@@ -215,6 +223,7 @@ const
   gcInvalid = -1;
   gcWhitespace = -2;
   gcPadding = -3;
+  gcNoBadChars = $00000008; // MB_ERR_INVALID_CHARS, missing in D2007's Windows.pas
 
 var
   gvDecodeTable: array[0..255] of ShortInt;
@@ -247,6 +256,9 @@ begin
   Result := '';
   if aSize <= 0 then
     Exit;
+  // 3 bytes in, 4 out: past this the length arithmetic below would wrap
+  if aSize > (MaxInt div 4) * 3 then
+    raise EbpBase64.Create('Input too large to Base64-encode');
   lvFull := aSize div 3;
   lvRest := aSize mod 3;
   lvOutLen := lvFull * 4;
@@ -411,6 +423,56 @@ begin
     Exit;
   SetLength(Result, Length(lvBytes));
   Move(lvBytes[0], Pointer(Result)^, Length(lvBytes));
+end;
+
+// Not UTF8Encode: before Delphi 2009 it stops at three bytes and breaks
+// surrogate pairs.
+function WideToUtf8(const aText: WideString): AnsiString;
+var
+  lvLen: Integer;
+begin
+  Result := '';
+  if aText = '' then
+    Exit;
+  lvLen := WideCharToMultiByte(CP_UTF8, 0, PWideChar(aText), Length(aText),
+    nil, 0, nil, nil);
+  if lvLen <= 0 then
+    raise EbpBase64.Create('Text cannot be encoded as UTF-8');
+  SetLength(Result, lvLen);
+  WideCharToMultiByte(CP_UTF8, 0, PWideChar(aText), Length(aText),
+    PAnsiChar(Result), lvLen, nil, nil);
+end;
+
+function Utf8ToWide(const aBytes: TBytes): WideString;
+var
+  lvLen: Integer;
+begin
+  Result := '';
+  if Length(aBytes) = 0 then
+    Exit;
+  // gcNoBadChars: bad UTF-8 fails instead of turning into U+FFFD
+  lvLen := MultiByteToWideChar(CP_UTF8, gcNoBadChars, PAnsiChar(@aBytes[0]),
+    Length(aBytes), nil, 0);
+  if lvLen <= 0 then
+    raise EbpBase64.Create('Base64 data is not valid UTF-8');
+  SetLength(Result, lvLen);
+  MultiByteToWideChar(CP_UTF8, gcNoBadChars, PAnsiChar(@aBytes[0]),
+    Length(aBytes), PWideChar(Result), lvLen);
+end;
+
+function Base64EncodeUtf8(const aText: WideString): string;
+begin
+  Result := Base64Encode(WideToUtf8(aText));
+end;
+
+function Base64UrlEncodeUtf8(const aText: WideString): string;
+begin
+  Result := Base64UrlEncode(WideToUtf8(aText));
+end;
+
+function Base64DecodeUtf8(const aBase64: string): WideString;
+begin
+  Result := Utf8ToWide(Base64Decode(aBase64));
 end;
 // ---------------- end BpBase64.pas implementation -----------------
 

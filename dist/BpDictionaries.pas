@@ -8,7 +8,7 @@ unit BpDictionaries;
 //   src\Core\Units\BpVariantUtils.pas
 //   src\Core\Classes\BpStrDictionary.pas
 //   src\Core\Classes\BpIntDictionary.pas
-// Source commit b865c03, generated 2026-08-30 by tools\Amalgamate.ps1.
+// Source commit 1a10ff5, generated 2026-08-30 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
 // One bundle per project: two that share a helper declare it twice.
@@ -28,8 +28,9 @@ uses
 // ------------------ begin BpCompat.pas interface ------------------
 
 // TBytes for compilers before Delphi 2007, whose SysUtils has no such type.
+// 18.5 is Delphi 2007; 18.0 is Delphi 2006, which does not have it either.
 
-{$IF CompilerVersion < 18.0}
+{$IF CompilerVersion < 18.5}
 type
   TBytes = array of Byte;
 {$IFEND}
@@ -635,9 +636,8 @@ const
 const
   gcNoBestFit = $00000400; // WC_NO_BEST_FIT_CHARS, missing in D7's Windows.pas
 
-// True when every character survives the ANSI code page. Below Delphi 2009 a
-// string is ANSI, so without this a code point the page cannot carry would be
-// replaced by '?' and still reported as a successful conversion.
+// True when every character survives the ANSI code page, so a code point it
+// cannot carry fails instead of arriving as '?'.
 function TryWideToAnsi(const aValue: WideString; out aResult: AnsiString): Boolean;
 var
   lvLen: Integer;
@@ -677,9 +677,8 @@ begin
     end;
     gcVarWord64:
     begin
-      // read the payload raw: assigning the variant goes through Double on
-      // D2007, which loses bits. A negative reading means bit 63 is set, so
-      // the unsigned value is past High(Int64) and does not fit.
+      // raw payload: a variant assignment goes through Double on D2007 and
+      // loses bits. Negative means bit 63 set, so it is past High(Int64).
       aResult := TVarData(aValue).VInt64;
       Result := aResult >= 0;
       if not Result then

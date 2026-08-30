@@ -45,9 +45,8 @@ const
 const
   gcNoBestFit = $00000400; // WC_NO_BEST_FIT_CHARS, missing in D7's Windows.pas
 
-// True when every character survives the ANSI code page. Below Delphi 2009 a
-// string is ANSI, so without this a code point the page cannot carry would be
-// replaced by '?' and still reported as a successful conversion.
+// True when every character survives the ANSI code page, so a code point it
+// cannot carry fails instead of arriving as '?'.
 function TryWideToAnsi(const aValue: WideString; out aResult: AnsiString): Boolean;
 var
   lvLen: Integer;
@@ -87,9 +86,8 @@ begin
     end;
     gcVarWord64:
     begin
-      // read the payload raw: assigning the variant goes through Double on
-      // D2007, which loses bits. A negative reading means bit 63 is set, so
-      // the unsigned value is past High(Int64) and does not fit.
+      // raw payload: a variant assignment goes through Double on D2007 and
+      // loses bits. Negative means bit 63 set, so it is past High(Int64).
       aResult := TVarData(aValue).VInt64;
       Result := aResult >= 0;
       if not Result then
