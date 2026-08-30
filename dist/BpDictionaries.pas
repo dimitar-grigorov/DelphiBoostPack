@@ -8,23 +8,24 @@ unit BpDictionaries;
 //   src\Core\Units\BpVariantUtils.pas
 //   src\Core\Classes\BpStrDictionary.pas
 //   src\Core\Classes\BpIntDictionary.pas
-// Source commit 4658eb7, generated 2026-08-30 by tools\Amalgamate.ps1.
+// Source commit 53eca34, generated 2026-08-30 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
-// Notes:
-// - use at most one bundle per project; two bundles embedding the same
-//   helper unit would declare duplicate identifiers
-// - unit-wide compiler directives of embedded units (e.g. {$Q-} in the
-//   hash units) apply from their position to the end of this file
+// One bundle per project: two that share a helper declare it twice.
+
+{$DEFINE BPAMALGAMATION}
 
 interface
 
 uses
   Windows, SysUtils, Variants, Classes;
 
-// ==================================================================
-// BpCompat.pas - interface
-// ==================================================================
+// Range and overflow checking as the consumer set it: a unit that turns
+// either off is bracketed, so its setting ends where the unit does.
+{$IFOPT R+}{$DEFINE BPAMALG_R}{$ELSE}{$UNDEF BPAMALG_R}{$ENDIF}
+{$IFOPT Q+}{$DEFINE BPAMALG_Q}{$ELSE}{$UNDEF BPAMALG_Q}{$ENDIF}
+
+// ------------------ begin BpCompat.pas interface ------------------
 
 // TBytes for compilers before Delphi 2007, whose SysUtils has no such type.
 
@@ -32,10 +33,9 @@ uses
 type
   TBytes = array of Byte;
 {$IFEND}
+// ------------------- end BpCompat.pas interface -------------------
 
-// ==================================================================
-// BpKeyFold.pas - interface
-// ==================================================================
+// ----------------- begin BpKeyFold.pas interface ------------------
 
 // Case folding for hash keys without the AnsiUpperCase temporary: a table
 // built once from the active code page. Byte-at-a-time folding is only valid
@@ -56,10 +56,9 @@ function BpFoldedSame(const aA, aB: string): Boolean;
 // folds aKey into aBuf for a caller running its own hash; the folded length,
 // or -1 when it will not fit or the table does not apply
 function BpFoldInto(const aKey: string; var aBuf; aBufChars: Integer): Integer;
+// ------------------ end BpKeyFold.pas interface -------------------
 
-// ==================================================================
-// BpHashBobJenkins.pas - interface
-// ==================================================================
+// -------------- begin BpHashBobJenkins.pas interface --------------
 
 // Bob Jenkins lookup3 hash (public domain) for Delphi 7/2007+, seeded to
 // interoperate with the RTL's BobJenkinsHash. Hashing a string hashes its
@@ -95,10 +94,10 @@ type
     class function GetHashValue(const aData; aLength: Integer; aInitialValue: Integer = 0): Integer; overload;
       {$IFDEF Delphi_2007_UP} static; inline; {$ENDIF}
   end;
+{$IFDEF BPAMALG_R}{$R+}{$ELSE}{$R-}{$ENDIF}{$IFDEF BPAMALG_Q}{$Q+}{$ELSE}{$Q-}{$ENDIF}
+// --------------- end BpHashBobJenkins.pas interface ---------------
 
-// ==================================================================
-// BpVariantUtils.pas - interface
-// ==================================================================
+// --------------- begin BpVariantUtils.pas interface ---------------
 
 // Strict Variant-to-native conversions shared by the Bp dictionary units.
 //
@@ -116,10 +115,9 @@ function BpTryVarToStr(const aValue: Variant; out aResult: string): Boolean;
 function BpTryVarToBool(const aValue: Variant; out aResult: Boolean): Boolean;
 function BpTryVarToFloat(const aValue: Variant; out aResult: Double): Boolean;
 function BpTryVarToIntArray(const aValue: Variant; out aResult: TbpIntegerDynArray): Boolean;
+// ---------------- end BpVariantUtils.pas interface ----------------
 
-// ==================================================================
-// BpStrDictionary.pas - interface
-// ==================================================================
+// -------------- begin BpStrDictionary.pas interface ---------------
 
 // String-key dictionary for Delphi 7/2007+ (no generics), TDictionary-style API.
 // Open addressing with linear probing, power-of-two capacity, backward-shift
@@ -198,10 +196,9 @@ type
     // raises EbpStrDictionary on read of a missing key; write acts as AddOrSet
     property Items[const aKey: string]: Variant read GetItem write SetItem; default;
   end;
+// --------------- end BpStrDictionary.pas interface ----------------
 
-// ==================================================================
-// BpIntDictionary.pas - interface
-// ==================================================================
+// -------------- begin BpIntDictionary.pas interface ---------------
 
 // Int64-key dictionary for Delphi 7/2007+ (no generics), same open-addressing
 // engine as TbpStrDictionary. Keys go through the Thomas Wang 64-bit mix;
@@ -278,18 +275,17 @@ type
 
 // Thomas Wang 64-bit to 32-bit hash, exposed for reuse and benchmarking
 function BpHashInt64(aKey: Int64): Integer;
+{$IFDEF BPAMALG_R}{$R+}{$ELSE}{$R-}{$ENDIF}{$IFDEF BPAMALG_Q}{$Q+}{$ELSE}{$Q-}{$ENDIF}
+// --------------- end BpIntDictionary.pas interface ----------------
 
 implementation
 
-// ==================================================================
-// BpCompat.pas - implementation
-// ==================================================================
+// --------------- begin BpCompat.pas implementation ----------------
 
 
+// ---------------- end BpCompat.pas implementation -----------------
 
-// ==================================================================
-// BpKeyFold.pas - implementation
-// ==================================================================
+// --------------- begin BpKeyFold.pas implementation ---------------
 
 var
   gvKfUpcase: array[0..255] of Char;
@@ -387,12 +383,10 @@ begin
     lvOut[i - 1] := gvKfUpcase[Ord(aKey[i]) and $FF];
   Result := lvLen;
 end;
+// ---------------- end BpKeyFold.pas implementation ----------------
 
-// ==================================================================
-// BpHashBobJenkins.pas - implementation
-// ==================================================================
+// ----------- begin BpHashBobJenkins.pas implementation ------------
 
-// lookup3 is defined on wrapping arithmetic, so the checks stay off here
 {$Q-}
 {$R-}
 
@@ -618,10 +612,10 @@ begin
   Final(a, b, c);
   Result := Integer(c);
 end;
+{$IFDEF BPAMALG_R}{$R+}{$ELSE}{$R-}{$ENDIF}{$IFDEF BPAMALG_Q}{$Q+}{$ELSE}{$Q-}{$ENDIF}
+// ------------ end BpHashBobJenkins.pas implementation -------------
 
-// ==================================================================
-// BpVariantUtils.pas - implementation
-// ==================================================================
+// ------------ begin BpVariantUtils.pas implementation -------------
 
 {$IF CompilerVersion < 20}
 const
@@ -715,10 +709,9 @@ begin
     end;
   Result := True;
 end;
+// ------------- end BpVariantUtils.pas implementation --------------
 
-// ==================================================================
-// BpStrDictionary.pas - implementation
-// ==================================================================
+// ------------ begin BpStrDictionary.pas implementation ------------
 
 // per-unit names so amalgamated bundles can embed both dictionaries
 const
@@ -1193,10 +1186,9 @@ begin
   if not Result then
     aValues := nil;
 end;
+// ------------- end BpStrDictionary.pas implementation -------------
 
-// ==================================================================
-// BpIntDictionary.pas - implementation
-// ==================================================================
+// ------------ begin BpIntDictionary.pas implementation ------------
 
 // per-unit names so amalgamated bundles can embed both dictionaries
 const
@@ -1626,5 +1618,7 @@ begin
   if not Result then
     aValue := 0;
 end;
+{$IFDEF BPAMALG_R}{$R+}{$ELSE}{$R-}{$ENDIF}{$IFDEF BPAMALG_Q}{$Q+}{$ELSE}{$Q-}{$ENDIF}
+// ------------- end BpIntDictionary.pas implementation -------------
 
 end.

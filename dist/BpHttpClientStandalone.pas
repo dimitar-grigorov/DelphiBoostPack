@@ -5,23 +5,19 @@ unit BpHttpClientStandalone;
 //   src\Core\Units\BpCompat.pas
 //   src\Core\Units\BpBase64.pas
 //   src\Core\Classes\BpHttpClient.pas
-// Source commit 4658eb7, generated 2026-08-30 by tools\Amalgamate.ps1.
+// Source commit 53eca34, generated 2026-08-30 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
-// Notes:
-// - use at most one bundle per project; two bundles embedding the same
-//   helper unit would declare duplicate identifiers
-// - unit-wide compiler directives of embedded units (e.g. {$Q-} in the
-//   hash units) apply from their position to the end of this file
+// One bundle per project: two that share a helper declare it twice.
+
+{$DEFINE BPAMALGAMATION}
 
 interface
 
 uses
   SysUtils, Classes, Windows, Messages, WinInet;
 
-// ==================================================================
-// BpCompat.pas - interface
-// ==================================================================
+// ------------------ begin BpCompat.pas interface ------------------
 
 // TBytes for compilers before Delphi 2007, whose SysUtils has no such type.
 
@@ -29,10 +25,9 @@ uses
 type
   TBytes = array of Byte;
 {$IFEND}
+// ------------------- end BpCompat.pas interface -------------------
 
-// ==================================================================
-// BpBase64.pas - interface
-// ==================================================================
+// ------------------ begin BpBase64.pas interface ------------------
 
 // Base64 encode/decode (RFC 4648), standard and url-safe alphabets. Encoding
 // is a single allocation; standard pads with '=', url-safe omits it. Decoding
@@ -50,10 +45,9 @@ function Base64UrlEncode(const aBytes: TBytes): string; overload;
 function Base64UrlEncode(const aText: AnsiString): string; overload;
 function Base64Decode(const aBase64: string): TBytes;
 function Base64DecodeStr(const aBase64: string): AnsiString;
+// ------------------- end BpBase64.pas interface -------------------
 
-// ==================================================================
-// BpHttpClient.pas - interface
-// ==================================================================
+// ---------------- begin BpHttpClient.pas interface ----------------
 
 // HTTP/HTTPS over WinInet for Delphi 7/2007+. TLS comes from Schannel, so no
 // OpenSSL DLLs to ship. Cancellable sync verbs, streaming downloads with
@@ -318,18 +312,16 @@ function BpClassifyHttpError(aWinInetError: DWORD; aHttpStatus: Integer): string
 const
   // WinInet ERROR_INTERNET_OPERATION_CANCELLED, missing from D2007's WinInet.pas
   gcErrOperationCancelled = 12017;
+// ----------------- end BpHttpClient.pas interface -----------------
 
 implementation
 
-// ==================================================================
-// BpCompat.pas - implementation
-// ==================================================================
+// --------------- begin BpCompat.pas implementation ----------------
 
 
+// ---------------- end BpCompat.pas implementation -----------------
 
-// ==================================================================
-// BpBase64.pas - implementation
-// ==================================================================
+// --------------- begin BpBase64.pas implementation ----------------
 
 const
   gcBase64Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
@@ -535,10 +527,9 @@ begin
   SetLength(Result, Length(lvBytes));
   Move(lvBytes[0], Pointer(Result)^, Length(lvBytes));
 end;
+// ---------------- end BpBase64.pas implementation -----------------
 
-// ==================================================================
-// BpHttpClient.pas - implementation
-// ==================================================================
+// ------------- begin BpHttpClient.pas implementation --------------
 
 const
   gcBufferSize = 8192;
@@ -1816,6 +1807,7 @@ begin
       Result := 'Unknown error';
   end;
 end;
+// -------------- end BpHttpClient.pas implementation ---------------
 
 initialization
   // from BpBase64.pas

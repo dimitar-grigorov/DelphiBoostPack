@@ -870,6 +870,8 @@ They are generated from the modular units, SQLite amalgamation style, by [tools/
 pwsh -NoProfile -File tools\Amalgamate.ps1
 ```
 
+A unit that turns range or overflow checking off, the way the hash units do, is bracketed in the bundle: its setting is restored at the end of the unit instead of running on to the end of the file, so your own `{$R+}` survives.
+
 One catch: two bundles that embed the same helper declare its identifiers twice, and which one you get then depends on `uses` order - `EbpBase64` raised inside one is not the `EbpBase64` the other one catches. Today that affects exactly one pair, `BpHashes` and `BpHttpClientStandalone`, since both embed `BpBase64`; use one or the other. The same clash appears if you mix a bundle with the modular units it already contains.
 
 [tools/VerifyBundles.cmd](../tools/VerifyBundles.cmd) compiles each bundle on its own and runs a smoke test against known-answer vectors, so what ships is known to build and to be correct.

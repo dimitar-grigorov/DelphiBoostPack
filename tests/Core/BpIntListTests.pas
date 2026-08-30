@@ -78,12 +78,30 @@ type
     procedure TestLoadFromStreamWithInvalidFormat;
     procedure TestSaveToStreamBasic;
     procedure TestSaveToStreamEmptyList;
+    procedure TestBinarySearchOnUnsortedListRaises;
+    procedure TestSortThenBinarySearch;
+    procedure TestSortOrganPipe;
+    procedure TestFileRoundTripBetweenLists;
   end;
 
 implementation
 
 uses
   Windows;
+
+var
+  gvFileCounter: Integer = 0;
+
+// a fixture path nothing else can claim, so two runs at once do not collide
+function TempFilePath(const aName: string): string;
+var
+  lvDir: array[0..MAX_PATH] of Char;
+begin
+  SetString(Result, lvDir, GetTempPath(Length(lvDir), lvDir));
+  Inc(gvFileCounter);
+  Result := Format('%sBpIntList_%d_%d_%s', [Result, GetCurrentProcessId,
+    gvFileCounter, aName]);
+end;
 
 procedure TBpIntListTests.SetUp;
 begin
@@ -534,7 +552,7 @@ var
   FileName: string;
   SavedText: TStringList;
 begin
-  FileName := 'testfile.txt';
+  FileName := TempFilePath('testfile.txt');
   SavedText := TStringList.Create;
   try
     SavedText.Text := '1,2,3';
@@ -565,7 +583,7 @@ var
   FileName: string;
   SavedText: TStringList;
 begin
-  FileName := 'savetofiletest.txt';
+  FileName := TempFilePath('savetofiletest.txt');
   FBpIntList.Add(1);
   FBpIntList.Add(2);
   FBpIntList.Add(3);
@@ -587,7 +605,7 @@ var
   FileName: string;
   SavedText: TStringList;
 begin
-  FileName := 'delimitertest.txt';
+  FileName := TempFilePath('delimitertest.txt');
   FBpIntList.Delimiter := ';';
   FBpIntList.Add(1);
   FBpIntList.Add(2);
@@ -610,7 +628,7 @@ var
   FileName: string;
   SavedText: TStringList;
 begin
-  FileName := 'emptylisttest.txt';
+  FileName := TempFilePath('emptylisttest.txt');
   FBpIntList.SaveToFile(FileName);
 
   SavedText := TStringList.Create;
@@ -628,7 +646,7 @@ var
   FileName: string;
   SavedText: TStringList;
 begin
-  FileName := 'invalidformat.txt';
+  FileName := TempFilePath('invalidformat.txt');
   SavedText := TStringList.Create;
   try
     SavedText.Text := 'not,a,number';
@@ -823,6 +841,80 @@ begin
     Check(FBpIntList.Items[i - 1] <= FBpIntList.Items[i], 'the list stays ordered');
 end;
 
+
+procedure TBpIntListTests.TestBinarySearchOnUnsortedListRaises;
+var
+  lvFound: Integer;
+begin
+  FBpIntList.Add(30);
+  FBpIntList.Add(10);
+  // a bare Sort orders the values but does not set the flag BinarySearch wants
+  FBpIntList.Sort;
+  try
+    FBpIntList.BinarySearch(10, lvFound);
+    Fail('BinarySearch must refuse a list that is not marked Sorted');
+  except
+    // narrow, or Fail is caught by its own handler
+    on E: EListError do
+      ; // expected
+  end;
+end;
+
+procedure TBpIntListTests.TestSortThenBinarySearch;
+var
+  lvFound: Integer;
+begin
+  // the FEATURES.md flow: Sorted := True, not a bare Sort, then search
+  FBpIntList.Add(30);
+  FBpIntList.Add(10);
+  FBpIntList.Add(20);
+  FBpIntList.Sorted := True;
+  CheckTrue(FBpIntList.BinarySearch(20, lvFound), '20 is in the list');
+  CheckEquals(1, lvFound);
+  CheckFalse(FBpIntList.BinarySearch(25, lvFound), '25 is not');
+  CheckEquals(2, lvFound, 'a miss reports where it would go');
+end;
+
+procedure TBpIntListTests.TestSortOrganPipe;
+const
+  lcCount = 200000;
+var
+  i: Integer;
+begin
+  // organ pipe: the shape that made the old recursion go quadratic and blow
+  // the stack. Anything but introsort dies here rather than failing an assert.
+  for i := 0 to lcCount - 1 do
+    if i < lcCount div 2 then
+      FBpIntList.Add(i)
+    else
+      FBpIntList.Add(lcCount - i);
+  FBpIntList.Sort;
+  CheckEquals(lcCount, FBpIntList.Count);
+  for i := 1 to FBpIntList.Count - 1 do
+    if FBpIntList.Items[i - 1] > FBpIntList.Items[i] then
+      Fail(Format('out of order at %d', [i]));
+end;
+
+procedure TBpIntListTests.TestFileRoundTripBetweenLists;
+var
+  lvFileName: string;
+  lvOther: TbpIntList;
+  i: Integer;
+begin
+  lvFileName := TempFilePath('roundtrip.txt');
+  for i := 1 to 50 do
+    FBpIntList.Add(i * 7 - 100);
+  lvOther := TbpIntList.Create;
+  try
+    FBpIntList.SaveToFile(lvFileName);
+    lvOther.LoadFromFile(lvFileName);
+    CheckEquals(FBpIntList.Count, lvOther.Count, 'same count after the round trip');
+    CheckEquals(FBpIntList.CommaText, lvOther.CommaText, 'same values in the same order');
+  finally
+    lvOther.Free;
+    SysUtils.DeleteFile(lvFileName);
+  end;
+end;
 
 initialization
   RegisterTest(TBpIntListTests.Suite);
