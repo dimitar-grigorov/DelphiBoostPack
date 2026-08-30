@@ -40,6 +40,9 @@ const
   lcRequestComplete     = 100;
   lcRedirect            = 110;
   lcStateChange         = 200;
+  lcCookieSent          = 320;
+  lcCookieReceived      = 321;
+  lcCookieHistory       = 327;
 
 // the callback hands over a NUL terminated buffer
 function TextInfo(const aText: string): PChar;
@@ -105,6 +108,10 @@ begin
   CheckEquals('', TbpHttpTrace.StatusText(lcHandleClosing, nil, 0));
   CheckEquals('', TbpHttpTrace.StatusText(lcRequestComplete, nil, 0));
   CheckEquals('', TbpHttpTrace.StatusText(lcStateChange, nil, 0));
+  // the cookie and privacy family, 320 to 327
+  CheckEquals('', TbpHttpTrace.StatusText(lcCookieSent, nil, 0));
+  CheckEquals('', TbpHttpTrace.StatusText(lcCookieReceived, nil, 0));
+  CheckEquals('', TbpHttpTrace.StatusText(lcCookieHistory, nil, 0));
 end;
 
 procedure TBpHttpTraceTests.TestUnknownStatus;
@@ -144,6 +151,14 @@ begin
   // bare authority, no trailing slash
   CheckEquals('https://example.com',
     TbpHttpTrace.SanitizeUrl('https://user:pass@example.com'));
+
+  // a query or a fragment ends the authority just like a path does
+  CheckEquals('https://example.com?to=a@b.com',
+    TbpHttpTrace.SanitizeUrl('https://example.com?to=a@b.com'));
+  CheckEquals('https://example.com#a@b',
+    TbpHttpTrace.SanitizeUrl('https://example.com#a@b'));
+  CheckEquals('https://example.com?x=1',
+    TbpHttpTrace.SanitizeUrl('https://user:pass@example.com?x=1'));
 end;
 
 initialization

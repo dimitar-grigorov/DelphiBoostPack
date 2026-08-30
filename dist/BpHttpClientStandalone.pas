@@ -5,9 +5,9 @@ unit BpHttpClientStandalone;
 //   src\Core\Units\BpCompat.pas
 //   src\Core\Units\BpBase64.pas
 //   src\Core\Classes\BpHttpClient.pas
-// Source commit c561b53, generated 2026-08-30 by tools\Amalgamate.ps1.
+// Source commit 0fe68c8, generated 2026-08-30 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
-//   powershell -ExecutionPolicy Bypass -File tools\Amalgamate.ps1
+//   pwsh -NoProfile -File tools\Amalgamate.ps1
 // Notes:
 // - use at most one bundle per project; two bundles embedding the same
 //   helper unit would declare duplicate identifiers
@@ -844,6 +844,7 @@ var
   lvHostBuffer: array[0..INTERNET_MAX_HOST_NAME_LENGTH] of Char;
   lvPathBuffer: array[0..INTERNET_MAX_PATH_LENGTH] of Char;
   lvExtraBuffer: array[0..INTERNET_MAX_PATH_LENGTH] of Char;
+  lvHash: Integer;
 begin
   Result := False;
 
@@ -863,9 +864,19 @@ begin
   if not InternetCrackUrl(PChar(aUrl), Length(aUrl), 0, lvComponents) then
     Exit;
 
+  // an ftp, file or mailto url must not become an http request to its host
+  if not (lvComponents.nScheme in [INTERNET_SCHEME_HTTP, INTERNET_SCHEME_HTTPS]) then
+    Exit;
+
   aServerName := lvComponents.lpszHostName;
+  if aServerName = '' then
+    Exit;
   // keep the query string attached to the resource
   aResource := string(lvComponents.lpszUrlPath) + string(lvComponents.lpszExtraInfo);
+  // the fragment is client side only, it never goes into the request line
+  lvHash := Pos('#', aResource);
+  if lvHash > 0 then
+    SetLength(aResource, lvHash - 1);
   if aResource = '' then
     aResource := '/';
 
@@ -1764,7 +1775,10 @@ const
   lcErrCertDateInvalid   = 12037;
   lcErrCertCnInvalid     = 12038;
   lcErrInvalidCa         = 12045;
-  lcErrSecureFailure     = 12175;
+  lcErrSecCertErrors     = 12055;
+  lcErrSecureChannel     = 12157;
+  lcErrSecInvalidCert    = 12169;
+  lcErrSecCertRevoked    = 12170;
 begin
   if aWinInetError <> 0 then
   begin
@@ -1779,7 +1793,8 @@ begin
         Result := 'Cannot connect to server';
       lcErrConnectionReset:
         Result := 'Connection lost';
-      lcErrCertDateInvalid, lcErrCertCnInvalid, lcErrInvalidCa, lcErrSecureFailure:
+      lcErrCertDateInvalid, lcErrCertCnInvalid, lcErrInvalidCa, lcErrSecCertErrors,
+      lcErrSecureChannel, lcErrSecInvalidCert, lcErrSecCertRevoked:
         Result := 'SSL/TLS certificate error';
     else
       Result := 'Network error';

@@ -1,7 +1,7 @@
 # Amalgamate.ps1 - generates single-file "carry one .pas" bundles in dist\
 # from the modular units under src\Core, SQLite amalgamation style.
 #
-# Usage:  powershell -ExecutionPolicy Bypass -File tools\Amalgamate.ps1 [-Bundle <name>]
+# Usage:  pwsh -NoProfile -File tools\Amalgamate.ps1 [-Bundle <name>]
 #
 # Each bundle is described by tools\bundles\<name>.manifest: one src-relative
 # unit path per line, in dependency order (a unit may only use units listed
@@ -104,7 +104,7 @@ function Build-Bundle([string]$manifestPath) {
     foreach ($p in $paths) { [void]$sb.AppendLine("//   src\$($p -replace '/', '\')") }
     [void]$sb.AppendLine("// Source commit $commit, generated $stamp by tools\Amalgamate.ps1.")
     [void]$sb.AppendLine('// Fix bugs in the modular units, then regenerate with:')
-    [void]$sb.AppendLine('//   powershell -ExecutionPolicy Bypass -File tools\Amalgamate.ps1')
+    [void]$sb.AppendLine('//   pwsh -NoProfile -File tools\Amalgamate.ps1')
     [void]$sb.AppendLine('// Notes:')
     [void]$sb.AppendLine('// - use at most one bundle per project; two bundles embedding the same')
     [void]$sb.AppendLine('//   helper unit would declare duplicate identifiers')

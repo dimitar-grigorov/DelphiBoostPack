@@ -76,8 +76,24 @@ begin
     lvPort, lvSecure), 'bare host should parse');
   CheckEquals('/', lvResource);
 
+  // the fragment is client side only and must not reach the request line
+  Check(FClient.ParseUrl('https://example.com/doc?a=1#part2', lvServer,
+    lvResource, lvPort, lvSecure), 'url with fragment should parse');
+  CheckEquals('/doc?a=1', lvResource);
+  Check(FClient.ParseUrl('https://example.com/#top', lvServer, lvResource,
+    lvPort, lvSecure), 'fragment only should parse');
+  CheckEquals('/', lvResource);
+
   CheckFalse(FClient.ParseUrl('not a url at all', lvServer, lvResource,
     lvPort, lvSecure), 'garbage should not parse');
+
+  // only http and https, or the client would post to an ftp host
+  CheckFalse(FClient.ParseUrl('ftp://example.com/f.txt', lvServer, lvResource,
+    lvPort, lvSecure), 'ftp should not parse');
+  CheckFalse(FClient.ParseUrl('file:///c:/temp/f.txt', lvServer, lvResource,
+    lvPort, lvSecure), 'file should not parse');
+  CheckFalse(FClient.ParseUrl('mailto:a@b.com', lvServer, lvResource,
+    lvPort, lvSecure), 'mailto should not parse');
 end;
 
 procedure TBpHttpClientTests.TestBuildHeaders;
@@ -192,6 +208,10 @@ begin
   CheckEquals('Cannot reach server (DNS or network issue)', BpClassifyHttpError(12007, 0));
   CheckEquals('Cannot connect to server', BpClassifyHttpError(12029, 0));
   CheckEquals('SSL/TLS certificate error', BpClassifyHttpError(12045, 0));
+  CheckEquals('SSL/TLS certificate error', BpClassifyHttpError(12055, 0));
+  CheckEquals('SSL/TLS certificate error', BpClassifyHttpError(12157, 0));
+  CheckEquals('SSL/TLS certificate error', BpClassifyHttpError(12169, 0));
+  CheckEquals('SSL/TLS certificate error', BpClassifyHttpError(12170, 0));
   CheckEquals('Network error', BpClassifyHttpError(12999, 404));
 
   // HTTP dimension
