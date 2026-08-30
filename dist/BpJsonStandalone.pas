@@ -4,9 +4,9 @@ unit BpJsonStandalone;
 // Single-file bundle amalgamated from the DelphiBoostPack modular units:
 //   src\Core\Classes\BpStringBuilder.pas
 //   src\Core\Classes\BpJson.pas
-// Source commit c561b53, generated 2026-08-30 by tools\Amalgamate.ps1.
+// Source commit 0fe68c8, generated 2026-08-30 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
-//   powershell -ExecutionPolicy Bypass -File tools\Amalgamate.ps1
+//   pwsh -NoProfile -File tools\Amalgamate.ps1
 // Notes:
 // - use at most one bundle per project; two bundles embedding the same
 //   helper unit would declare duplicate identifiers

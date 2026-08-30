@@ -408,13 +408,15 @@ procedure TbpInt64List.LoadFromStream(aStream: TStream);
 var
   lvS: string;
   lvBuffer: array of Byte;
+  lvSize: Integer;
 begin
   Clear;
-  if aStream.Size = 0 then
+  // from the current position, the way TStrings does it
+  lvSize := aStream.Size - aStream.Position;
+  if lvSize <= 0 then
     Exit;
-  SetLength(lvBuffer, aStream.Size);
-  aStream.Position := 0;
-  aStream.ReadBuffer(lvBuffer[0], aStream.Size);
+  SetLength(lvBuffer, lvSize);
+  aStream.ReadBuffer(lvBuffer[0], lvSize);
   SetString(lvS, PAnsiChar(@lvBuffer[0]), Length(lvBuffer));
   SetDelimitedText(lvS);
 end;

@@ -865,7 +865,7 @@ Do not want to add ten units to your project? Take one file from [dist/](../dist
 They are generated from the modular units, SQLite amalgamation style, by [tools/Amalgamate.ps1](../tools/Amalgamate.ps1), from a manifest per bundle in [tools/bundles/](../tools/bundles/). That makes them build artifacts: do not patch them by hand - fix the real unit and regenerate.
 
 ```
-powershell -ExecutionPolicy Bypass -File tools\Amalgamate.ps1
+pwsh -NoProfile -File tools\Amalgamate.ps1
 ```
 
 One catch: two bundles that embed the same helper declare its identifiers twice, and which one you get then depends on `uses` order - `EbpBase64` raised inside one is not the `EbpBase64` the other one catches. Today that affects exactly one pair, `BpHashes` and `BpHttpClientStandalone`, since both embed `BpBase64`; use one or the other. The same clash appears if you mix a bundle with the modular units it already contains.

@@ -76,6 +76,7 @@ type
     procedure TestSaveToFileEmptyList;
     procedure TestLoadFromStreamBasic;
     procedure TestLoadFromStreamEmpty;
+    procedure TestLoadFromStreamHonoursPosition;
     procedure TestLoadFromStreamWithInvalidFormat;
     procedure TestSaveToStreamBasic;
     procedure TestSaveToStreamEmptyList;
@@ -701,6 +702,27 @@ begin
   end;
 
   CheckEquals(3, FBpInt64List.Count, 'Count should be 3 after loading from stream');
+end;
+
+procedure TBpInt64ListTests.TestLoadFromStreamHonoursPosition;
+var
+  MemoryStream: TMemoryStream;
+  Payload: AnsiString;
+begin
+  // a header ahead of the payload, the way a container format writes it
+  Payload := 'HDR' + '7,8,9';
+  MemoryStream := TMemoryStream.Create;
+  try
+    MemoryStream.WriteBuffer(Payload[1], Length(Payload));
+    MemoryStream.Position := 3;
+    FBpInt64List.LoadFromStream(MemoryStream);
+  finally
+    MemoryStream.Free;
+  end;
+
+  CheckEquals(3, FBpInt64List.Count, 'reading must start at the caller position');
+  CheckEquals(7, FBpInt64List[0]);
+  CheckEquals(9, FBpInt64List[2]);
 end;
 
 procedure TBpInt64ListTests.TestLoadFromStreamEmpty;

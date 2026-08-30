@@ -34,7 +34,9 @@ uses
   SysUtils, WinInet;
 
 const
-  gcStatusDetectingProxy = 80;  // missing from D2007's WinInet.pas
+  gcStatusDetectingProxy = 80;   // missing from D2007's WinInet.pas
+  gcStatusCookieFirst    = 320;  // the cookie, P3P and privacy family
+  gcStatusCookieLast     = 327;
 
 var
   gvTraceProc: TbpHttpTraceProc = nil;
@@ -49,8 +51,13 @@ begin
   if not Assigned(lvProc) then
     Exit;
   lvLine := TbpHttpTrace.StatusText(aStatus, aInfo, aInfoLen);
-  if lvLine <> '' then
+  if lvLine = '' then
+    Exit;
+  // a diagnostic must never unwind through wininet and abort the request
+  try
     lvProc(Pointer(aInternet), lvLine);
+  except
+  end;
 end;
 
 { TbpHttpTrace }
@@ -130,7 +137,8 @@ begin
     INTERNET_STATUS_INTERMEDIATE_RESPONSE:
       Result := 'intermediate response';
     INTERNET_STATUS_HANDLE_CREATED, INTERNET_STATUS_HANDLE_CLOSING,
-    INTERNET_STATUS_REQUEST_COMPLETE, INTERNET_STATUS_STATE_CHANGE:
+    INTERNET_STATUS_REQUEST_COMPLETE, INTERNET_STATUS_STATE_CHANGE,
+    gcStatusCookieFirst..gcStatusCookieLast:
       Result := '';  // noise
   else
     Result := Format('status %d', [aStatus]);
@@ -151,7 +159,8 @@ begin
   lvAt := 0;
   for i := lvStart to Length(Result) do
   begin
-    if Result[i] = '/' then
+    // the authority ends at the path, the query or the fragment
+    if (Result[i] = '/') or (Result[i] = '?') or (Result[i] = '#') then
       Break;
     if Result[i] = '@' then
       lvAt := i;
