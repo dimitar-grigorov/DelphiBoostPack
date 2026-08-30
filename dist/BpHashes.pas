@@ -8,7 +8,7 @@ unit BpHashes;
 //   src\Core\Classes\BpMD5.pas
 //   src\Core\Classes\BpHMACSHA256.pas
 //   src\Core\Classes\BpPasswordHash.pas
-// Source commit 3fbb305, generated 2026-08-29 by tools\Amalgamate.ps1.
+// Source commit 0feec9e, generated 2026-08-29 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   powershell -ExecutionPolicy Bypass -File tools\Amalgamate.ps1
 // Notes:
@@ -175,6 +175,8 @@ type
 // record so the work factor can grow without breaking old hashes:
 //   lvStored := BpHashPassword('hunter2');  // $pbkdf2-sha256$600000$<salt>$<hash>
 //   if BpVerifyPassword('hunter2', lvStored) then ...
+// Takes bytes, not text: on Delphi 2009+ pass AnsiString(UTF8Encode(lvPassword)),
+// or the ANSI conversion makes the hash lossy and locale-dependent.
 
 const
   // OWASP recommendation for PBKDF2-HMAC-SHA256 as of 2023+

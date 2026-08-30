@@ -449,7 +449,8 @@ begin
     FList.Add('only');
     Fail('a duplicate must raise with dupError');
   except
-    on E: Exception do
+    // narrow, or Fail is caught by its own handler
+    on E: EStringListError do
       CheckEquals(1, FList.Count, 'and nothing must have been added');
   end;
   CheckEquals(0, FList.IndexOf('only'), 'the index survived the rejected add');

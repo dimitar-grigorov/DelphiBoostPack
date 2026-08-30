@@ -410,9 +410,11 @@ var
   lvBuffer: array of Byte;
 begin
   Clear;
+  if aStream.Size = 0 then
+    Exit;
   SetLength(lvBuffer, aStream.Size);
   aStream.Position := 0;
-  aStream.Read(lvBuffer[0], aStream.Size);
+  aStream.ReadBuffer(lvBuffer[0], aStream.Size);
   SetString(lvS, PAnsiChar(@lvBuffer[0]), Length(lvBuffer));
   SetDelimitedText(lvS);
 end;
@@ -431,9 +433,10 @@ end;
 
 procedure TbpInt64List.SaveToStream(aStream: TStream);
 var
-  lvText: string;
+  lvText: AnsiString;
 begin
-  lvText := GetDelimitedText; // Get the delimited text representation of the list
+  // AnsiString, so Length counts bytes on Unicode compilers too
+  lvText := AnsiString(GetDelimitedText);
   if Length(lvText) > 0 then
     aStream.WriteBuffer(lvText[1], Length(lvText));
 end;

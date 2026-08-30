@@ -5,6 +5,8 @@ unit BpPasswordHash;
 // record so the work factor can grow without breaking old hashes:
 //   lvStored := BpHashPassword('hunter2');  // $pbkdf2-sha256$600000$<salt>$<hash>
 //   if BpVerifyPassword('hunter2', lvStored) then ...
+// Takes bytes, not text: on Delphi 2009+ pass AnsiString(UTF8Encode(lvPassword)),
+// or the ANSI conversion makes the hash lossy and locale-dependent.
 
 interface
 

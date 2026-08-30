@@ -218,6 +218,8 @@ begin
 end;
 
 procedure TBpCredentialsTests.TestProtectedWrongEntropy;
+var
+  lvSecret: WideString;
 begin
   Track('vip');
   TbpCredentials.SetPasswordProtected(FService, 'vip', 'top-secret', 'pepper');
@@ -228,6 +230,17 @@ begin
     on E: EbpCredentials do
       Check(True);
   end;
+  lvSecret := 'untouched';
+  CheckFalse(TbpCredentials.TryGetPasswordProtected(FService, 'vip', 'salt', lvSecret),
+    'try get answers False on a wrong entropy');
+  CheckWideEquals('', lvSecret, 'no secret handed back');
+  // a plain entry read through the protected path is the same story
+  Track('plain');
+  TbpCredentials.SetPassword(FService, 'plain', 'in-the-clear');
+  lvSecret := 'untouched';
+  CheckFalse(TbpCredentials.TryGetPasswordProtected(FService, 'plain', 'pepper', lvSecret),
+    'try get answers False on an unprotected entry');
+  CheckWideEquals('', lvSecret, 'no secret handed back');
 end;
 
 procedure TBpCredentialsTests.TestProtectedMissingEntry;
