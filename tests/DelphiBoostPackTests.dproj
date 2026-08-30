@@ -14,10 +14,16 @@
     <DCC_LocalDebugSymbols>False</DCC_LocalDebugSymbols>
     <DCC_SymbolReferenceInfo>0</DCC_SymbolReferenceInfo>
     <DCC_Define>RELEASE</DCC_Define>
+    <DCC_UnitSearchPath>;$(BDS)\Source\DUnit\src</DCC_UnitSearchPath>
+    <DCC_ResourcePath>;$(BDS)\Source\DUnit\src</DCC_ResourcePath>
+    <DCC_ObjPath>;$(BDS)\Source\DUnit\src</DCC_ObjPath>
+    <DCC_IncludePath>;$(BDS)\Source\DUnit\src</DCC_IncludePath>
+    <DCC_ExeOutput>.\!bin</DCC_ExeOutput>
+    <DCC_DcuOutput>.\!dcu\Release</DCC_DcuOutput>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <Version>7.0</Version>
-    <DCC_Define>DEBUG;_CONSOLE_TESTRUNNER;BENCHMARK</DCC_Define>
+    <DCC_Define>DEBUG;_CONSOLE_TESTRUNNER;_BENCHMARK</DCC_Define>
     <DCC_UnitSearchPath>;$(BDS)\Source\DUnit\src</DCC_UnitSearchPath>
     <DCC_ResourcePath>;$(BDS)\Source\DUnit\src</DCC_ResourcePath>
     <DCC_ObjPath>;$(BDS)\Source\DUnit\src</DCC_ObjPath>

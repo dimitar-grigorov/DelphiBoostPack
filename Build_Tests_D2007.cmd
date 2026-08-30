@@ -2,7 +2,7 @@
 setlocal
 
 rem Build_Tests_D2007.cmd [Debug|Release] [/ci] [/bench] [/nointeg]  -  rebuilds tests\!bin\DelphiBoostPackTests.exe.
-rem Debug is the only config wired for the DUnit source paths, and CONSOLE_TESTRUNNER is forced so the exe runs on the console.
+rem Both configs carry the DUnit source paths, and CONSOLE_TESTRUNNER is forced so the exe runs on the console.
 rem Kinds: unit always, integration unless /nointeg (NO_INTEGRATION), benchmarks only with /bench (BENCHMARK).
 rem /ci skips the pause on failure (AI agent, CI runner).
 

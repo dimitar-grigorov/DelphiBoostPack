@@ -65,5 +65,10 @@
     <DCCReference Include="Core\Units\BpSysUtils.pas" />
     <DCCReference Include="Core\Units\BpVariantUtils.pas" />
     <DCCReference Include="Core\Units\StopWatch.pas" />
+    <DCCReference Include="Core\Classes\BpCredentials.pas" />
+    <DCCReference Include="Core\Classes\BpHttpTrace.pas" />
+    <DCCReference Include="Core\Classes\BpStringList.pas" />
+    <DCCReference Include="Core\Units\BpCompat.pas" />
+    <DCCReference Include="Core\Units\BpKeyFold.pas" />
   </ItemGroup>
 </Project>
