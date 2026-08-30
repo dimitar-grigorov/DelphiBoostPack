@@ -8,7 +8,7 @@ unit BpDictionaries;
 //   src\Core\Units\BpVariantUtils.pas
 //   src\Core\Classes\BpStrDictionary.pas
 //   src\Core\Classes\BpIntDictionary.pas
-// Source commit 53eca34, generated 2026-08-30 by tools\Amalgamate.ps1.
+// Source commit b865c03, generated 2026-08-30 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
 // One bundle per project: two that share a helper declare it twice.
@@ -105,6 +105,10 @@ type
 // requested kind of data. Nothing is parsed, truncated or implicitly
 // widened: no numeric strings, no boolean-to-int, no float-to-int.
 // On failure the out parameter is zeroed/emptied and False is returned.
+//
+// varDate is a kind of its own here, not a float: use BpTryVarToDate.
+// Below Delphi 2009 a varOleStr converts only when the ANSI code page
+// carries every character, otherwise the call fails instead of writing '?'.
 
 type
   TbpIntegerDynArray = array of Integer;
@@ -114,6 +118,7 @@ function BpTryVarToInt64(const aValue: Variant; out aResult: Int64): Boolean;
 function BpTryVarToStr(const aValue: Variant; out aResult: string): Boolean;
 function BpTryVarToBool(const aValue: Variant; out aResult: Boolean): Boolean;
 function BpTryVarToFloat(const aValue: Variant; out aResult: Double): Boolean;
+function BpTryVarToDate(const aValue: Variant; out aResult: TDateTime): Boolean;
 function BpTryVarToIntArray(const aValue: Variant; out aResult: TbpIntegerDynArray): Boolean;
 // ---------------- end BpVariantUtils.pas interface ----------------
 
@@ -624,15 +629,61 @@ const
 
 const
   gcVarWord64 = $0015; // UInt64 variant type (varWord64/varUInt64, missing in D2007)
+  gcTwoPow64  = 18446744073709551616.0; // to read an unsigned Int64 payload as a float
+
+{$IF CompilerVersion < 20}
+const
+  gcNoBestFit = $00000400; // WC_NO_BEST_FIT_CHARS, missing in D7's Windows.pas
+
+// True when every character survives the ANSI code page. Below Delphi 2009 a
+// string is ANSI, so without this a code point the page cannot carry would be
+// replaced by '?' and still reported as a successful conversion.
+function TryWideToAnsi(const aValue: WideString; out aResult: AnsiString): Boolean;
+var
+  lvLen: Integer;
+  lvUsedDefault: BOOL;
+begin
+  aResult := '';
+  Result := True;
+  if aValue = '' then
+    Exit;
+  lvLen := WideCharToMultiByte(CP_ACP, gcNoBestFit, PWideChar(aValue),
+    Length(aValue), nil, 0, nil, nil);
+  if lvLen <= 0 then
+  begin
+    Result := False;
+    Exit;
+  end;
+  SetLength(aResult, lvLen);
+  lvUsedDefault := False;
+  lvLen := WideCharToMultiByte(CP_ACP, gcNoBestFit, PWideChar(aValue),
+    Length(aValue), PAnsiChar(aResult), lvLen, nil, @lvUsedDefault);
+  Result := (lvLen > 0) and (not lvUsedDefault);
+  if Result then
+    SetLength(aResult, lvLen)
+  else
+    aResult := '';
+end;
+{$IFEND}
 
 function BpTryVarToInt64(const aValue: Variant; out aResult: Int64): Boolean;
 begin
   case VarType(aValue) of
     varShortInt, varSmallint, varInteger, varByte, varWord, varLongWord,
-    varInt64, gcVarWord64:
+    varInt64:
     begin
       aResult := aValue;
       Result := True;
+    end;
+    gcVarWord64:
+    begin
+      // read the payload raw: assigning the variant goes through Double on
+      // D2007, which loses bits. A negative reading means bit 63 is set, so
+      // the unsigned value is past High(Int64) and does not fit.
+      aResult := TVarData(aValue).VInt64;
+      Result := aResult >= 0;
+      if not Result then
+        aResult := 0;
     end;
   else
     aResult := 0;
@@ -655,7 +706,16 @@ end;
 function BpTryVarToStr(const aValue: Variant; out aResult: string): Boolean;
 begin
   case VarType(aValue) of
-    varOleStr, varString, varUString:
+    varOleStr:
+    begin
+{$IF CompilerVersion < 20}
+      Result := TryWideToAnsi(WideString(aValue), aResult);
+{$ELSE}
+      aResult := aValue;
+      Result := True;
+{$IFEND}
+    end;
+    varString, varUString:
     begin
       aResult := aValue;
       Result := True;
@@ -676,18 +736,39 @@ begin
 end;
 
 function BpTryVarToFloat(const aValue: Variant; out aResult: Double): Boolean;
+var
+  lvInt64: Int64;
 begin
   case VarType(aValue) of
     varShortInt, varSmallint, varInteger, varByte, varWord, varLongWord,
-    varInt64, gcVarWord64, varSingle, varDouble, varCurrency:
+    varInt64, varSingle, varDouble, varCurrency:
     begin
       aResult := aValue;
+      Result := True;
+    end;
+    gcVarWord64:
+    begin
+      // same raw reading as above, put back on the unsigned side when negative
+      lvInt64 := TVarData(aValue).VInt64;
+      if lvInt64 >= 0 then
+        aResult := lvInt64
+      else
+        aResult := lvInt64 + gcTwoPow64;
       Result := True;
     end;
   else
     aResult := 0;
     Result := False;
   end;
+end;
+
+function BpTryVarToDate(const aValue: Variant; out aResult: TDateTime): Boolean;
+begin
+  Result := VarType(aValue) = varDate;
+  if Result then
+    aResult := TVarData(aValue).VDate
+  else
+    aResult := 0;
 end;
 
 function BpTryVarToIntArray(const aValue: Variant; out aResult: TbpIntegerDynArray): Boolean;
