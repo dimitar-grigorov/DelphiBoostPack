@@ -407,6 +407,8 @@ end;
 
 `SetX` is create-or-replace, `AddX` appends to an array, and `SetArray` / `SetObject` / `AddArray` / `AddObject` return the new container so you can keep going. Pass `aEscapeNonAscii := True` to `ToJson` when the transport is not UTF-8 clean and you want everything above #127 as `\uXXXX`.
 
+Encoding below Delphi 2009: a string is UTF-8 bytes, in and out. A `\uXXXX` escape decodes to the same bytes as the raw character, and the writer reads them back the same way, so a round trip loses nothing that the machine code page happens not to carry.
+
 Ownership is simple: a container owns its children, so freeing the root frees the tree. `Clone` gives you a deep copy you own; the standalone `CreateX` constructors give you a value you own until you add it somewhere.
 
 ### [BpDateUtils](../src/Core/Units/BpDateUtils.pas)

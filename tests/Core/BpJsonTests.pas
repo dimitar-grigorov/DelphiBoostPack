@@ -38,6 +38,7 @@ type
     procedure TestDuplicateKeyKeepsLast;
     procedure TestStringEscapesRoundTrip;
     procedure TestUnicodeEscape;
+    procedure TestUnicodeEscapeMatchesTheRawCharacter;
     procedure TestSurrogatePair;
     procedure TestTypedAccessors;
     procedure TestTryAndDefAccessors;
@@ -279,6 +280,36 @@ begin
     CheckEquals('A'#9'B', lvValue.AsStr);
   finally
     lvValue.Free;
+  end;
+end;
+
+procedure TBpJsonTests.TestUnicodeEscapeMatchesTheRawCharacter;
+var
+  lvEscaped, lvRaw: TbpJsonValue;
+begin
+  // U+00E9, U+20AC and U+1F600, once escaped and once as the raw bytes the
+  // literal path already passes through. Neither may lose anything.
+  lvEscaped := TbpJsonValue.Parse('"\u00e9\u20ac\ud83d\ude00"');
+  try
+{$IF CompilerVersion >= 20.0}
+    CheckEquals(4, Length(lvEscaped.AsStr), 'two BMP chars plus a surrogate pair');
+    lvRaw := TbpJsonValue.CreateStr(lvEscaped.AsStr);
+{$ELSE}
+    CheckEquals(9, Length(lvEscaped.AsStr), '2 + 3 + 4 UTF-8 bytes');
+    lvRaw := TbpJsonValue.Parse('"'#$C3#$A9#$E2#$82#$AC#$F0#$9F#$98#$80'"');
+{$IFEND}
+    try
+      CheckEquals(lvRaw.AsStr, lvEscaped.AsStr,
+        'an escape must decode to what the raw character parses to');
+      // and back out again, both spellings and both writer modes
+      CheckEquals(lvRaw.ToJson, lvEscaped.ToJson);
+      CheckEquals('"\u00e9\u20ac\ud83d\ude00"',
+        LowerCase(lvEscaped.ToJson(True)));
+    finally
+      lvRaw.Free;
+    end;
+  finally
+    lvEscaped.Free;
   end;
 end;
 
