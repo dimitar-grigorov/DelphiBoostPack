@@ -4,23 +4,19 @@ unit BpJsonStandalone;
 // Single-file bundle amalgamated from the DelphiBoostPack modular units:
 //   src\Core\Classes\BpStringBuilder.pas
 //   src\Core\Classes\BpJson.pas
-// Source commit 4658eb7, generated 2026-08-30 by tools\Amalgamate.ps1.
+// Source commit 53eca34, generated 2026-08-30 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
-// Notes:
-// - use at most one bundle per project; two bundles embedding the same
-//   helper unit would declare duplicate identifiers
-// - unit-wide compiler directives of embedded units (e.g. {$Q-} in the
-//   hash units) apply from their position to the end of this file
+// One bundle per project: two that share a helper declare it twice.
+
+{$DEFINE BPAMALGAMATION}
 
 interface
 
 uses
   SysUtils, Math;
 
-// ==================================================================
-// BpStringBuilder.pas - interface
-// ==================================================================
+// -------------- begin BpStringBuilder.pas interface ---------------
 
 // Fast string builder for Delphi 7/2007+, API modeled on XE6 TStringBuilder.
 // It writes through a cached buffer pointer rather than routing every append
@@ -66,10 +62,9 @@ type
     property Capacity: Integer read GetCapacity write SetCapacity;
     property Chars[aIndex: Integer]: Char read GetChar write SetChar; default;
   end;
+// --------------- end BpStringBuilder.pas interface ----------------
 
-// ==================================================================
-// BpJson.pas - interface
-// ==================================================================
+// ------------------- begin BpJson.pas interface -------------------
 
 // JSON reader/writer for Delphi 7/2007+ (RFC 8259). TbpJsonValue is the whole
 // tree, so freeing the root frees it all; FindPath walks 'data.items[0].name'.
@@ -187,12 +182,11 @@ type
     function ToJsonPretty(aIndentSize: Integer = 2;
       aEscapeNonAscii: Boolean = False): string;
   end;
+// -------------------- end BpJson.pas interface --------------------
 
 implementation
 
-// ==================================================================
-// BpStringBuilder.pas - implementation
-// ==================================================================
+// ------------ begin BpStringBuilder.pas implementation ------------
 
 const
   gcDefaultCapacity = 16;
@@ -435,10 +429,9 @@ begin
     FData[i] := #0;
   FLength := aValue;
 end;
+// ------------- end BpStringBuilder.pas implementation -------------
 
-// ==================================================================
-// BpJson.pas - implementation
-// ==================================================================
+// ---------------- begin BpJson.pas implementation -----------------
 
 const
   // recursion guard, far deeper than any sane document
@@ -1751,5 +1744,6 @@ begin
     lvSb.Free;
   end;
 end;
+// ----------------- end BpJson.pas implementation ------------------
 
 end.

@@ -8,23 +8,24 @@ unit BpHashes;
 //   src\Core\Classes\BpMD5.pas
 //   src\Core\Classes\BpHMACSHA256.pas
 //   src\Core\Classes\BpPasswordHash.pas
-// Source commit 4658eb7, generated 2026-08-30 by tools\Amalgamate.ps1.
+// Source commit 53eca34, generated 2026-08-30 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
-// Notes:
-// - use at most one bundle per project; two bundles embedding the same
-//   helper unit would declare duplicate identifiers
-// - unit-wide compiler directives of embedded units (e.g. {$Q-} in the
-//   hash units) apply from their position to the end of this file
+// One bundle per project: two that share a helper declare it twice.
+
+{$DEFINE BPAMALGAMATION}
 
 interface
 
 uses
   SysUtils, Classes, Windows;
 
-// ==================================================================
-// BpCompat.pas - interface
-// ==================================================================
+// Range and overflow checking as the consumer set it: a unit that turns
+// either off is bracketed, so its setting ends where the unit does.
+{$IFOPT R+}{$DEFINE BPAMALG_R}{$ELSE}{$UNDEF BPAMALG_R}{$ENDIF}
+{$IFOPT Q+}{$DEFINE BPAMALG_Q}{$ELSE}{$UNDEF BPAMALG_Q}{$ENDIF}
+
+// ------------------ begin BpCompat.pas interface ------------------
 
 // TBytes for compilers before Delphi 2007, whose SysUtils has no such type.
 
@@ -32,10 +33,9 @@ uses
 type
   TBytes = array of Byte;
 {$IFEND}
+// ------------------- end BpCompat.pas interface -------------------
 
-// ==================================================================
-// BpBase64.pas - interface
-// ==================================================================
+// ------------------ begin BpBase64.pas interface ------------------
 
 // Base64 encode/decode (RFC 4648), standard and url-safe alphabets. Encoding
 // is a single allocation; standard pads with '=', url-safe omits it. Decoding
@@ -53,10 +53,9 @@ function Base64UrlEncode(const aBytes: TBytes): string; overload;
 function Base64UrlEncode(const aText: AnsiString): string; overload;
 function Base64Decode(const aBase64: string): TBytes;
 function Base64DecodeStr(const aBase64: string): AnsiString;
+// ------------------- end BpBase64.pas interface -------------------
 
-// ==================================================================
-// BpSHA256.pas - interface
-// ==================================================================
+// ------------------ begin BpSHA256.pas interface ------------------
 
 // SHA-256 (FIPS 180-4), pure Pascal, for Delphi 7/2007+. Streaming (Init,
 // Update in chunks, Final) so large files need not fit in memory, plus
@@ -94,10 +93,10 @@ type
     class function DigestToHex(const aDigest: TbpSHA256Digest): string;
     class function DigestToBase64(const aDigest: TbpSHA256Digest): string;
   end;
+{$IFDEF BPAMALG_R}{$R+}{$ELSE}{$R-}{$ENDIF}{$IFDEF BPAMALG_Q}{$Q+}{$ELSE}{$Q-}{$ENDIF}
+// ------------------- end BpSHA256.pas interface -------------------
 
-// ==================================================================
-// BpMD5.pas - interface
-// ==================================================================
+// ------------------- begin BpMD5.pas interface --------------------
 
 // MD5 (RFC 1321), pure Pascal, for Delphi 7/2007+. Same interface as
 // BpSHA256: streaming Update plus one-shot class functions, hex or Base64.
@@ -134,10 +133,10 @@ type
     class function DigestToHex(const aDigest: TbpMD5Digest): string;
     class function DigestToBase64(const aDigest: TbpMD5Digest): string;
   end;
+{$IFDEF BPAMALG_R}{$R+}{$ELSE}{$R-}{$ENDIF}{$IFDEF BPAMALG_Q}{$Q+}{$ELSE}{$Q-}{$ENDIF}
+// -------------------- end BpMD5.pas interface ---------------------
 
-// ==================================================================
-// BpHMACSHA256.pas - interface
-// ==================================================================
+// ---------------- begin BpHMACSHA256.pas interface ----------------
 
 // HMAC-SHA256 (RFC 2104), built on BpSHA256, for keyed message
 // authentication (API signatures, webhook verification, JWT HS256).
@@ -165,10 +164,9 @@ type
     class function ComputeHex(const aKey, aText: AnsiString): string;
     class function ComputeBase64(const aKey, aText: AnsiString): string;
   end;
+// ----------------- end BpHMACSHA256.pas interface -----------------
 
-// ==================================================================
-// BpPasswordHash.pas - interface
-// ==================================================================
+// --------------- begin BpPasswordHash.pas interface ---------------
 
 // Password hashing with PBKDF2-HMAC-SHA256 (RFC 2898), built on BpHMACSHA256.
 // Salt from the Windows CSPRNG, constant-time verify, and a self-describing
@@ -199,18 +197,16 @@ function BpHashPassword(const aPassword: AnsiString; aIterations: Integer): stri
 // parses the record, re-derives, compares in constant time; malformed input
 // returns False, never raises
 function BpVerifyPassword(const aPassword: AnsiString; const aStored: string): Boolean;
+// ---------------- end BpPasswordHash.pas interface ----------------
 
 implementation
 
-// ==================================================================
-// BpCompat.pas - implementation
-// ==================================================================
+// --------------- begin BpCompat.pas implementation ----------------
 
 
+// ---------------- end BpCompat.pas implementation -----------------
 
-// ==================================================================
-// BpBase64.pas - implementation
-// ==================================================================
+// --------------- begin BpBase64.pas implementation ----------------
 
 const
   gcBase64Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
@@ -416,10 +412,11 @@ begin
   SetLength(Result, Length(lvBytes));
   Move(lvBytes[0], Pointer(Result)^, Length(lvBytes));
 end;
+// ---------------- end BpBase64.pas implementation -----------------
 
-// ==================================================================
-// BpSHA256.pas - implementation
-// ==================================================================
+// --------------- begin BpSHA256.pas implementation ----------------
+
+{$Q-}{$R-}
 
 const
   // FIPS 180-4 round constants: fractional parts of the cube roots of the first 64 primes
@@ -675,10 +672,12 @@ class function TbpSHA256.DigestToBase64(const aDigest: TbpSHA256Digest): string;
 begin
   Result := Base64Encode(aDigest, SizeOf(aDigest));
 end;
+{$IFDEF BPAMALG_R}{$R+}{$ELSE}{$R-}{$ENDIF}{$IFDEF BPAMALG_Q}{$Q+}{$ELSE}{$Q-}{$ENDIF}
+// ---------------- end BpSHA256.pas implementation -----------------
 
-// ==================================================================
-// BpMD5.pas - implementation
-// ==================================================================
+// ----------------- begin BpMD5.pas implementation -----------------
+
+{$Q-}{$R-}
 
 const
   // RFC 1321 sine table: T[i] = floor(2^32 * abs(sin(i + 1)))
@@ -931,10 +930,10 @@ class function TbpMD5.DigestToBase64(const aDigest: TbpMD5Digest): string;
 begin
   Result := Base64Encode(aDigest, SizeOf(aDigest));
 end;
+{$IFDEF BPAMALG_R}{$R+}{$ELSE}{$R-}{$ENDIF}{$IFDEF BPAMALG_Q}{$Q+}{$ELSE}{$Q-}{$ENDIF}
+// ------------------ end BpMD5.pas implementation ------------------
 
-// ==================================================================
-// BpHMACSHA256.pas - implementation
-// ==================================================================
+// ------------- begin BpHMACSHA256.pas implementation --------------
 
 procedure TbpHMACSHA256.SetKey(const aKey; aKeySize: Integer);
 var
@@ -1067,10 +1066,9 @@ class function TbpHMACSHA256.ComputeBase64(const aKey, aText: AnsiString): strin
 begin
   Result := TbpSHA256.DigestToBase64(Compute(aKey, aText));
 end;
+// -------------- end BpHMACSHA256.pas implementation ---------------
 
-// ==================================================================
-// BpPasswordHash.pas - implementation
-// ==================================================================
+// ------------ begin BpPasswordHash.pas implementation -------------
 
 const
   gcBpPasswordHashScheme = 'pbkdf2-sha256';
@@ -1259,6 +1257,7 @@ begin
     Result := False;
   end;
 end;
+// ------------- end BpPasswordHash.pas implementation --------------
 
 initialization
   // from BpBase64.pas
