@@ -40,7 +40,7 @@ Worker thread, progress and completion events on the main thread, no `ProcessMes
 
 ## Why
 
-Rewriting a 300-unit legacy app just to get a `TDictionary` is not a plan. This is the missing RTL as loose units you can lift one at a time: it targets Delphi 2007 first and is written to compile unchanged from Delphi 7 to 11.3, so it goes wherever your codebase happens to live. The scripts here build and test on Delphi 2007 and compile the whole library on Delphi 7, so the range is checked rather than claimed.
+Rewriting a 300-unit legacy app just to get a `TDictionary` is not a plan. This is the missing RTL as loose units you can lift one at a time: it targets Delphi 2007 first and is written to compile unchanged from Delphi 7 to 11.3, so it goes wherever your codebase happens to live. The scripts here build and test on Delphi 2007 and compile every unit on Delphi 7, so the low end of that range is checked rather than claimed.
 
 Nearly every unit has a DUnit test unit behind it, and the crypto and hash units are checked against the published standard vectors (FIPS, RFC) and the Windows CryptoAPI, so the numbers match other implementations.
 
