@@ -8,7 +8,7 @@ unit BpDictionaries;
 //   src\Core\Units\BpVariantUtils.pas
 //   src\Core\Classes\BpStrDictionary.pas
 //   src\Core\Classes\BpIntDictionary.pas
-// Source commit 0fe68c8, generated 2026-08-30 by tools\Amalgamate.ps1.
+// Source commit 4658eb7, generated 2026-08-30 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
 // Notes:

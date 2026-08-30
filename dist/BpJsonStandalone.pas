@@ -4,7 +4,7 @@ unit BpJsonStandalone;
 // Single-file bundle amalgamated from the DelphiBoostPack modular units:
 //   src\Core\Classes\BpStringBuilder.pas
 //   src\Core\Classes\BpJson.pas
-// Source commit 0fe68c8, generated 2026-08-30 by tools\Amalgamate.ps1.
+// Source commit 4658eb7, generated 2026-08-30 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
 // Notes:
@@ -74,6 +74,8 @@ type
 // JSON reader/writer for Delphi 7/2007+ (RFC 8259). TbpJsonValue is the whole
 // tree, so freeing the root frees it all; FindPath walks 'data.items[0].name'.
 // The parser is strict: leading zeros, trailing commas and junk all fail.
+// Below Delphi 2009 a string holds UTF-8 bytes, in and out, so a \u escape and
+// the raw character it names give the same result.
 
 type
   // raised on parse errors, kind mismatches and missing object members
@@ -504,14 +506,110 @@ begin
   end;
 end;
 
+{$IF CompilerVersion < 20.0}
+// UTF-8 bytes for one code point. Below Delphi 2009 a string holds bytes, so a
+// \u escape has to produce the same UTF-8 a raw literal already passes through.
+function BpJsonUtf8Bytes(aCode: Integer): AnsiString;
+begin
+  if aCode < $80 then
+  begin
+    SetLength(Result, 1);
+    Result[1] := AnsiChar(aCode);
+  end
+  else if aCode < $800 then
+  begin
+    SetLength(Result, 2);
+    Result[1] := AnsiChar($C0 or (aCode shr 6));
+    Result[2] := AnsiChar($80 or (aCode and $3F));
+  end
+  else if aCode < $10000 then
+  begin
+    SetLength(Result, 3);
+    Result[1] := AnsiChar($E0 or (aCode shr 12));
+    Result[2] := AnsiChar($80 or ((aCode shr 6) and $3F));
+    Result[3] := AnsiChar($80 or (aCode and $3F));
+  end
+  else
+  begin
+    SetLength(Result, 4);
+    Result[1] := AnsiChar($F0 or (aCode shr 18));
+    Result[2] := AnsiChar($80 or ((aCode shr 12) and $3F));
+    Result[3] := AnsiChar($80 or ((aCode shr 6) and $3F));
+    Result[4] := AnsiChar($80 or (aCode and $3F));
+  end;
+end;
+// The reverse, for the writer. False when the bytes are not valid UTF-8, which
+// leaves the caller free to fall back to the ANSI reading.
+function BpJsonWideFromUtf8(const aValue: AnsiString;
+  out aWide: WideString): Boolean;
+var
+  lvIdx, lvLen, lvOut, lvCode, lvExtra, i: Integer;
+  lvByte: Byte;
+begin
+  Result := False;
+  lvLen := Length(aValue);
+  SetLength(aWide, lvLen);  // never more UTF-16 units than bytes
+  lvIdx := 1;
+  lvOut := 0;
+  while lvIdx <= lvLen do
+  begin
+    lvByte := Byte(aValue[lvIdx]);
+    if lvByte < $80 then
+    begin
+      lvCode := lvByte;
+      lvExtra := 0;
+    end
+    else if (lvByte and $E0) = $C0 then
+    begin
+      lvCode := lvByte and $1F;
+      lvExtra := 1;
+    end
+    else if (lvByte and $F0) = $E0 then
+    begin
+      lvCode := lvByte and $0F;
+      lvExtra := 2;
+    end
+    else if (lvByte and $F8) = $F0 then
+    begin
+      lvCode := lvByte and $07;
+      lvExtra := 3;
+    end
+    else
+      Exit;
+    if lvIdx + lvExtra > lvLen then
+      Exit;
+    for i := 1 to lvExtra do
+    begin
+      lvByte := Byte(aValue[lvIdx + i]);
+      if (lvByte and $C0) <> $80 then
+        Exit;
+      lvCode := (lvCode shl 6) or (lvByte and $3F);
+    end;
+    Inc(lvIdx, lvExtra + 1);
+    if lvCode < $10000 then
+    begin
+      Inc(lvOut);
+      aWide[lvOut] := WideChar(lvCode);
+    end
+    else
+    begin
+      Dec(lvCode, $10000);
+      Inc(lvOut);
+      aWide[lvOut] := WideChar($D800 or (lvCode shr 10));
+      Inc(lvOut);
+      aWide[lvOut] := WideChar($DC00 or (lvCode and $3FF));
+    end;
+  end;
+  SetLength(aWide, lvOut);
+  Result := True;
+end;
+{$IFEND}
+
 function BpJsonParseString(var aReader: TbpJsonReader): string;
 var
   lvSb: TbpStringBuilder;
   lvSeg: PChar;
   lvW1, lvW2: Integer;
-{$IF CompilerVersion < 20.0}
-  lvWide: WideString;
-{$IFEND}
 
   procedure FlushSeg(aUpTo: PChar);
   var
@@ -524,27 +622,21 @@ var
     end;
   end;
 
-  procedure AppendWideChar(aOrd: Integer);
+  // one code point in whatever a string holds here: UTF-16 on Delphi 2009+,
+  // UTF-8 bytes below it
+  procedure AppendCodePoint(aCode: Integer);
   begin
 {$IF CompilerVersion >= 20.0}
-    lvSb.Append(Char(aOrd));
+    if aCode < $10000 then
+      lvSb.Append(Char(aCode))
+    else
+    begin
+      Dec(aCode, $10000);
+      lvSb.Append(Char($D800 or (aCode shr 10)));
+      lvSb.Append(Char($DC00 or (aCode and $3FF)));
+    end;
 {$ELSE}
-    SetLength(lvWide, 1);
-    lvWide[1] := WideChar(aOrd);
-    lvSb.Append(string(lvWide));
-{$IFEND}
-  end;
-
-  procedure AppendSurrogatePair(aHi, aLo: Integer);
-  begin
-{$IF CompilerVersion >= 20.0}
-    lvSb.Append(Char(aHi));
-    lvSb.Append(Char(aLo));
-{$ELSE}
-    SetLength(lvWide, 2);
-    lvWide[1] := WideChar(aHi);
-    lvWide[2] := WideChar(aLo);
-    lvSb.Append(string(lvWide));
+    lvSb.Append(BpJsonUtf8Bytes(aCode));
 {$IFEND}
   end;
 
@@ -608,7 +700,8 @@ begin
                       lvW2 := BpJsonHexQuad(aReader);
                       if (lvW2 < $DC00) or (lvW2 > $DFFF) then
                         BpJsonFail(aReader, 'Invalid surrogate pair');
-                      AppendSurrogatePair(lvW1, lvW2);
+                      AppendCodePoint($10000 +
+                        ((lvW1 - $D800) shl 10) + (lvW2 - $DC00));
                     end
                     else
                       BpJsonFail(aReader, 'Unpaired high surrogate');
@@ -616,7 +709,7 @@ begin
                   else if (lvW1 >= $DC00) and (lvW1 <= $DFFF) then
                     BpJsonFail(aReader, 'Unpaired low surrogate')
                   else
-                    AppendWideChar(lvW1);
+                    AppendCodePoint(lvW1);
                 end;
             else
               BpJsonFail(aReader, 'Invalid escape sequence');
@@ -929,7 +1022,10 @@ begin
         AppendEscape(Ord(lvC));
     end;
 {$ELSE}
-    lvWide := WideString(aValue);
+    // the parser hands out UTF-8 here, so decode it as such; input that is not
+    // valid UTF-8 is taken as ANSI, the best guess left
+    if not BpJsonWideFromUtf8(aValue, lvWide) then
+      lvWide := WideString(aValue);
     for lvIdx := 1 to Length(lvWide) do
     begin
       lvWC := lvWide[lvIdx];
