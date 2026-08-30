@@ -82,7 +82,7 @@ Full descriptions and examples in the [feature guide](docs/FEATURES.md).
 | [BpSHA256](docs/FEATURES.md#bpsha256) / [BpMD5](docs/FEATURES.md#bpmd5) | one-shot or streaming digests for buffers, strings and files; hex or Base64 out |
 | [BpHMACSHA256](docs/FEATURES.md#bphmacsha256) | request signing and webhook verification (RFC 2104) |
 | [BpPasswordHash](docs/FEATURES.md#bppasswordhash) | PBKDF2-HMAC-SHA256 with CSPRNG salt, 600k iterations and a self-describing record |
-| [BpBase64](docs/FEATURES.md#bpbase64) | Base64 and Base64url; the decoder forgives padding and whitespace |
+| [BpBase64](docs/FEATURES.md#bpbase64) | Base64 and Base64url; the decoder forgives padding and whitespace, and a UTF-8 set for text |
 | [BpHashBobJenkins](docs/FEATURES.md#bphashbobjenkins) | lookup3, interoperable with the RTL's `BobJenkinsHash` |
 
 **Windows and odds and ends**

@@ -103,8 +103,7 @@ var
   lvI64: Int64;
   lvFloat: Double;
 begin
-  // varWord64 has no header constant on D2007, so build the payload by hand;
-  // a fresh local is varEmpty, so writing VType directly is safe
+  // no varWord64 constant on D2007, so build the payload by hand
   TVarData(lvVar).VType := gcVarWord64;
   try
     TVarData(lvVar).VInt64 := 5;

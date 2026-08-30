@@ -138,8 +138,8 @@ type
     // persistent headers sent with every request; setting a name again replaces it
     procedure AddHeader(const aName, aValue: string);
     procedure ClearHeaders;
-    // preemptive Basic auth header via Base64; clears BearerToken
-    procedure SetBasicAuth(const aUser, aPassword: AnsiString);
+    // preemptive Basic auth header, UTF-8 per RFC 7617; clears BearerToken
+    procedure SetBasicAuth(const aUser, aPassword: WideString);
 
     // exposed for testing; also useful on their own
     function ParseUrl(const aUrl: string; out aServerName, aResource: string;
@@ -530,10 +530,12 @@ begin
   FHeaders.Clear;
 end;
 
-procedure TbpHttpClient.SetBasicAuth(const aUser, aPassword: AnsiString);
+procedure TbpHttpClient.SetBasicAuth(const aUser, aPassword: WideString);
 begin
   FBearerToken := '';
-  AddHeader('Authorization', 'Basic ' + Base64Encode(aUser + ':' + aPassword));
+  // RFC 7617 says UTF-8, and the ANSI page would differ from machine to machine
+  AddHeader('Authorization', 'Basic ' +
+    Base64EncodeUtf8(aUser + ':' + aPassword));
 end;
 
 class function TbpHttpClient.MethodToString(aMethod: TbpHttpMethod): string;
