@@ -5,7 +5,7 @@ unit BpHttpClientStandalone;
 //   src\Core\Units\BpCompat.pas
 //   src\Core\Units\BpBase64.pas
 //   src\Core\Classes\BpHttpClient.pas
-// Source commit 3fbb305, generated 2026-08-29 by tools\Amalgamate.ps1.
+// Source commit 0feec9e, generated 2026-08-29 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   powershell -ExecutionPolicy Bypass -File tools\Amalgamate.ps1
 // Notes:

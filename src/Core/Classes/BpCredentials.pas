@@ -32,12 +32,14 @@ type
     // removes every entry under aService, returns how many
     class function DeleteAll(const aService: WideString): Integer;
 
-    // extra CryptProtectData layer keyed by aEntropy; wrong entropy raises.
+    // extra CryptProtectData layer keyed by aEntropy.
     // Friction against same-user readers, not a hard boundary.
     class procedure SetPasswordProtected(const aService, aUserName, aSecret,
       aEntropy: WideString);
+    // raises EbpCredentials when the entry is missing or will not unprotect
     class function GetPasswordProtected(const aService, aUserName,
       aEntropy: WideString): WideString;
+    // False in both those cases, never raises on a wrong entropy
     class function TryGetPasswordProtected(const aService, aUserName,
       aEntropy: WideString; out aSecret: WideString): Boolean;
   end;
@@ -342,10 +344,13 @@ begin
     lvIn.cbData := Length(lvCipher);
     lvIn.pbData := PAnsiChar(lvCipher);
     InitEntropyBlob(aEntropy, lvEntropy, lvEntropyPtr);
-    // fails on wrong entropy, a tampered blob, or a plain entry
+    // wrong entropy, tampered blob or a plain entry: a Try* answers False
     if not CryptUnprotectData(@lvIn, nil, lvEntropyPtr, nil, nil,
       gcCryptProtectUiForbidden, @lvOut) then
-      RaiseLastCredError('CryptUnprotectData');
+    begin
+      Result := False;
+      Exit;
+    end;
     try
       SetLength(lvPlain, lvOut.cbData);
       if lvPlain <> '' then
@@ -364,9 +369,20 @@ end;
 
 class function TbpCredentials.GetPasswordProtected(const aService, aUserName,
   aEntropy: WideString): WideString;
+var
+  lvBlob: AnsiString;
 begin
-  if not TryGetPasswordProtected(aService, aUserName, aEntropy, Result) then
-    RaiseNotFound(aService, aUserName);
+  if TryGetPasswordProtected(aService, aUserName, aEntropy, Result) then
+    Exit;
+  // will not unprotect is not the same as missing
+  if TryReadBlob(aService, aUserName, lvBlob) then
+  begin
+    WipeString(lvBlob);
+    raise EbpCredentials.CreateFmt('Credential for service ''%s'', user ''%s'' will not ' +
+      'unprotect: wrong entropy, a tampered blob, or an unprotected entry',
+      [string(aService), string(aUserName)]);
+  end;
+  RaiseNotFound(aService, aUserName);
 end;
 
 end.

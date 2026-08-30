@@ -553,7 +553,8 @@ begin
     FBpIntList.LoadFromFile('nonexistingfile.txt');
     Fail('Expected exception for non-existing file');
   except
-    on E: Exception do
+    // narrow, or Fail is caught by its own handler
+    on E: EFOpenError do
       Check(True, 'Exception raised as expected');
   end;
 end;
@@ -725,7 +726,8 @@ begin
     FBpIntList.Add(3);
     FBpIntList.SaveToStream(MemoryStream);
 
-    // Verify the stream content
+    // bytes, not UTF-16 elements
+    CheckEquals(5, MemoryStream.Size, 'Stream should hold the text as bytes');
     SetString(OutputText, PAnsiChar(MemoryStream.Memory), MemoryStream.Size);
     CheckEquals('1,2,3', OutputText, 'Stream content should match the list content');
   finally

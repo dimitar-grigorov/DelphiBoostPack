@@ -72,10 +72,13 @@ end;
 
 procedure TBpPasswordHashTests.TestPbkdf2BadArgs;
 begin
+  // ETestFailure must escape, or Fail is caught by its own handler
   try
     BpPBKDF2SHA256('p', 's', 0, 32);
     Fail('zero iterations must raise');
   except
+    on E: ETestFailure do
+      raise;
     on E: Exception do
       Check(True);
   end;
@@ -83,6 +86,8 @@ begin
     BpPBKDF2SHA256('p', 's', 1000, 0);
     Fail('zero key length must raise');
   except
+    on E: ETestFailure do
+      raise;
     on E: Exception do
       Check(True);
   end;
