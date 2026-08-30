@@ -75,6 +75,7 @@ uses
   BpSysUtils in '..\src\Core\Units\BpSysUtils.pas',
   BpTasksTests in 'Core\BpTasksTests.pas',
   BpTasks in '..\src\Core\Classes\BpTasks.pas',
+  BpVariantUtilsTests in 'Core\BpVariantUtilsTests.pas',
   BpVariantUtils in '..\src\Core\Units\BpVariantUtils.pas',
   BpKeyFoldTests in 'Core\BpKeyFoldTests.pas',
   BpKeyFold in '..\src\Core\Units\BpKeyFold.pas',

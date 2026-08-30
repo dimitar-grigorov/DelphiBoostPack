@@ -830,7 +830,13 @@ if BpTryVarToInt(lvField, lvCount) then ...      // False for '42', True for 42
 if BpTryVarToIntArray(lvField, lvIds) then ...
 ```
 
-`BpTryVarToInt`, `BpTryVarToInt64`, `BpTryVarToStr`, `BpTryVarToBool`, `BpTryVarToFloat`, `BpTryVarToIntArray`. This is the shared rule set behind the dictionaries' typed accessors, so `GetIntDef` and `BpTryVarToInt` agree by construction.
+`BpTryVarToInt`, `BpTryVarToInt64`, `BpTryVarToStr`, `BpTryVarToBool`, `BpTryVarToFloat`, `BpTryVarToDate`, `BpTryVarToIntArray`. This is the shared rule set behind the dictionaries' typed accessors, so `GetIntDef` and `BpTryVarToInt` agree by construction.
+
+Three details worth knowing:
+
+- A `varDate` is a kind of its own, not a float. `BpTryVarToFloat` rejects it and `BpTryVarToDate` reads it, so a timestamp never arrives silently as 46264.52. The dictionaries have no `GetDate`; pass their `TryGetValue` result to `BpTryVarToDate`.
+- Below Delphi 2009 a `string` is ANSI, so a `varOleStr` converts only when the active code page carries every character. When it does not, the call fails instead of handing you a `'?'` where a character used to be.
+- `varUInt64` is read straight from the payload rather than through a `Double`, so nothing is rounded. A value past `High(Int64)` makes `BpTryVarToInt64` return False; `BpTryVarToFloat` still takes it, on the unsigned side.
 
 ### [BpSysUtils](../src/Core/Units/BpSysUtils.pas)
 
