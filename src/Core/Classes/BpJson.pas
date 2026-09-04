@@ -657,8 +657,7 @@ begin
   end;
 end;
 
-// JSON floats always use '.' no matter what the locale says, and the shortest
-// text that reads back as the same Double wins: FloatToStr stops at 15 digits
+// always '.' whatever the locale says, and shortest round-tripping text wins
 function BpJsonFloatToStr(const aValue: Double): string;
 var
   lvFs: TFormatSettings;

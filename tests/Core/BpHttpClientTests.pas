@@ -24,6 +24,8 @@ type
     procedure TestIsSuccess;
     procedure TestBodyAsUtf8;
     procedure TestClassifyHttpError;
+    procedure TestHeaderInjectionRejected;
+    procedure TestBuildHeadersOddValues;
     procedure TestVerbsHonourPreCancelledToken;
   end;
 
@@ -232,6 +234,60 @@ begin
   CheckEquals('Server error', BpClassifyHttpError(0, 503));
   CheckEquals('HTTP error 418', BpClassifyHttpError(0, 418));
   CheckEquals('Unknown error', BpClassifyHttpError(0, 0));
+  CheckEquals('Operation cancelled', BpClassifyHttpError(gcErrOperationCancelled, 0));
+end;
+
+// a CRLF in a name or a value would inject whole headers into the request
+procedure TBpHttpClientTests.TestHeaderInjectionRejected;
+
+  procedure CheckRejected(const aName, aValue, aCase: string);
+  begin
+    try
+      FClient.AddHeader(aName, aValue);
+      Fail('Expected EbpHttpClient for ' + aCase);
+    except
+      on E: EbpHttpClient do
+        ;
+    end;
+  end;
+
+begin
+  CheckRejected('X', 'a'#13#10'Y: b', 'CRLF in the value');
+  CheckRejected('X'#13#10'Y', 'b', 'CRLF in the name');
+  CheckRejected('X', 'a'#10'Y: b', 'bare LF in the value');
+  CheckRejected('X', 'a'#13'Y: b', 'bare CR in the value');
+  CheckRejected('X:Y', 'b', 'colon in the name');
+  CheckEquals('', FClient.BuildHeaders(''), 'no rejected header may survive');
+
+  try
+    FClient.BearerToken := 't'#13#10'Y: b';
+    Fail('Expected EbpHttpClient for a CRLF in the bearer token');
+  except
+    on E: EbpHttpClient do
+      ;
+  end;
+
+  // the password goes through Base64, so a CRLF in it cannot reach the wire
+  FClient.SetBasicAuth('user', 'pa'#13#10'ss');
+  CheckEquals(0, Pos(#13, FClient.BuildHeaders('')), 'no CR in the basic auth line');
+  CheckEquals(0, Pos(#10, FClient.BuildHeaders('')), 'no LF in the basic auth line');
+end;
+
+procedure TBpHttpClientTests.TestBuildHeadersOddValues;
+begin
+  // the headers live in a TStrings, so an empty value removes the name
+  FClient.AddHeader('X-Gone', 'here');
+  FClient.AddHeader('X-Gone', '');
+  CheckEquals('', FClient.BuildHeaders(''), 'an empty value removes the header');
+
+  // a stray CRLF around the per-request block is trimmed off
+  FClient.AddHeader('X-Custom', 'one');
+  CheckEquals('X-Custom: one'#13#10'Accept: text/plain',
+    FClient.BuildHeaders('Accept: text/plain'#13#10), 'trailing CRLF trimmed');
+  CheckEquals('X-Custom: one'#13#10'Accept: text/plain',
+    FClient.BuildHeaders(#13#10'Accept: text/plain'), 'leading CRLF trimmed');
+  CheckEquals('X-Custom: one', FClient.BuildHeaders(#13#10),
+    'a CRLF-only block adds nothing');
 end;
 
 procedure TBpHttpClientTests.TestVerbsHonourPreCancelledToken;

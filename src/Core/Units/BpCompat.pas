@@ -1,7 +1,6 @@
 unit BpCompat;
 
-// Types the older compilers are missing. 18.5 is Delphi 2007; 18.0 is Delphi
-// 2006, which has no TBytes either.
+// Types the older compilers are missing; 18.5 is Delphi 2007, 18.0 is 2006.
 
 interface
 

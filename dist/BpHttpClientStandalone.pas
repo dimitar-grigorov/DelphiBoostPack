@@ -5,7 +5,7 @@ unit BpHttpClientStandalone;
 //   src\Core\Units\BpCompat.pas
 //   src\Core\Units\BpBase64.pas
 //   src\Core\Classes\BpHttpClient.pas
-// Source commit da7d570, generated 2026-09-04 by tools\Amalgamate.ps1.
+// Source commit a1dbea7, generated 2026-09-04 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
 // One bundle per project: two that share a helper declare it twice.
@@ -19,8 +19,7 @@ uses
 
 // ------------------ begin BpCompat.pas interface ------------------
 
-// Types the older compilers are missing. 18.5 is Delphi 2007; 18.0 is Delphi
-// 2006, which has no TBytes either.
+// Types the older compilers are missing; 18.5 is Delphi 2007, 18.0 is 2006.
 
 type
 {$IF CompilerVersion < 23.0}

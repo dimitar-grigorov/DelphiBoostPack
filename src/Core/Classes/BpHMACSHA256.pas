@@ -4,6 +4,8 @@ unit BpHMACSHA256;
 // authentication (API signatures, webhook verification, JWT HS256).
 // Streaming like the hash classes: Create with the key, Update, Final;
 // Final re-arms with the same key. One-shot class functions too.
+// Key and text are raw bytes: UTF8Encode first, or a Unicode compiler signs
+// the ANSI conversion instead of the bytes the peer signed.
 
 interface
 
