@@ -246,8 +246,9 @@ begin
   FBpIntList.Clear;
   FBpIntList.Sorted := True;
   QueryPerformanceCounter(lvStartTick);
+  // Add is the only insert path on a sorted list, and Insert resolved to it anyway
   for I := 0 to 100000 do
-    FBpIntList.Insert(Random(I + 1), I);
+    FBpIntList.Add(I);
   QueryPerformanceCounter(lvEndTick);
   lvElapsedTimeSorted := (lvEndTick - lvStartTick) * 1000.0 / lvFrequency;
 
@@ -264,7 +265,7 @@ begin
   QueryPerformanceCounter(lvEndTick);
   lvElapsedTimeSorting := (lvEndTick - lvStartTick) * 1000.0 / lvFrequency;
 
-  Status(Format('Insert into Sorted List Time: %f ms', [lvElapsedTimeSorted]));
+  Status(Format('Add into Sorted List Time: %f ms', [lvElapsedTimeSorted]));
   Status(Format('Insert into Unsorted List Time: %f ms', [lvElapsedTimeUnsorted]));
   Status(Format('Time to Sort After Insertion: %f ms', [lvElapsedTimeSorting]));
 end;

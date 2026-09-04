@@ -166,7 +166,6 @@ begin
     // an empty array must be a no-op, not a reset or an access violation
     lvBytes := nil;
     lvHasher.Update(lvBytes);
-    lvBytes := nil;
     SetLength(lvBytes, 1);
     lvBytes[0] := Ord('c');
     lvHasher.Update(lvBytes);
