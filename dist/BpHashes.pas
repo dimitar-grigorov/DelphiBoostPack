@@ -8,7 +8,7 @@ unit BpHashes;
 //   src\Core\Classes\BpMD5.pas
 //   src\Core\Classes\BpHMACSHA256.pas
 //   src\Core\Classes\BpPasswordHash.pas
-// Source commit da7d570, generated 2026-09-04 by tools\Amalgamate.ps1.
+// Source commit a1dbea7, generated 2026-09-04 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
 // One bundle per project: two that share a helper declare it twice.
@@ -27,8 +27,7 @@ uses
 
 // ------------------ begin BpCompat.pas interface ------------------
 
-// Types the older compilers are missing. 18.5 is Delphi 2007; 18.0 is Delphi
-// 2006, which has no TBytes either.
+// Types the older compilers are missing; 18.5 is Delphi 2007, 18.0 is 2006.
 
 type
 {$IF CompilerVersion < 23.0}
@@ -116,6 +115,8 @@ type
 // MD5 (RFC 1321), pure Pascal, for Delphi 7/2007+. Same interface as
 // BpSHA256: streaming Update plus one-shot class functions, hex or Base64.
 // Broken for signatures; fine for checksums, ETags and fingerprints.
+// The string overloads hash raw bytes: UTF8Encode first on Delphi 2009+, or
+// the digest follows the machine's ANSI code page.
 
 // hash arithmetic relies on Cardinal wraparound mod 2^32
 {$Q-}
@@ -157,6 +158,8 @@ type
 // authentication (API signatures, webhook verification, JWT HS256).
 // Streaming like the hash classes: Create with the key, Update, Final;
 // Final re-arms with the same key. One-shot class functions too.
+// Key and text are raw bytes: UTF8Encode first, or a Unicode compiler signs
+// the ANSI conversion instead of the bytes the peer signed.
 
 type
   TbpHMACSHA256 = class
@@ -213,8 +216,7 @@ function BpConstantTimeEquals(const A, B: AnsiString): Boolean;
 function BpHashPassword(const aPassword: AnsiString): string; overload;
 function BpHashPassword(const aPassword: AnsiString; aIterations: Integer): string; overload;
 // parses the record, re-derives, compares in constant time; malformed input
-// returns False, never raises. A record past gcBpPasswordHashMaxIterations
-// rounds or gcBpPasswordHashMaxKeyLen bytes is refused rather than obeyed.
+// returns False, never raises, and a record past the ceilings below is refused
 function BpVerifyPassword(const aPassword: AnsiString; const aStored: string): Boolean;
 // ---------------- end BpPasswordHash.pas interface ----------------
 

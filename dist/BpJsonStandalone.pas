@@ -4,7 +4,7 @@ unit BpJsonStandalone;
 // Single-file bundle amalgamated from the DelphiBoostPack modular units:
 //   src\Core\Classes\BpStringBuilder.pas
 //   src\Core\Classes\BpJson.pas
-// Source commit da7d570, generated 2026-09-04 by tools\Amalgamate.ps1.
+// Source commit a1dbea7, generated 2026-09-04 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
 // One bundle per project: two that share a helper declare it twice.
@@ -963,8 +963,7 @@ begin
   end;
 end;
 
-// JSON floats always use '.' no matter what the locale says, and the shortest
-// text that reads back as the same Double wins: FloatToStr stops at 15 digits
+// always '.' whatever the locale says, and shortest round-tripping text wins
 function BpJsonFloatToStr(const aValue: Double): string;
 var
   lvFs: TFormatSettings;

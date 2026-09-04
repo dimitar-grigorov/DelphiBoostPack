@@ -16,6 +16,7 @@ type
       const aCase: string);
   published
     procedure TestRfc4231Vectors;
+    procedure TestKeyLengthBoundaries;
     procedure TestByDefinitionRandom;
     procedure TestStreamingMatchesOneShot;
     procedure TestReuseAfterFinal;
@@ -100,6 +101,26 @@ begin
     'This is a test using a larger than block-size key and a larger t' +
     'han block-size data. The key needs to be hashed before being use' +
     'd by the HMAC algorithm.', 'case 7');
+end;
+
+// the RFC 2104 key rule changes at the 64-byte block size, and an off-by-one
+// there passes every published vector; values from python hmac
+procedure TBpHMACSHA256Tests.TestKeyLengthBoundaries;
+begin
+  CheckHmac('b613679a0814d9ec772f95d778c35fc5ff1697c493715653c6c712144292c5ad',
+    '', '', 'empty key, empty message');
+  CheckHmac('5f576a8d68fe4fb7eb823227246353c0870c3b0e878997341db1226b4bd88d61',
+    '', 'msg', 'empty key');
+  CheckHmac('1d6ee7eab6efdae0d28064055ecd0164d07e39e20e4034eae90f59a56d9c36bd',
+    StringOfChar(AnsiChar('A'), 63), 'msg', 'key of 63 bytes');
+  CheckHmac('54be2c66676012b3a6c28720fd9ad115e0634b75407fcebcb9225f9dfd951f4a',
+    StringOfChar(AnsiChar('A'), 64), 'msg', 'key of exactly one block');
+  CheckHmac('611aa2854cfe8c7f0dece5afc20183c68ee42e10bc2a1a5d2ea6421a7987c7a4',
+    StringOfChar(AnsiChar('A'), 65), 'msg', 'key of 65 bytes, hashed down');
+  CheckHmac('f39e9cd0dd8fb553028d5e067b1c1b84e467cbd4976ef3ddb6d959414f5d5d01',
+    StringOfChar(AnsiChar('A'), 128), 'msg', 'key of two blocks');
+  CheckHmac('896cc53f98fa12ccfd2d424f71ab5eef4fe57292f1293a6c9836e91a7ce734d4',
+    StringOfChar(AnsiChar('A'), 129), 'msg', 'key of 129 bytes');
 end;
 
 procedure TBpHMACSHA256Tests.TestByDefinitionRandom;

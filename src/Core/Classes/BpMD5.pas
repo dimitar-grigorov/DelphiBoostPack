@@ -3,6 +3,8 @@ unit BpMD5;
 // MD5 (RFC 1321), pure Pascal, for Delphi 7/2007+. Same interface as
 // BpSHA256: streaming Update plus one-shot class functions, hex or Base64.
 // Broken for signatures; fine for checksums, ETags and fingerprints.
+// The string overloads hash raw bytes: UTF8Encode first on Delphi 2009+, or
+// the digest follows the machine's ANSI code page.
 
 // hash arithmetic relies on Cardinal wraparound mod 2^32
 {$Q-}

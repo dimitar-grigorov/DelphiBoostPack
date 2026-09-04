@@ -69,7 +69,7 @@ lvClient.SetBasicAuth('user', 'pass');    // WideString, UTF-8 per RFC 7617
 lvClient.AddHeader('X-Api-Version', '2'); // persistent, sent every request
 ```
 
-`AddHeader` replaces a name already set, and rejects CR, LF or a colon in the name, so a value from a config file cannot append headers of its own; `BearerToken` is checked the same way. Per-request headers merge on top, a name in both sent once with the per-request value.
+`AddHeader` replaces a name already set, removes it when the value is empty, and rejects CR, LF or a colon in the name, so a value from a config file cannot append headers of its own; `BearerToken` is checked the same way. Per-request headers merge on top, a name in both sent once with the per-request value.
 
 | Property | Default |
 |----------|---------|
@@ -408,6 +408,8 @@ lvHasher.Final(lvDigest);                               // Final resets for reus
 
 MD5 (RFC 1321), the same shape as [BpSHA256](#bpsha256). Broken for anything security-related: keep it to legacy checksums, ETags and old protocols that demand it.
 
+The `AnsiString` entry points hash the raw bytes they are given, so on Delphi 2009+ a `string` argument is converted through the active ANSI code page first and the digest differs from the Delphi 2007 one. Pass `AnsiString(UTF8Encode(lvText))` when the bytes matter. The same holds for [BpSHA256](#bpsha256), [BpHMACSHA256](#bphmacsha256) and [BpPasswordHash](#bppasswordhash).
+
 ### [BpHMACSHA256](../src/Core/Classes/BpHMACSHA256.pas)
 
 HMAC-SHA256 (RFC 2104), for signing API requests and verifying webhooks.
@@ -420,7 +422,9 @@ if not BpConstantTimeEquals(lvSig, lvHeaderSig) then     // from BpPasswordHash
   raise Exception.Create('bad signature');
 ```
 
-`Compute`, `ComputeHex` and `ComputeBase64` for one shot; `Create(aKey)` / `Update` / `Final` when the message is a stream. Keys of any length are handled per the RFC.
+`Compute`, `ComputeHex` and `ComputeBase64` for one shot; `Create(aKey)` / `Update` / `Final` when the message is a stream. Keys of any length are handled per the RFC: shorter than the 64-byte block they are zero-padded, longer ones are hashed down first.
+
+Key and payload are raw bytes, not text. The peer signs the UTF-8 body, so sign the same bytes: `TbpHMACSHA256.ComputeHex(lvSecret, AnsiString(UTF8Encode(lvPayload)))`, or hand it the `Body: AnsiString` that [TbpHttpClient](#tbphttpclient) already returns.
 
 ### [BpPasswordHash](../src/Core/Classes/BpPasswordHash.pas)
 

@@ -16,6 +16,9 @@ type
     procedure TestStreamingMatchesOneShot;
     procedure TestBlockBoundaries;
     procedure TestInstanceReuseAfterFinal;
+    procedure TestHashBytes;
+    procedure TestHashBuffer;
+    procedure TestUpdateBytesStreaming;
     procedure TestHashFile;
     procedure TestDigestToBase64;
     procedure TestCryptoApiCrossCheck;
@@ -119,6 +122,59 @@ begin
   end;
   CheckEquals(TbpMD5.DigestToHex(lvFirst), TbpMD5.DigestToHex(lvSecond));
   CheckEquals('900150983cd24fb0d6963f7d28e17f72', TbpMD5.DigestToHex(lvFirst));
+end;
+
+procedure TBpMD5Tests.TestHashBytes;
+var
+  lvBytes: TBytes;
+begin
+  SetLength(lvBytes, 3);
+  lvBytes[0] := Ord('a');
+  lvBytes[1] := Ord('b');
+  lvBytes[2] := Ord('c');
+  CheckEquals('900150983cd24fb0d6963f7d28e17f72',
+    TbpMD5.DigestToHex(TbpMD5.HashBytes(lvBytes)));
+  lvBytes := nil;
+  CheckEquals('d41d8cd98f00b204e9800998ecf8427e',
+    TbpMD5.DigestToHex(TbpMD5.HashBytes(lvBytes)), 'empty bytes');
+end;
+
+procedure TBpMD5Tests.TestHashBuffer;
+var
+  lvBuf: array[0..2] of AnsiChar;
+begin
+  lvBuf[0] := 'a';
+  lvBuf[1] := 'b';
+  lvBuf[2] := 'c';
+  CheckEquals('900150983cd24fb0d6963f7d28e17f72',
+    TbpMD5.DigestToHex(TbpMD5.HashBuffer(lvBuf, 3)));
+end;
+
+procedure TBpMD5Tests.TestUpdateBytesStreaming;
+var
+  lvHasher: TbpMD5;
+  lvBytes: TBytes;
+  lvDigest: TbpMD5Digest;
+begin
+  lvHasher := TbpMD5.Create;
+  try
+    SetLength(lvBytes, 1);
+    lvBytes[0] := Ord('a');
+    lvHasher.Update(lvBytes);
+    lvBytes[0] := Ord('b');
+    lvHasher.Update(lvBytes);
+    // an empty array must be a no-op, not a reset or an access violation
+    lvBytes := nil;
+    lvHasher.Update(lvBytes);
+    lvBytes := nil;
+    SetLength(lvBytes, 1);
+    lvBytes[0] := Ord('c');
+    lvHasher.Update(lvBytes);
+    lvHasher.Final(lvDigest);
+    CheckEquals('900150983cd24fb0d6963f7d28e17f72', TbpMD5.DigestToHex(lvDigest));
+  finally
+    lvHasher.Free;
+  end;
 end;
 
 procedure TBpMD5Tests.TestHashFile;

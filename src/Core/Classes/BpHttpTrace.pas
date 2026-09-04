@@ -33,8 +33,7 @@ implementation
 uses
   SysUtils, WinInet, BpCompat;
 
-// WinInet.pas maps the unsuffixed name to the wide entry point on Unicode
-// compilers, which changes the payload encoding, so bind the ANSI one here
+// the unsuffixed name binds the wide entry point on Unicode compilers
 function InternetSetStatusCallbackA(hInet: HINTERNET;
   lpfnInternetCallback: PFNInternetStatusCallback): PFNInternetStatusCallback;
   stdcall; external 'wininet.dll' name 'InternetSetStatusCallbackA';
