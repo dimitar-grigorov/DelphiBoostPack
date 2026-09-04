@@ -4,6 +4,8 @@ unit BpSHA256;
 // Update in chunks, Final) so large files need not fit in memory, plus
 // one-shot class functions for buffer/bytes/string/file, hex or Base64.
 // Final resets the state so an instance can be reused for the next message.
+// The string overloads hash raw bytes: UTF8Encode first on Delphi 2009+, or
+// the digest follows the machine's ANSI code page.
 
 // hash arithmetic relies on Cardinal wraparound mod 2^32
 {$Q-}
