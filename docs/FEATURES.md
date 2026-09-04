@@ -115,7 +115,8 @@ begin
   Log(Format('[http %p] %s', [aHandle, aLine]));            // "connected to ..."
 end;
 
-TbpHttpTrace.Attach(FClient, MyTrace);   // any thread; Detach when done
+if not TbpHttpTrace.Attach(FClient, MyTrace) then  // any thread; Detach when done
+  Log('wininet refused the trace callback');
 ```
 
 It installs a WinInet status callback, so an untraced build pays nothing, and the sink runs on the I/O thread: keep it quick and thread-safe. Headers never pass through it, so no `Authorization` value reaches a log.
@@ -337,7 +338,7 @@ if lvIds.BinarySearch(5, lvIndex) then
   lvIds.Delete(lvIndex);
 ```
 
-`BinarySearch` needs the `Sorted` flag, so use `Sorted := True` rather than a bare `Sort` when you intend to search; `IndexOf` is the linear fallback either way. Sorting is an in-place introsort over a plain `array of Integer`, recursing into the smaller partition only and dropping to heapsort when the pivot keeps splitting badly: 400,000 organ-pipe values sort in 31 ms where a middle-pivot quicksort recurses 200,000 deep and dies. Implements `IBpIntList`; `TIntegerList` / `TIntList` are aliases for older code.
+`BinarySearch` needs the `Sorted` flag, so use `Sorted := True` rather than a bare `Sort` when you intend to search; `IndexOf` is the linear fallback either way. While `Sorted` is on, `Items[]`, `Insert` and `Exchange` raise `EListError` the way `TStringList` does, because an unchecked write would leave the binary search looking at unordered data; turn `Sorted` off first. `DelimitedText` treats spaces, tabs and line breaks as separators as well as the delimiter, so a whitespace-separated file loads. Sorting is an in-place introsort over a plain `array of Integer`, recursing into the smaller partition only and dropping to heapsort when the pivot keeps splitting badly: 400,000 organ-pipe values sort in 31 ms where a middle-pivot quicksort recurses 200,000 deep and dies. Implements `IBpIntList`; `TIntegerList` / `TIntList` are aliases for older code.
 
 ### [TbpInt64List](../src/Core/Classes/BpInt64List.pas)
 
@@ -475,7 +476,7 @@ Bob Jenkins lookup3 (public domain), producing the same values as the RTL's `Bob
 lvBucket := TbpHashBobJenkins.GetHashValue(lvKey) and (lcBucketCount - 1);
 ```
 
-Fast, well distributed and non-cryptographic - a bucket index, not a fingerprint. It powers [TbpStrDictionary](#tbpstrdictionary); `Reset` / `Update` / `HashAsInteger` for data arriving in pieces.
+Fast, well distributed and non-cryptographic - a bucket index, not a fingerprint. It powers [TbpStrDictionary](#tbpstrdictionary); `Reset` / `Update` / `HashAsInteger` hash data that arrives in pieces, but `Update` chains by re-seeding with the previous hash (RTL semantics), so the result depends on where the chunks are split and is not the one-shot hash of the concatenation. Use `GetHashValue` over a contiguous buffer when you need that value.
 
 ---
 

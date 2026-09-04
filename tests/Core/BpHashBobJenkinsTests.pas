@@ -19,7 +19,11 @@ type
     procedure TestHashConsistency;
     procedure TestSmallChangesImpact;
     procedure TestKnownAnswers;
+    procedure TestKnownAnswersWithInitialValue;
     procedure TestKnownAnswersUnaligned;
+    procedure TestUpdateBytesWholeArray;
+    procedure TestUpdateBytesExplicitZero;
+    procedure TestUpdateBytesLengthPastEndRaises;
     procedure TestChainedUpdate;
     procedure TestTailBytesAffectHash;
   end;
@@ -39,26 +43,34 @@ begin
 end;
 
 procedure TBpHashBobJenkinsTests.TestHashUniqueness;
+const
+  lcCount = 50000;
+  // birthday bound: lcCount^2 / 2^33 is about 0.3 expected collisions for a
+  // perfect 32-bit hash, so a budget, not zero
+  lcMaxCollisions = 5;
 var
-  i: Integer;
+  i, index, lvCollisions: Integer;
   hashValue: Integer;
   uniqueHashes: TStringList;
-  index: Integer;
 begin
+  lvCollisions := 0;
   uniqueHashes := TStringList.Create;
   try
     uniqueHashes.Sorted := True;
-    for i := 1 to 50000 do
+    for i := 1 to lcCount do
     begin
       hashValue := FHashBobJenkins.GetHashValue('Sample Text ' + IntToStr(i));
-      if uniqueHashes.Find(IntToStr(hashValue), index) then  // Check if hashValue is already in the list
-        Fail('Hash collision detected for value ' + IntToStr(i))
+      if uniqueHashes.Find(IntToStr(hashValue), index) then
+        Inc(lvCollisions)
       else
         uniqueHashes.Add(IntToStr(hashValue));
     end;
   finally
     uniqueHashes.Free;
   end;
+  Check(lvCollisions <= lcMaxCollisions,
+    Format('%d collisions in %d hashes, budget is %d',
+      [lvCollisions, lcCount, lcMaxCollisions]));
 end;
 
 procedure TBpHashBobJenkinsTests.TestHashConsistency;
@@ -112,6 +124,63 @@ begin
   for i := 0 to 255 do
     lvAllBytes[i + 1] := AnsiChar(i);
   CheckHash(-502396877, lvAllBytes);      // all byte values, multi-block
+end;
+
+// the second published lookup3 vector: the same text with initval 1, which is
+// the only test that pins the seeding of a non-zero initial value
+procedure TBpHashBobJenkinsTests.TestKnownAnswersWithInitialValue;
+const
+  lcText: AnsiString = 'Four score and seven years ago';
+begin
+  CheckEquals(Integer($CD628161),
+    TbpHashBobJenkins.GetHashValue(Pointer(lcText)^, Length(lcText), 1),
+    'hashlittle(text, 30, 1) must be $CD628161');
+  CheckEquals(Integer($27D04005),
+    TbpHashBobJenkins.GetHashValue(Pointer(lcText)^, Length(lcText), 2),
+    'hashlittle(text, 30, 2) must be $27D04005');
+end;
+
+procedure TBpHashBobJenkinsTests.TestUpdateBytesWholeArray;
+var
+  lvBytes: TBytes;
+  i: Integer;
+begin
+  SetLength(lvBytes, 20);
+  for i := 0 to High(lvBytes) do
+    lvBytes[i] := i * 7;
+  FHashBobJenkins.Reset;
+  FHashBobJenkins.Update(lvBytes);
+  CheckEquals(TbpHashBobJenkins.GetHashValue(lvBytes[0], Length(lvBytes)),
+    FHashBobJenkins.HashAsInteger,
+    'the default length must hash the whole array');
+end;
+
+// an explicit 0 means zero bytes, it is not a request for the whole array
+procedure TBpHashBobJenkinsTests.TestUpdateBytesExplicitZero;
+var
+  lvBytes: TBytes;
+begin
+  SetLength(lvBytes, 8);
+  FillChar(lvBytes[0], Length(lvBytes), $AB);
+  FHashBobJenkins.Reset;
+  FHashBobJenkins.Update(lvBytes, 0);
+  CheckEquals(-559038737, FHashBobJenkins.HashAsInteger,
+    'zero bytes must leave the $DEADBEEF seed, not hash the array');
+end;
+
+procedure TBpHashBobJenkinsTests.TestUpdateBytesLengthPastEndRaises;
+var
+  lvBytes: TBytes;
+begin
+  SetLength(lvBytes, 4);
+  FHashBobJenkins.Reset;
+  try
+    FHashBobJenkins.Update(lvBytes, 5);
+    Fail('Expected ERangeError when aLength runs past the array');
+  except
+    on E: ERangeError do
+      ;
+  end;
 end;
 
 procedure TBpHashBobJenkinsTests.TestKnownAnswersUnaligned;

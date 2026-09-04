@@ -21,6 +21,7 @@ type
     procedure TestVerifyWrongPassword;
     procedure TestVerifyTamperedRecord;
     procedure TestVerifyMalformedInput;
+    procedure TestVerifyRejectsAbsurdWorkFactor;
     procedure TestRecordFormat;
     procedure TestSaltUniqueness;
     procedure TestConstantTimeEquals;
@@ -171,6 +172,24 @@ begin
   CheckFalse(BpVerifyPassword('p', '$pbkdf2-sha256$1000$!!!$c2FsdA=='), 'bad salt base64');
   CheckFalse(BpVerifyPassword('p', '$pbkdf2-sha256$1000$c2FsdA==$!!!'), 'bad hash base64');
   CheckFalse(BpVerifyPassword('p', '$pbkdf2-sha256$1000$c2FsdA==$c2FsdA==$extra'), 'extra field');
+end;
+
+// a record is untrusted input: an absurd work factor must be refused, not
+// obeyed, or one verify blocks its thread for the best part of an hour
+procedure TBpPasswordHashTests.TestVerifyRejectsAbsurdWorkFactor;
+var
+  lvLongHash: string;
+begin
+  CheckEquals(10000000, gcBpPasswordHashMaxIterations, 'iteration ceiling');
+  CheckEquals(64, gcBpPasswordHashMaxKeyLen, 'hash length ceiling');
+  CheckFalse(BpVerifyPassword('p',
+    '$pbkdf2-sha256$2147483647$c2FsdA==$c2FsdA=='), 'MaxInt iterations');
+  CheckFalse(BpVerifyPassword('p',
+    '$pbkdf2-sha256$10000001$c2FsdA==$c2FsdA=='), 'one past the ceiling');
+  // 96 base64 characters decode to 72 bytes, past the 64-byte ceiling
+  lvLongHash := StringOfChar('A', 96);
+  CheckFalse(BpVerifyPassword('p',
+    '$pbkdf2-sha256$1000$c2FsdA==$' + lvLongHash), 'over-long hash');
 end;
 
 procedure TBpPasswordHashTests.TestRecordFormat;

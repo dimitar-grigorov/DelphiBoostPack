@@ -3,7 +3,7 @@ unit BpHttpTrace;
 // An in-process 'ssh -v' for TbpHttpClient: DNS, connect, byte counts,
 // redirects. Optional - nothing references this unit.
 //
-//   TbpHttpTrace.Attach(FClient, MyTrace);
+//   if TbpHttpTrace.Attach(FClient, MyTrace) then ...
 //   TbpHttpTrace.Detach(FClient);
 
 interface
@@ -17,8 +17,8 @@ type
 
   TbpHttpTrace = class
   public
-    // one sink per process; the last Attach wins
-    class procedure Attach(aClient: TbpHttpClient; aProc: TbpHttpTraceProc);
+    // one sink per process, last Attach wins; False means WinInet refused it
+    class function Attach(aClient: TbpHttpClient; aProc: TbpHttpTraceProc): Boolean;
     class procedure Detach(aClient: TbpHttpClient);
 
     // '' for the statuses a wire trace skips
@@ -31,7 +31,13 @@ type
 implementation
 
 uses
-  SysUtils, WinInet;
+  SysUtils, WinInet, BpCompat;
+
+// WinInet.pas maps the unsuffixed name to the wide entry point on Unicode
+// compilers, which changes the payload encoding, so bind the ANSI one here
+function InternetSetStatusCallbackA(hInet: HINTERNET;
+  lpfnInternetCallback: PFNInternetStatusCallback): PFNInternetStatusCallback;
+  stdcall; external 'wininet.dll' name 'InternetSetStatusCallbackA';
 
 const
   gcStatusDetectingProxy = 80;   // missing from D2007's WinInet.pas
@@ -62,17 +68,22 @@ end;
 
 { TbpHttpTrace }
 
-class procedure TbpHttpTrace.Attach(aClient: TbpHttpClient;
-  aProc: TbpHttpTraceProc);
+class function TbpHttpTrace.Attach(aClient: TbpHttpClient;
+  aProc: TbpHttpTraceProc): Boolean;
 begin
   gvTraceProc := aProc;
-  InternetSetStatusCallback(aClient.SessionHandle,
-    PFNInternetStatusCallback(@TraceStatusCallback));
+  // the sentinel is -1 widened to a pointer, not a callback address
+  Result := Pointer(InternetSetStatusCallbackA(aClient.SessionHandle,
+    PFNInternetStatusCallback(@TraceStatusCallback))) <>
+    Pointer(TbpUIntPtr(INTERNET_INVALID_STATUS_CALLBACK));
+  // a failed attach must not leave the sink globally armed
+  if not Result then
+    gvTraceProc := nil;
 end;
 
 class procedure TbpHttpTrace.Detach(aClient: TbpHttpClient);
 begin
-  InternetSetStatusCallback(aClient.SessionHandle, nil);
+  InternetSetStatusCallbackA(aClient.SessionHandle, nil);
   gvTraceProc := nil;
 end;
 
@@ -84,20 +95,23 @@ class function TbpHttpTrace.StatusText(aStatus: DWORD; aInfo: Pointer;
   const
     lcMaxChars = 512;
   var
-    lvChars: PChar;
+    lvChars: PAnsiChar;
+    lvAnsi: AnsiString;
     lvMax, i: Integer;
   begin
     Result := '';
     if aInfo = nil then
       Exit;
-    lvChars := PChar(aInfo);
+    // WinInet hands over bytes; aInfoLen counts bytes, not characters
+    lvChars := PAnsiChar(aInfo);
     lvMax := lcMaxChars;
     if (aInfoLen > 0) and (aInfoLen < DWORD(lvMax)) then
       lvMax := aInfoLen;
     i := 0;
     while (i < lvMax) and (lvChars[i] <> #0) do
       Inc(i);
-    SetString(Result, lvChars, i);
+    SetString(lvAnsi, lvChars, i);
+    Result := string(lvAnsi);
   end;
 
   function InfoNumber: DWORD;

@@ -89,6 +89,14 @@ type
     procedure TestBinarySearchWithLargeMixedValues;
     procedure TestDelimitedTextAboveHighInt64Raises;
     procedure TestDelimitedTextBelowLowInt64Raises;
+    procedure TestExchangeWhenSortedRaises;
+    procedure TestInsertWhenSortedRaises;
+    procedure TestSortReSortsAfterUncheckedWrite;
+    procedure TestSortedReadableThroughInterface;
+    procedure TestDelimitedTextWhitespaceSeparated;
+    procedure TestDelimitedTextTabSeparated;
+    procedure TestDelimitedTextSpaceBeforeDelimiter;
+    procedure TestDelimitedTextWhitespaceOnly;
   end;
 
   // The list is a TInterfacedObject, so an IBpInt64List reference must free it
@@ -364,13 +372,105 @@ begin
   CheckEqualsInt64(1, FBpInt64List.Items[0], 'Items should be added in sorted order');
 end;
 
+// Sorted is an invariant, not a hint: an unchecked write is refused
 procedure TBpInt64ListTests.TestSetItemWhenSorted;
 begin
   FBpInt64List.Add(1);
   FBpInt64List.Add(3);
   FBpInt64List.Sorted := True;
-  FBpInt64List.Items[1] := 2; // behavior is unspecified: may raise or force a re-sort
-  CheckEqualsInt64(2, FBpInt64List.Items[1], 'Setting item in a sorted list should maintain order');
+  try
+    FBpInt64List.Items[1] := 2;
+    Fail('Expected EListError for Items[] on a sorted list');
+  except
+    on E: EListError do
+      ;
+  end;
+  CheckEqualsInt64(3, FBpInt64List.Items[1], 'the list must be untouched after the refusal');
+end;
+
+procedure TBpInt64ListTests.TestExchangeWhenSortedRaises;
+begin
+  FBpInt64List.Add(1);
+  FBpInt64List.Add(2);
+  FBpInt64List.Sorted := True;
+  try
+    FBpInt64List.Exchange(0, 1);
+    Fail('Expected EListError for Exchange on a sorted list');
+  except
+    on E: EListError do
+      ;
+  end;
+  CheckEqualsInt64(1, FBpInt64List.Items[0], 'the order must survive the refusal');
+end;
+
+procedure TBpInt64ListTests.TestInsertWhenSortedRaises;
+begin
+  FBpInt64List.Sorted := True;
+  FBpInt64List.Add(10);
+  try
+    FBpInt64List.Insert(0, 20);
+    Fail('Expected EListError for Insert on a sorted list');
+  except
+    on E: EListError do
+      ;
+  end;
+  CheckEquals(1, FBpInt64List.Count, 'nothing may be inserted');
+  // Add is still the sorted entry point
+  FBpInt64List.Add(5);
+  CheckEqualsInt64(5, FBpInt64List.Items[0], 'Add must still insert in order');
+end;
+
+// Sort is the repair path once Sorted goes back off, so it may not skip
+procedure TBpInt64ListTests.TestSortReSortsAfterUncheckedWrite;
+begin
+  FBpInt64List.Sorted := True;
+  FBpInt64List.Add(1);
+  FBpInt64List.Add(2);
+  FBpInt64List.Add(3);
+  FBpInt64List.Sorted := False;
+  FBpInt64List.Items[0] := 99;
+  FBpInt64List.Sort;
+  CheckEqualsInt64(2, FBpInt64List.Items[0], 'Sort must re-sort, not exit early');
+  CheckEqualsInt64(3, FBpInt64List.Items[1], 'second item after the re-sort');
+  CheckEqualsInt64(99, FBpInt64List.Items[2], 'the written value ends up last');
+end;
+
+procedure TBpInt64ListTests.TestSortedReadableThroughInterface;
+var
+  lvIntf: IBpInt64List;
+begin
+  lvIntf := TbpInt64List.Create;
+  CheckEquals(False, lvIntf.Sorted, 'a fresh list is unsorted');
+  lvIntf.Sorted := True;
+  CheckEquals(True, lvIntf.Sorted, 'the interface must be able to read the flag back');
+end;
+
+procedure TBpInt64ListTests.TestDelimitedTextWhitespaceSeparated;
+begin
+  FBpInt64List.DelimitedText := '1 2 3';
+  CheckEquals(3, FBpInt64List.Count, 'whitespace separates values, as in TStringList');
+  CheckEqualsInt64(1, FBpInt64List.Items[0], 'first value');
+  CheckEqualsInt64(3, FBpInt64List.Items[2], 'last value');
+end;
+
+procedure TBpInt64ListTests.TestDelimitedTextTabSeparated;
+begin
+  FBpInt64List.DelimitedText := '1'#9'2'#9#9'3';
+  CheckEquals(3, FBpInt64List.Count, 'tabs separate values too');
+  CheckEqualsInt64(2, FBpInt64List.Items[1], 'second value');
+end;
+
+procedure TBpInt64ListTests.TestDelimitedTextSpaceBeforeDelimiter;
+begin
+  FBpInt64List.DelimitedText := '1 ,2, 3';
+  CheckEquals(3, FBpInt64List.Count, 'a space before the delimiter is not part of the value');
+  CheckEqualsInt64(3, FBpInt64List.Items[2], 'last value');
+end;
+
+procedure TBpInt64ListTests.TestDelimitedTextWhitespaceOnly;
+begin
+  FBpInt64List.DelimitedText := '   '#9;
+  CheckEquals(0, FBpInt64List.Count, 'whitespace-only input is an empty list, not an error');
 end;
 
 procedure TBpInt64ListTests.TestSetItem;

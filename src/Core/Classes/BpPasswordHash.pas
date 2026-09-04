@@ -18,6 +18,9 @@ const
   gcBpPasswordHashIterations = 600000;
   gcBpPasswordHashSaltLen = 16;
   gcBpPasswordHashKeyLen = 32;
+  // ceilings for a stored record: 10 million rounds is already ~40 s per verify
+  gcBpPasswordHashMaxIterations = 10000000;
+  gcBpPasswordHashMaxKeyLen = 64;
 
 // raw derived key bytes in an AnsiString, plus a lowercase hex convenience wrapper
 function BpPBKDF2SHA256(const aPassword, aSalt: AnsiString;
@@ -32,7 +35,8 @@ function BpConstantTimeEquals(const A, B: AnsiString): Boolean;
 function BpHashPassword(const aPassword: AnsiString): string; overload;
 function BpHashPassword(const aPassword: AnsiString; aIterations: Integer): string; overload;
 // parses the record, re-derives, compares in constant time; malformed input
-// returns False, never raises
+// returns False, never raises. A record past gcBpPasswordHashMaxIterations
+// rounds or gcBpPasswordHashMaxKeyLen bytes is refused rather than obeyed.
 function BpVerifyPassword(const aPassword: AnsiString; const aStored: string): Boolean;
 
 implementation
@@ -212,12 +216,14 @@ begin
     if (lvHashB64 = '') or (Pos('$', lvHashB64) > 0) then
       Exit;
     lvIterations := StrToIntDef(lvIterStr, 0);
-    if lvIterations < 1 then
+    if (lvIterations < 1) or (lvIterations > gcBpPasswordHashMaxIterations) then
       Exit;
     // Base64Decode raises on garbage; the except below turns that into False
     lvSaltBytes := Base64Decode(lvSaltB64);
     lvHashBytes := Base64Decode(lvHashB64);
     if (Length(lvSaltBytes) = 0) or (Length(lvHashBytes) = 0) then
+      Exit;
+    if Length(lvHashBytes) > gcBpPasswordHashMaxKeyLen then
       Exit;
     SetString(lvSalt, PAnsiChar(@lvSaltBytes[0]), Length(lvSaltBytes));
     SetString(lvHash, PAnsiChar(@lvHashBytes[0]), Length(lvHashBytes));

@@ -5,7 +5,7 @@ unit BpIntListTests;
 interface
 
 uses
-  TestFramework, Classes, BpIntList, SysUtils;
+  TestFramework, Classes, BpIntListIntf, BpIntList, SysUtils;
 
 type
   TBpIntListTests = class(TTestCase)
@@ -82,6 +82,14 @@ type
     procedure TestSortThenBinarySearch;
     procedure TestSortOrganPipe;
     procedure TestFileRoundTripBetweenLists;
+    procedure TestExchangeWhenSortedRaises;
+    procedure TestInsertWhenSortedRaises;
+    procedure TestSortReSortsAfterUncheckedWrite;
+    procedure TestSortedReadableThroughInterface;
+    procedure TestDelimitedTextWhitespaceSeparated;
+    procedure TestDelimitedTextTabSeparated;
+    procedure TestDelimitedTextSpaceBeforeDelimiter;
+    procedure TestDelimitedTextWhitespaceOnly;
   end;
 
 implementation
@@ -348,15 +356,6 @@ begin
   FBpIntList.Add(3);
   FBpIntList.Add(1);
   CheckEquals(1, FBpIntList.Items[0], 'Items should be added in sorted order');
-end;
-
-procedure TBpIntListTests.TestSetItemWhenSorted;
-begin
-  FBpIntList.Add(1);
-  FBpIntList.Add(3);
-  FBpIntList.Sorted := True;
-  FBpIntList.Items[1] := 2; // behavior is unspecified: may raise or force a re-sort
-  CheckEquals(2, FBpIntList.Items[1], 'Setting item in a sorted list should maintain order');
 end;
 
 procedure TBpIntListTests.TestSetItem;
@@ -914,6 +913,107 @@ begin
     lvOther.Free;
     SysUtils.DeleteFile(lvFileName);
   end;
+end;
+
+// Sorted is an invariant, not a hint: an unchecked write is refused
+procedure TBpIntListTests.TestSetItemWhenSorted;
+begin
+  FBpIntList.Add(1);
+  FBpIntList.Add(3);
+  FBpIntList.Sorted := True;
+  try
+    FBpIntList.Items[1] := 2;
+    Fail('Expected EListError for Items[] on a sorted list');
+  except
+    on E: EListError do
+      ;
+  end;
+  CheckEquals(3, FBpIntList.Items[1], 'the list must be untouched after the refusal');
+end;
+
+procedure TBpIntListTests.TestExchangeWhenSortedRaises;
+begin
+  FBpIntList.Add(1);
+  FBpIntList.Add(2);
+  FBpIntList.Sorted := True;
+  try
+    FBpIntList.Exchange(0, 1);
+    Fail('Expected EListError for Exchange on a sorted list');
+  except
+    on E: EListError do
+      ;
+  end;
+  CheckEquals(1, FBpIntList.Items[0], 'the order must survive the refusal');
+end;
+
+procedure TBpIntListTests.TestInsertWhenSortedRaises;
+begin
+  FBpIntList.Sorted := True;
+  FBpIntList.Add(10);
+  try
+    FBpIntList.Insert(0, 20);
+    Fail('Expected EListError for Insert on a sorted list');
+  except
+    on E: EListError do
+      ;
+  end;
+  CheckEquals(1, FBpIntList.Count, 'nothing may be inserted');
+  // Add is still the sorted entry point
+  FBpIntList.Add(5);
+  CheckEquals(5, FBpIntList.Items[0], 'Add must still insert in order');
+end;
+
+// Sort is the repair path once Sorted goes back off, so it may not skip
+procedure TBpIntListTests.TestSortReSortsAfterUncheckedWrite;
+begin
+  FBpIntList.Sorted := True;
+  FBpIntList.Add(1);
+  FBpIntList.Add(2);
+  FBpIntList.Add(3);
+  FBpIntList.Sorted := False;
+  FBpIntList.Items[0] := 99;
+  FBpIntList.Sort;
+  CheckEquals(2, FBpIntList.Items[0], 'Sort must re-sort, not exit early');
+  CheckEquals(3, FBpIntList.Items[1], 'second item after the re-sort');
+  CheckEquals(99, FBpIntList.Items[2], 'the written value ends up last');
+end;
+
+procedure TBpIntListTests.TestSortedReadableThroughInterface;
+var
+  lvIntf: IBpIntList;
+begin
+  lvIntf := TbpIntList.Create;
+  CheckEquals(False, lvIntf.Sorted, 'a fresh list is unsorted');
+  lvIntf.Sorted := True;
+  CheckEquals(True, lvIntf.Sorted, 'the interface must be able to read the flag back');
+end;
+
+procedure TBpIntListTests.TestDelimitedTextWhitespaceSeparated;
+begin
+  FBpIntList.DelimitedText := '1 2 3';
+  CheckEquals(3, FBpIntList.Count, 'whitespace separates values, as in TStringList');
+  CheckEquals(1, FBpIntList.Items[0], 'first value');
+  CheckEquals(3, FBpIntList.Items[2], 'last value');
+end;
+
+procedure TBpIntListTests.TestDelimitedTextTabSeparated;
+begin
+  FBpIntList.DelimitedText := '1'#9'2'#9#9'3';
+  CheckEquals(3, FBpIntList.Count, 'tabs separate values too');
+  CheckEquals(2, FBpIntList.Items[1], 'second value');
+end;
+
+procedure TBpIntListTests.TestDelimitedTextSpaceBeforeDelimiter;
+begin
+  FBpIntList.DelimitedText := '1 ,2, 3';
+  CheckEquals(3, FBpIntList.Count, 'a space before the delimiter is not part of the value');
+  CheckEquals(3, FBpIntList.Items[2], 'last value');
+end;
+
+procedure TBpIntListTests.TestDelimitedTextWhitespaceOnly;
+begin
+  FBpIntList.DelimitedText := '   '#9;
+  CheckEquals(0, FBpIntList.Count, 'whitespace-only input is an empty list, not an error');
 end;
 
 initialization

@@ -57,6 +57,7 @@ type
     procedure TestWriterEscapeNonAscii;
     procedure TestPrettyPrint;
     procedure TestFloatUsesDotSeparator;
+    procedure TestFloatRoundTripsThroughText;
     procedure TestEmptyContainersWrite;
     procedure TestRoundTripComplexDocument;
     procedure TestParseErrorsRaise;
@@ -590,14 +591,65 @@ end;
 procedure TBpJsonTests.TestFloatUsesDotSeparator;
 var
   lvObj: TbpJsonValue;
+  lvSaved: Char;
 begin
-  // the writer must ignore the locale decimal separator
-  lvObj := TbpJsonValue.CreateObject;
+  // the writer must ignore the locale decimal separator, so move it first
+{$IF CompilerVersion >= 22.0}
+  lvSaved := FormatSettings.DecimalSeparator;
+  FormatSettings.DecimalSeparator := ',';
+{$ELSE}
+  lvSaved := DecimalSeparator;
+  DecimalSeparator := ',';
+{$IFEND}
   try
-    lvObj.SetFloat('x', 1.25);
-    CheckEquals('{"x":1.25}', lvObj.ToJson);
+    lvObj := TbpJsonValue.CreateObject;
+    try
+      lvObj.SetFloat('x', 1.25);
+      CheckEquals('{"x":1.25}', lvObj.ToJson);
+      // and the reader must not be fooled by it either
+      lvObj.Free;
+      lvObj := TbpJsonValue.Parse('{"x":2.5}');
+      CheckEquals(2.5, lvObj.GetFloat('x'), 1E-12);
+    finally
+      lvObj.Free;
+    end;
   finally
-    lvObj.Free;
+{$IF CompilerVersion >= 22.0}
+    FormatSettings.DecimalSeparator := lvSaved;
+{$ELSE}
+    DecimalSeparator := lvSaved;
+{$IFEND}
+  end;
+end;
+
+// FloatToStr stops at 15 significant digits, which loses the last bits of a
+// Double; the writer must emit the shortest text that reads back identically
+procedure TBpJsonTests.TestFloatRoundTripsThroughText;
+const
+  lcValues: array[0..4] of Double = (
+    0.1, 1/3, 1.7976931348623157E308,
+    123456789.12345678, -0.30000000000000004);
+var
+  lvObj, lvBack: TbpJsonValue;
+  i: Integer;
+  lvJson: string;
+begin
+  for i := Low(lcValues) to High(lcValues) do
+  begin
+    lvObj := TbpJsonValue.CreateObject;
+    try
+      lvObj.SetFloat('v', lcValues[i]);
+      lvJson := lvObj.ToJson;
+    finally
+      lvObj.Free;
+    end;
+    lvBack := TbpJsonValue.Parse(lvJson);
+    try
+      Check(lvBack.GetFloat('v') = lcValues[i],
+        Format('%s does not round-trip: %.17g', [lvJson, lvBack.GetFloat('v')]));
+    finally
+      lvBack.Free;
+    end;
   end;
 end;
 
