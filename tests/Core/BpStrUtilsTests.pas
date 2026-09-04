@@ -20,6 +20,7 @@ type
     procedure TestSplitCharLeadingTrailing;
     procedure TestSplitCharConsecutive;
     procedure TestSplitCharOnlyDelimiters;
+    procedure TestSplitCharManyParts;
     // Split with a string delimiter
     procedure TestSplitStrBasic;
     procedure TestSplitStrEmptyDelimiter;
@@ -27,6 +28,7 @@ type
     procedure TestSplitStrLeadingTrailing;
     procedure TestSplitStrOverlappingPattern;
     procedure TestSplitStrManyParts;
+    procedure TestSplitStrGrowsOnExactCapacity;
     // Join
     procedure TestJoinBasic;
     procedure TestJoinEmptyArray;
@@ -181,13 +183,55 @@ begin
   CheckEquals('a', lvParts[1]);
 end;
 
+// a Char literal binds the Char overload, so the string overload needs a
+// multi-character delimiter to be tested at all
 procedure TBpStrUtilsTests.TestSplitStrManyParts;
 var
   lvParts: TbpStringArray;
   lvText: string;
   i: Integer;
 begin
-  // 20 parts exercise the doubling growth of the result array
+  // 20 parts run both doublings of the result array, 8 -> 16 and 16 -> 32
+  lvText := '';
+  for i := 1 to 20 do
+  begin
+    if i > 1 then
+      lvText := lvText + '::';
+    lvText := lvText + IntToStr(i);
+  end;
+  lvParts := Split(lvText, '::');
+  CheckEquals(20, Length(lvParts));
+  for i := 1 to 20 do
+    CheckEquals(IntToStr(i), lvParts[i - 1]);
+end;
+
+procedure TBpStrUtilsTests.TestSplitStrGrowsOnExactCapacity;
+var
+  lvParts: TbpStringArray;
+  lvText: string;
+  i: Integer;
+begin
+  // 9 parts leave the loop with the array exactly full, the one grow the
+  // doubling never covers
+  lvText := '';
+  for i := 1 to 9 do
+  begin
+    if i > 1 then
+      lvText := lvText + '::';
+    lvText := lvText + IntToStr(i);
+  end;
+  lvParts := Split(lvText, '::');
+  CheckEquals(9, Length(lvParts));
+  CheckEquals('1', lvParts[0]);
+  CheckEquals('9', lvParts[8]);
+end;
+
+procedure TBpStrUtilsTests.TestSplitCharManyParts;
+var
+  lvParts: TbpStringArray;
+  lvText: string;
+  i: Integer;
+begin
   lvText := '';
   for i := 1 to 20 do
   begin
