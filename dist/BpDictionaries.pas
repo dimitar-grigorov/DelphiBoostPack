@@ -8,7 +8,7 @@ unit BpDictionaries;
 //   src\Core\Units\BpVariantUtils.pas
 //   src\Core\Classes\BpStrDictionary.pas
 //   src\Core\Classes\BpIntDictionary.pas
-// Source commit 1a10ff5, generated 2026-08-30 by tools\Amalgamate.ps1.
+// Source commit da7d570, generated 2026-09-04 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
 // One bundle per project: two that share a helper declare it twice.
@@ -27,11 +27,18 @@ uses
 
 // ------------------ begin BpCompat.pas interface ------------------
 
-// TBytes for compilers before Delphi 2007, whose SysUtils has no such type.
-// 18.5 is Delphi 2007; 18.0 is Delphi 2006, which does not have it either.
+// Types the older compilers are missing. 18.5 is Delphi 2007; 18.0 is Delphi
+// 2006, which has no TBytes either.
+
+type
+{$IF CompilerVersion < 23.0}
+  // no NativeUInt before D2007 and no 64-bit target before XE2, so Cardinal fits
+  TbpUIntPtr = Cardinal;
+{$ELSE}
+  TbpUIntPtr = NativeUInt;
+{$IFEND}
 
 {$IF CompilerVersion < 18.5}
-type
   TBytes = array of Byte;
 {$IFEND}
 // ------------------- end BpCompat.pas interface -------------------
@@ -81,7 +88,8 @@ type
     constructor Create;
     procedure Reset(aInitialValue: Integer = 0);
     procedure Update(const aData; aLength: Cardinal); overload;
-    procedure Update(const aData: TBytes; aLength: Cardinal = 0); overload;
+    // aLength < 0 means the whole array; an explicit 0 hashes nothing
+    procedure Update(const aData: TBytes; aLength: Integer = -1); overload;
     procedure Update(const Input: string); overload;
     function HashAsBytes: TBytes;
     function HashAsInteger: Integer;
@@ -443,11 +451,14 @@ begin
   FHash := HashLittle(aData, aLength, FHash);
 end;
 
-procedure TbpHashBobJenkins.Update(const aData: TBytes; aLength: Cardinal);
+procedure TbpHashBobJenkins.Update(const aData: TBytes; aLength: Integer);
 begin
-  if aLength = 0 then
+  if aLength < 0 then
     aLength := Length(aData);
-  Update(Pointer(aData)^, aLength);
+  if aLength > Length(aData) then
+    raise ERangeError.CreateFmt('Update: aLength %d exceeds the %d bytes available',
+      [aLength, Length(aData)]);
+  Update(Pointer(aData)^, Cardinal(aLength));
 end;
 
 procedure TbpHashBobJenkins.Update(const Input: string);
@@ -510,7 +521,7 @@ begin
   b := a;
   c := a;
 
-  if (Cardinal(@Data) and 3) = 0 then
+  if (TbpUIntPtr(@Data) and 3) = 0 then
   begin
     // 4-byte aligned data
     pd := PCardinalTriple(@Data);
@@ -521,7 +532,7 @@ begin
       Inc(c, pd^[2]);
       Mix(a, b, c);
       Dec(Len, 12);
-      pd := PCardinalTriple(Cardinal(pd) + 12);
+      Inc(pd); // one 12-byte block
     end;
 
     case Len of
@@ -591,7 +602,7 @@ begin
       Inc(c, Cardinal(pb^[8]) + Cardinal(pb^[9]) shl 8 + Cardinal(pb^[10]) shl 16 + Cardinal(pb^[11]) shl 24);
       Mix(a, b, c);
       Dec(Len, 12);
-      pb := PByteArray(Cardinal(pb) + 12);
+      pb := PByteArray(TbpUIntPtr(pb) + 12);
     end;
 
     if Len = 0 then

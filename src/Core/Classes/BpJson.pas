@@ -657,16 +657,33 @@ begin
   end;
 end;
 
-// JSON floats always use '.' no matter what the locale says
+// JSON floats always use '.' no matter what the locale says, and the shortest
+// text that reads back as the same Double wins: FloatToStr stops at 15 digits
 function BpJsonFloatToStr(const aValue: Double): string;
 var
   lvFs: TFormatSettings;
+  lvPrec: Integer;
+  lvBack: Double;
+  lvParsed: Boolean;
 begin
   if IsNan(aValue) or IsInfinite(aValue) then
     raise EbpJson.Create('NaN and Infinity cannot be written as JSON');
   FillChar(lvFs, SizeOf(lvFs), 0);
   lvFs.DecimalSeparator := '.';
-  Result := FloatToStr(aValue, lvFs);
+  for lvPrec := 15 to 17 do
+  begin
+    Result := FloatToStrF(aValue, ffGeneral, lvPrec, 0, lvFs);
+    // narrowing Extended to Double overflows when the text passes MaxDouble
+    lvBack := 0; // D7 flow analysis cannot see the except assignment
+    lvParsed := True;
+    try
+      lvBack := StrToFloat(Result, lvFs);
+    except
+      lvParsed := False;
+    end;
+    if lvParsed and (lvBack = aValue) then
+      Exit;
+  end;
 end;
 
 procedure BpJsonAppendQuoted(aSb: TbpStringBuilder; const aValue: string;

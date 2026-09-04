@@ -24,7 +24,8 @@ type
     constructor Create;
     procedure Reset(aInitialValue: Integer = 0);
     procedure Update(const aData; aLength: Cardinal); overload;
-    procedure Update(const aData: TBytes; aLength: Cardinal = 0); overload;
+    // aLength < 0 means the whole array; an explicit 0 hashes nothing
+    procedure Update(const aData: TBytes; aLength: Integer = -1); overload;
     procedure Update(const Input: string); overload;
     function HashAsBytes: TBytes;
     function HashAsInteger: Integer;
@@ -92,11 +93,14 @@ begin
   FHash := HashLittle(aData, aLength, FHash);
 end;
 
-procedure TbpHashBobJenkins.Update(const aData: TBytes; aLength: Cardinal);
+procedure TbpHashBobJenkins.Update(const aData: TBytes; aLength: Integer);
 begin
-  if aLength = 0 then
+  if aLength < 0 then
     aLength := Length(aData);
-  Update(Pointer(aData)^, aLength);
+  if aLength > Length(aData) then
+    raise ERangeError.CreateFmt('Update: aLength %d exceeds the %d bytes available',
+      [aLength, Length(aData)]);
+  Update(Pointer(aData)^, Cardinal(aLength));
 end;
 
 procedure TbpHashBobJenkins.Update(const Input: string);
@@ -159,7 +163,7 @@ begin
   b := a;
   c := a;
 
-  if (Cardinal(@Data) and 3) = 0 then
+  if (TbpUIntPtr(@Data) and 3) = 0 then
   begin
     // 4-byte aligned data
     pd := PCardinalTriple(@Data);
@@ -170,7 +174,7 @@ begin
       Inc(c, pd^[2]);
       Mix(a, b, c);
       Dec(Len, 12);
-      pd := PCardinalTriple(Cardinal(pd) + 12);
+      Inc(pd); // one 12-byte block
     end;
 
     case Len of
@@ -240,7 +244,7 @@ begin
       Inc(c, Cardinal(pb^[8]) + Cardinal(pb^[9]) shl 8 + Cardinal(pb^[10]) shl 16 + Cardinal(pb^[11]) shl 24);
       Mix(a, b, c);
       Dec(Len, 12);
-      pb := PByteArray(Cardinal(pb) + 12);
+      pb := PByteArray(TbpUIntPtr(pb) + 12);
     end;
 
     if Len = 0 then

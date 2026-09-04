@@ -22,6 +22,7 @@ type
     FUpdateCount: Integer;
     FCount: Integer;
     FSorted: Boolean;
+    FSortedInsert: Boolean;
     FDelimiter: Char;
     function GetItem(aIndex: Integer): Integer;
     procedure SetItem(aIndex: Integer; const aValue: Integer);
@@ -39,6 +40,7 @@ type
     function GetCommaText: string;
     procedure SetCommaText(const aValue: string);
     procedure SetSorted(const aValue: Boolean);
+    function GetSorted: Boolean;
   protected
     property UpdateCount: Integer read FUpdateCount;
   public
@@ -64,7 +66,7 @@ type
     property Count: Integer read GetCount;
     property Delimiter: Char read GetDelimiter write SetDelimiter;
     property DelimitedText: string read GetDelimitedText write SetDelimitedText;
-    property Sorted: Boolean read FSorted write SetSorted;
+    property Sorted: Boolean read GetSorted write SetSorted;
 
     {$IFDEF BENCHMARK}
     property StepCount: Integer read FStepCount;
@@ -93,6 +95,7 @@ resourcestring
   SListCountError = 'List count out of bounds (%d)';
   SListIndexError = 'List index out of bounds (%d)';
   SListMustBeSortedForBinarySearch = 'List must be sorted before performing binary search';
+  SSortedListError = 'Operation not allowed on sorted list';
 
 constructor TbpIntList.Create;
 begin
@@ -118,9 +121,17 @@ end;
 
 procedure TbpIntList.SetItem(aIndex: Integer; const aValue: Integer);
 begin
+  // an unchecked write would defeat the binary search, as in TStringList
+  if FSorted then
+    raise EListError.Create(SSortedListError);
   if (aIndex < 0) or (aIndex >= FCount) then
     raise EListError.Create('List index out of bounds');
   FList[aIndex] := aValue;
+end;
+
+function TbpIntList.GetSorted: Boolean;
+begin
+  Result := FSorted;
 end;
 
 procedure TbpIntList.SetSorted(const aValue: Boolean);
@@ -143,6 +154,8 @@ end;
 
 procedure TbpIntList.Exchange(aIndex1, aIndex2: Integer);
 begin
+  if FSorted then
+    raise EListError.Create(SSortedListError);
   if (aIndex1 < 0) or (aIndex1 >= FCount) then
     raise EListError.CreateFmt(SListIndexError, [aIndex1]);
   if (aIndex2 < 0) or (aIndex2 >= FCount) then
@@ -275,7 +288,12 @@ begin
     Result := SortedInsertIndex(aItem)
   else
     Result := FCount;
-  Insert(Result, aItem);
+  FSortedInsert := True;
+  try
+    Insert(Result, aItem);
+  finally
+    FSortedInsert := False;
+  end;
 end;
 
 // lowest index at which aItem keeps the list ordered
@@ -381,7 +399,7 @@ begin
   while P^ <> #0 do
   begin
     lvStart := P;
-    while (P^ <> #0) and (P^ <> Delimiter) and not CharInSet(P^, [#10, #13]) do
+    while (P^ <> #0) and (P^ <> Delimiter) and not CharInSet(P^, [#9, #10, #13, ' ']) do
       Inc(P);
 
     SetString(lvS, lvStart, P - lvStart);
@@ -393,7 +411,7 @@ begin
         raise EConvertError.CreateFmt('Cannot convert string "%s" to integer', [lvS]);
     end;
 
-    while (P^ = Delimiter) or CharInSet(P^, [#10, #13, ' ']) do
+    while (P^ = Delimiter) or CharInSet(P^, [#9, #10, #13, ' ']) do
       Inc(P);
   end;
 end;
@@ -531,11 +549,15 @@ end;
 
 procedure TbpIntList.Insert(aIndex: Integer; const aItem: Integer);
 begin
-  if (aIndex < 0) or (aIndex > Count) then
-    raise EListError.Create('List index out of bounds');
-
   if FSorted then
+  begin
+    // Add is the only entry point on a sorted list; an index would be a lie
+    if not FSortedInsert then
+      raise EListError.Create(SSortedListError);
     aIndex := SortedInsertIndex(aItem);
+  end
+  else if (aIndex < 0) or (aIndex > Count) then
+    raise EListError.Create('List index out of bounds');
 
   if Count = Length(FList) then
     Grow;
@@ -551,7 +573,7 @@ procedure TbpIntList.Sort;
 var
   lvBudget, lvSpan: Integer;
 begin
-  if Sorted or (FCount <= 1) then
+  if FCount <= 1 then
     Exit;
   lvBudget := 0;
   lvSpan := FCount;

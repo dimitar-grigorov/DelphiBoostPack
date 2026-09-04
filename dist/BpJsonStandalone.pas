@@ -4,7 +4,7 @@ unit BpJsonStandalone;
 // Single-file bundle amalgamated from the DelphiBoostPack modular units:
 //   src\Core\Classes\BpStringBuilder.pas
 //   src\Core\Classes\BpJson.pas
-// Source commit 1a10ff5, generated 2026-08-30 by tools\Amalgamate.ps1.
+// Source commit da7d570, generated 2026-09-04 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
 // One bundle per project: two that share a helper declare it twice.
@@ -963,16 +963,33 @@ begin
   end;
 end;
 
-// JSON floats always use '.' no matter what the locale says
+// JSON floats always use '.' no matter what the locale says, and the shortest
+// text that reads back as the same Double wins: FloatToStr stops at 15 digits
 function BpJsonFloatToStr(const aValue: Double): string;
 var
   lvFs: TFormatSettings;
+  lvPrec: Integer;
+  lvBack: Double;
+  lvParsed: Boolean;
 begin
   if IsNan(aValue) or IsInfinite(aValue) then
     raise EbpJson.Create('NaN and Infinity cannot be written as JSON');
   FillChar(lvFs, SizeOf(lvFs), 0);
   lvFs.DecimalSeparator := '.';
-  Result := FloatToStr(aValue, lvFs);
+  for lvPrec := 15 to 17 do
+  begin
+    Result := FloatToStrF(aValue, ffGeneral, lvPrec, 0, lvFs);
+    // narrowing Extended to Double overflows when the text passes MaxDouble
+    lvBack := 0; // D7 flow analysis cannot see the except assignment
+    lvParsed := True;
+    try
+      lvBack := StrToFloat(Result, lvFs);
+    except
+      lvParsed := False;
+    end;
+    if lvParsed and (lvBack = aValue) then
+      Exit;
+  end;
 end;
 
 procedure BpJsonAppendQuoted(aSb: TbpStringBuilder; const aValue: string;

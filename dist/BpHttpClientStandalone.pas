@@ -5,7 +5,7 @@ unit BpHttpClientStandalone;
 //   src\Core\Units\BpCompat.pas
 //   src\Core\Units\BpBase64.pas
 //   src\Core\Classes\BpHttpClient.pas
-// Source commit 1a10ff5, generated 2026-08-30 by tools\Amalgamate.ps1.
+// Source commit da7d570, generated 2026-09-04 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
 // One bundle per project: two that share a helper declare it twice.
@@ -19,11 +19,18 @@ uses
 
 // ------------------ begin BpCompat.pas interface ------------------
 
-// TBytes for compilers before Delphi 2007, whose SysUtils has no such type.
-// 18.5 is Delphi 2007; 18.0 is Delphi 2006, which does not have it either.
+// Types the older compilers are missing. 18.5 is Delphi 2007; 18.0 is Delphi
+// 2006, which has no TBytes either.
+
+type
+{$IF CompilerVersion < 23.0}
+  // no NativeUInt before D2007 and no 64-bit target before XE2, so Cardinal fits
+  TbpUIntPtr = Cardinal;
+{$ELSE}
+  TbpUIntPtr = NativeUInt;
+{$IFEND}
 
 {$IF CompilerVersion < 18.5}
-type
   TBytes = array of Byte;
 {$IFEND}
 // ------------------- end BpCompat.pas interface -------------------
