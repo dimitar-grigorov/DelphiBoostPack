@@ -8,7 +8,7 @@ unit BpHashes;
 //   src\Core\Classes\BpMD5.pas
 //   src\Core\Classes\BpHMACSHA256.pas
 //   src\Core\Classes\BpPasswordHash.pas
-// Source commit a1dbea7, generated 2026-09-04 by tools\Amalgamate.ps1.
+// Source commit f47b4e2, generated 2026-09-04 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
 // One bundle per project: two that share a helper declare it twice.
@@ -75,6 +75,8 @@ function Base64DecodeUtf8(const aBase64: string): WideString;
 // Update in chunks, Final) so large files need not fit in memory, plus
 // one-shot class functions for buffer/bytes/string/file, hex or Base64.
 // Final resets the state so an instance can be reused for the next message.
+// The string overloads hash raw bytes: UTF8Encode first on Delphi 2009+, or
+// the digest follows the machine's ANSI code page.
 
 // hash arithmetic relies on Cardinal wraparound mod 2^32
 {$Q-}
