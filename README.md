@@ -64,7 +64,7 @@ Full descriptions and examples in the [feature guide](docs/FEATURES.md).
 | [TbpJsonValue](docs/FEATURES.md#tbpjsonvalue) | strict RFC 8259 reader and writer, `FindPath('data.items[0].name')`, pretty printing |
 | [BpDateUtils](docs/FEATURES.md#bpdateutils) | ISO 8601 / RFC 3339 and Unix time both ways, in `Int64` - what D2007 has no `ISO8601ToDate` for |
 | [TbpStrDictionary](docs/FEATURES.md#tbpstrdictionary) / [TbpIntDictionary](docs/FEATURES.md#tbpintdictionary) | real hash maps for compilers with no generics, `TDictionary`-style API, typed accessors that refuse to coerce |
-| [TbpStringList](docs/FEATURES.md#tbpstringlist) | `TStringList` whose `IndexOf` and `IndexOfName` are O(1); a descendant, so it drops into anything that takes a `TStrings` |
+| [TbpStringList](docs/FEATURES.md#tbpstringlist) | the `TStringList` API on a `TStrings` with O(1) `IndexOf` and `IndexOfName`, a stable `Sort` and one ordinal relation behind hash, equality and order |
 | [TbpIntList](docs/FEATURES.md#tbpintlist) | a list of integers that behaves like `TStringList` |
 | [TbpInt64List](docs/FEATURES.md#tbpint64list) | the same list for `Int64` - keys, file sizes, millisecond timestamps |
 
