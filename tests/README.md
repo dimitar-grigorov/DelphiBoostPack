@@ -33,7 +33,7 @@ Pure, offline, deterministic, fast. Every `Bp*Tests.pas` in [Core/](Core) except
 - strings: `BpStringBuilderTests`, `BpStringListTests`, `BpStrUtilsTests`
 - hashing and encoding: `BpSHA256Tests`, `BpMD5Tests`, `BpHMACSHA256Tests`, `BpPasswordHashTests`, `BpHashBobJenkinsTests`, `BpBase64Tests` (crypto and hash checked against the Windows CryptoAPI, the XE6 RTL and the published FIPS/RFC vectors)
 - HTTP offline: `BpHttpClientTests` (URL parsing, header building, auth, error classification) and the offline half of `BpHttpDownloadTests` (progress math, `Content-Length` parsing, argument validation, the task state machine)
-- other: `BpJsonTests`, `BpDateUtilsTests`, `BpKeyFoldTests`, `BpObjectComparerSimpleTests`, `BpSysUtilsTests`, `BpCancellationTokenTests`, `BpHttpTraceTests`, `BpTasksTests` (background task state machine, cancellation, error capture)
+- other: `BpJsonTests`, `BpDateUtilsTests`, `BpKeyFoldTests`, `BpObjectComparerSimpleTests`, `BpSysUtilsTests`, `BpCancellationTokenTests`, `BpHttpTraceTests`, `BpTasksTests` (background task state machine, cancellation, error capture, the message-pumped marshalled mode and the lifetime rules: free from inside a handler, from a foreign thread, before the completion is dispatched)
 
 ### Integration
 
