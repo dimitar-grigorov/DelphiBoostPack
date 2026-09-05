@@ -19,6 +19,8 @@ type
     procedure GetMissingKey;
     procedure GetStrOnIntValue;
     procedure SetTooSmallCapacity;
+    procedure AddInsideCallback(aKey: Int64; const aValue: Variant; var aStop: Boolean);
+    procedure RemoveInsideCallback(aKey: Int64; const aValue: Variant; var aStop: Boolean);
   protected
     procedure SetUp; override;
     procedure TearDown; override;
@@ -38,6 +40,11 @@ type
     procedure TestClearAndReuse;
     procedure TestGetKeys;
     procedure TestForEach;
+    procedure TestForEachRefusesAnAddFromTheCallback;
+    procedure TestForEachRefusesARemoveFromTheCallback;
+    procedure TestForEachIsUsableAgainAfterARefusal;
+    procedure TestDuplicateAddDoesNotGrow;
+    procedure TestGrowKeepsStringValues;
     procedure TestTypedAccessors;
     procedure TestTypedAccessorStrictness;
     procedure TestItemsDefaultProperty;
@@ -438,6 +445,95 @@ begin
   end;
 end;
 
+
+procedure TBpIntDictionaryTests.AddInsideCallback(aKey: Int64;
+  const aValue: Variant; var aStop: Boolean);
+begin
+  FDict.SetInt(999999, 1);
+end;
+
+procedure TBpIntDictionaryTests.RemoveInsideCallback(aKey: Int64;
+  const aValue: Variant; var aStop: Boolean);
+begin
+  FDict.Remove(aKey);
+end;
+
+// a rehash under the scan would skip or revisit entries, so it is refused
+procedure TBpIntDictionaryTests.TestForEachRefusesAnAddFromTheCallback;
+begin
+  FDict.SetInt(1, 1);
+  FDict.SetInt(2, 2);
+  try
+    FDict.ForEach(AddInsideCallback);
+    Fail('an Add from inside ForEach must be refused');
+  except
+    on E: EbpIntDictionary do
+      ; // expected
+  end;
+  CheckEquals(2, FDict.Count, 'and must not have happened');
+end;
+
+procedure TBpIntDictionaryTests.TestForEachRefusesARemoveFromTheCallback;
+begin
+  FDict.SetInt(1, 1);
+  FDict.SetInt(2, 2);
+  try
+    FDict.ForEach(RemoveInsideCallback);
+    Fail('a Remove from inside ForEach must be refused');
+  except
+    on E: EbpIntDictionary do
+      ; // expected
+  end;
+  CheckEquals(2, FDict.Count, 'and must not have happened');
+end;
+
+// the guard is released even when the callback leaves through an exception
+procedure TBpIntDictionaryTests.TestForEachIsUsableAgainAfterARefusal;
+begin
+  FDict.SetInt(1, 1);
+  try
+    FDict.ForEach(AddInsideCallback);
+  except
+    on E: EbpIntDictionary do
+      ; // expected
+  end;
+  FDict.SetInt(2, 2);
+  FForEachCalls := 0;
+  FDict.ForEach(SumCallback);
+  CheckEquals(2, FForEachCalls, 'the dictionary is writable and iterable again');
+end;
+
+procedure TBpIntDictionaryTests.TestDuplicateAddDoesNotGrow;
+var
+  i, lvCapacity: Integer;
+begin
+  for i := 1 to 3 do
+    FDict.Add(i, i);
+  lvCapacity := FDict.Capacity;
+  for i := 1 to 20 do
+    try
+      FDict.Add(1, 1);
+      Fail('a duplicate must raise');
+    except
+      on E: EbpIntDictionary do
+        ; // expected
+    end;
+  CheckEquals(lvCapacity, FDict.Capacity, 'a refused Add must not double the table');
+  CheckEquals(3, FDict.Count, 'nor add anything');
+end;
+
+// Rehash hands the entries over as raw bits, so a refcount slip shows up here
+procedure TBpIntDictionaryTests.TestGrowKeepsStringValues;
+var
+  i: Integer;
+begin
+  for i := 1 to 1000 do
+    FDict.SetStr(i, StringOfChar('x', 40) + IntToStr(i));
+  CheckEquals(1000, FDict.Count, 'every key is there after many grows');
+  for i := 1 to 1000 do
+    CheckEquals(StringOfChar('x', 40) + IntToStr(i), FDict.GetStr(i),
+      'the string value survived every rehash');
+end;
 
 initialization
   RegisterTest(TBpIntDictionaryTests.Suite);

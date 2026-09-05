@@ -5,7 +5,7 @@ unit BpInt64ListTests;
 interface
 
 uses
-  TestFramework, Classes, BpInt64ListIntf, BpInt64List, SysUtils;
+  TestFramework, Classes, BpInt64List, SysUtils;
 
 type
   TBpInt64ListTests = class(TTestCase)
@@ -24,9 +24,9 @@ type
     procedure TestDeleteWithInvalidIndex;
     procedure TestClear;
     procedure TestIndexOf;
-    procedure TestBinarySearchEmptyList;
-    procedure TestBinarySearchSingleElement;
-    procedure TestBinarySearchMultipleElements;
+    procedure TestFindEmptyList;
+    procedure TestFindSingleElement;
+    procedure TestFindMultipleElements;
     procedure TestExchangeValidIndices;
     procedure TestExchangeSameIndex;
     procedure TestExchangeInvalidIndex;
@@ -86,27 +86,32 @@ type
     procedure TestExtremesCommaTextRoundTrip;
     procedure TestExtremesStreamRoundTrip;
     procedure TestSortWithLargeMixedValues;
-    procedure TestBinarySearchWithLargeMixedValues;
+    procedure TestFindWithLargeMixedValues;
     procedure TestDelimitedTextAboveHighInt64Raises;
     procedure TestDelimitedTextBelowLowInt64Raises;
     procedure TestExchangeWhenSortedRaises;
     procedure TestInsertWhenSortedRaises;
     procedure TestSortReSortsAfterUncheckedWrite;
-    procedure TestSortedReadableThroughInterface;
     procedure TestDelimitedTextWhitespaceSeparated;
     procedure TestDelimitedTextTabSeparated;
     procedure TestDelimitedTextSpaceBeforeDelimiter;
     procedure TestDelimitedTextWhitespaceOnly;
-  end;
-
-  // The list is a TInterfacedObject, so an IBpInt64List reference must free it
-  TBpInt64ListMemoryTests = class(TTestCase)
-  private
-    procedure TestList(aList: IBpInt64List);
-  public
-    procedure SetUp; override;
-  published
-    procedure TestMemoryLeak;
+    procedure TestFindOnUnsortedListUsesTheIndex;
+    procedure TestIndexOfReturnsFirstOfDuplicates;
+    procedure TestIndexOfSurvivesAnAppend;
+    procedure TestIndexOfAfterDeleteRebuilds;
+    procedure TestIndexOfOnSortedListFindsFirstOfRun;
+    procedure TestDuplicatesIgnoreDropsOnSortedAdd;
+    procedure TestDuplicatesErrorRaisesOnSortedAdd;
+    procedure TestDuplicatesAcceptKeepsTheRun;
+    procedure TestDeleteFromSortedList;
+    procedure TestCapacityBelowCountRaises;
+    procedure TestCapacityPresizesWithoutChangingCount;
+    procedure TestAssignCopiesContentAndFlags;
+    procedure TestSameAs;
+    procedure TestLoadFromStreamSkipsUtf8Bom;
+    procedure TestLoadFromStreamRejectsUtf16;
+    procedure TestDelimitedTextLineSeparated;
   end;
 
 implementation
@@ -197,28 +202,28 @@ begin
   CheckEquals(-1, FBpInt64List.IndexOf(30), 'IndexOf should return -1 for a non-existent item');
 end;
 
-procedure TBpInt64ListTests.TestBinarySearchEmptyList;
+procedure TBpInt64ListTests.TestFindEmptyList;
 var
   FoundIndex: Integer;
 begin
   FBpInt64List.Sorted := True;
-  CheckFalse(FBpInt64List.BinarySearch(10, FoundIndex), 'Search in an empty list should return False.');
+  CheckFalse(FBpInt64List.Find(10, FoundIndex), 'Search in an empty list should return False.');
 end;
 
-procedure TBpInt64ListTests.TestBinarySearchSingleElement;
+procedure TBpInt64ListTests.TestFindSingleElement;
 var
   FoundIndex: Integer;
 begin
   FBpInt64List.Add(5);
   FBpInt64List.Sorted := True;
-  CheckTrue(FBpInt64List.BinarySearch(5, FoundIndex), 'Item should be found.');
+  CheckTrue(FBpInt64List.Find(5, FoundIndex), 'Item should be found.');
   CheckEquals(0, FoundIndex, 'FoundIndex should be 0.');
 
-  CheckFalse(FBpInt64List.BinarySearch(3, FoundIndex), 'Item should not be found.');
+  CheckFalse(FBpInt64List.Find(3, FoundIndex), 'Item should not be found.');
   CheckEquals(0, FoundIndex, 'Insertion index should be 0 for a smaller element.');
 end;
 
-procedure TBpInt64ListTests.TestBinarySearchMultipleElements;
+procedure TBpInt64ListTests.TestFindMultipleElements;
 var
   FoundIndex: Integer;
 begin
@@ -227,16 +232,16 @@ begin
   FBpInt64List.Add(20);
   FBpInt64List.Sorted := True;
 
-  CheckTrue(FBpInt64List.BinarySearch(10, FoundIndex), 'Item should be found.');
+  CheckTrue(FBpInt64List.Find(10, FoundIndex), 'Item should be found.');
   CheckEquals(1, FoundIndex, 'FoundIndex should be 1.');
 
-  CheckFalse(FBpInt64List.BinarySearch(15, FoundIndex), 'Item should not be found.');
+  CheckFalse(FBpInt64List.Find(15, FoundIndex), 'Item should not be found.');
   CheckEquals(2, FoundIndex, 'Insertion index should be 2.');
 
-  CheckTrue(FBpInt64List.BinarySearch(5, FoundIndex), 'First element should be found.');
+  CheckTrue(FBpInt64List.Find(5, FoundIndex), 'First element should be found.');
   CheckEquals(0, FoundIndex, 'FoundIndex should be 0.');
 
-  CheckTrue(FBpInt64List.BinarySearch(20, FoundIndex), 'Last element should be found.');
+  CheckTrue(FBpInt64List.Find(20, FoundIndex), 'Last element should be found.');
   CheckEquals(2, FoundIndex, 'FoundIndex should be 2.');
 end;
 
@@ -435,15 +440,6 @@ begin
   CheckEqualsInt64(99, FBpInt64List.Items[2], 'the written value ends up last');
 end;
 
-procedure TBpInt64ListTests.TestSortedReadableThroughInterface;
-var
-  lvIntf: IBpInt64List;
-begin
-  lvIntf := TbpInt64List.Create;
-  CheckEquals(False, lvIntf.Sorted, 'a fresh list is unsorted');
-  lvIntf.Sorted := True;
-  CheckEquals(True, lvIntf.Sorted, 'the interface must be able to read the flag back');
-end;
 
 procedure TBpInt64ListTests.TestDelimitedTextWhitespaceSeparated;
 begin
@@ -1023,7 +1019,7 @@ begin
   CheckEqualsInt64(High(Int64), FBpInt64List.Items[4], 'High(Int64) should sort last');
 end;
 
-procedure TBpInt64ListTests.TestBinarySearchWithLargeMixedValues;
+procedure TBpInt64ListTests.TestFindWithLargeMixedValues;
 var
   FoundIndex: Integer;
 begin
@@ -1034,20 +1030,20 @@ begin
   FBpInt64List.Add(cBelowLowInt32);
   FBpInt64List.Sorted := True;
 
-  CheckTrue(FBpInt64List.BinarySearch(Low(Int64), FoundIndex), 'Low(Int64) should be found.');
+  CheckTrue(FBpInt64List.Find(Low(Int64), FoundIndex), 'Low(Int64) should be found.');
   CheckEquals(0, FoundIndex, 'FoundIndex should be 0.');
 
-  CheckTrue(FBpInt64List.BinarySearch(cBelowLowInt32, FoundIndex), 'Low(Integer) - 1 should be found.');
+  CheckTrue(FBpInt64List.Find(cBelowLowInt32, FoundIndex), 'Low(Integer) - 1 should be found.');
   CheckEquals(1, FoundIndex, 'FoundIndex should be 1.');
 
-  CheckTrue(FBpInt64List.BinarySearch(High(Int64), FoundIndex), 'High(Int64) should be found.');
+  CheckTrue(FBpInt64List.Find(High(Int64), FoundIndex), 'High(Int64) should be found.');
   CheckEquals(4, FoundIndex, 'FoundIndex should be 4.');
 
-  CheckFalse(FBpInt64List.BinarySearch(High(Int64) - 1, FoundIndex), 'High(Int64) - 1 should not be found.');
+  CheckFalse(FBpInt64List.Find(High(Int64) - 1, FoundIndex), 'High(Int64) - 1 should not be found.');
   CheckEquals(4, FoundIndex, 'Insertion index should be 4.');
 
   // A value only Int64 can tell apart from the one stored next to it
-  CheckFalse(FBpInt64List.BinarySearch(cAboveHighInt32 + 1, FoundIndex), 'Item should not be found.');
+  CheckFalse(FBpInt64List.Find(cAboveHighInt32 + 1, FoundIndex), 'Item should not be found.');
   CheckEquals(4, FoundIndex, 'Insertion index should be 4.');
 end;
 
@@ -1073,28 +1069,8 @@ begin
   end;
 end;
 
-procedure TBpInt64ListMemoryTests.SetUp;
-begin
-  inherited;
-  {$IF CompilerVersion >= 18.0}
-  System.ReportMemoryLeaksOnShutdown := True;
-  {$IFEND}
-end;
 
-procedure TBpInt64ListMemoryTests.TestMemoryLeak;
-var
-  il: IBpInt64List;
-begin
-  il := TbpInt64List.Create;
-  il.Add(1);
-  il.Add(High(Int64));
-  TestList(il);
-end;
 
-procedure TBpInt64ListMemoryTests.TestList(aList: IBpInt64List);
-begin
-  Status(Format('IBpInt64List.Count: %d', [aList.Count]));
-end;
 
 procedure TBpInt64ListTests.TestAddReturnsInsertionIndexWhenSorted;
 begin
@@ -1132,8 +1108,237 @@ begin
 end;
 
 
+// the hash index answers where the old linear scan did
+procedure TBpInt64ListTests.TestFindOnUnsortedListUsesTheIndex;
+var
+  lvIndex: Integer;
+begin
+  FBpInt64List.Add(30);
+  FBpInt64List.Add(10);
+  CheckTrue(FBpInt64List.Find(10, lvIndex), 'an unsorted list still answers Find');
+  CheckEquals(1, lvIndex, 'the position of the item, not an insertion point');
+  CheckFalse(FBpInt64List.Find(99, lvIndex), 'a miss stays a miss');
+  CheckEquals(2, lvIndex, 'a miss reports Count');
+end;
+
+procedure TBpInt64ListTests.TestIndexOfReturnsFirstOfDuplicates;
+var
+  i: Integer;
+begin
+  for i := 0 to 9 do
+    FBpInt64List.Add(7);
+  FBpInt64List.Add(8);
+  CheckEquals(0, FBpInt64List.IndexOf(7), 'the lowest position among equal items');
+  CheckEquals(10, FBpInt64List.IndexOf(8), 'and the only position of a unique one');
+end;
+
+// an append is the one mutation the index survives, so the answer must stay right
+procedure TBpInt64ListTests.TestIndexOfSurvivesAnAppend;
+var
+  i: Integer;
+begin
+  for i := 0 to 99 do
+    FBpInt64List.Add(i);
+  CheckEquals(50, FBpInt64List.IndexOf(50), 'builds the index');
+  for i := 100 to 999 do
+    FBpInt64List.Add(i);
+  CheckEquals(50, FBpInt64List.IndexOf(50), 'an item from before the appends');
+  CheckEquals(999, FBpInt64List.IndexOf(999), 'and one appended after the build');
+  CheckEquals(-1, FBpInt64List.IndexOf(1000), 'a value that was never added');
+end;
+
+procedure TBpInt64ListTests.TestIndexOfAfterDeleteRebuilds;
+var
+  i: Integer;
+begin
+  for i := 0 to 99 do
+    FBpInt64List.Add(i);
+  CheckEquals(50, FBpInt64List.IndexOf(50), 'builds the index');
+  FBpInt64List.Delete(0);
+  CheckEquals(49, FBpInt64List.IndexOf(50), 'every position above the gap moved by one');
+  FBpInt64List.Insert(0, 500);
+  CheckEquals(50, FBpInt64List.IndexOf(50), 'and back again after an insert at the head');
+  CheckEquals(0, FBpInt64List.IndexOf(500), 'the inserted value is findable too');
+end;
+
+procedure TBpInt64ListTests.TestIndexOfOnSortedListFindsFirstOfRun;
+var
+  i: Integer;
+begin
+  FBpInt64List.Duplicates := dupAccept;
+  FBpInt64List.Sorted := True;
+  FBpInt64List.Add(1);
+  for i := 0 to 4 do
+    FBpInt64List.Add(5);
+  FBpInt64List.Add(9);
+  CheckEquals(7, FBpInt64List.Count, 'the run is kept');
+  CheckEquals(1, FBpInt64List.IndexOf(5), 'the first of the equal run, not any of it');
+  CheckEquals(0, FBpInt64List.IndexOf(1), 'first');
+  CheckEquals(6, FBpInt64List.IndexOf(9), 'last');
+  CheckEquals(-1, FBpInt64List.IndexOf(4), 'a value between two present ones');
+end;
+
+procedure TBpInt64ListTests.TestDuplicatesIgnoreDropsOnSortedAdd;
+begin
+  FBpInt64List.Sorted := True;
+  CheckEquals(0, FBpInt64List.Add(5), 'the first 5 lands at 0');
+  CheckEquals(0, FBpInt64List.Add(5), 'the second returns the position of the first');
+  CheckEquals(1, FBpInt64List.Count, 'dupIgnore is the default, as in TStringList');
+end;
+
+procedure TBpInt64ListTests.TestDuplicatesErrorRaisesOnSortedAdd;
+begin
+  FBpInt64List.Duplicates := dupError;
+  FBpInt64List.Sorted := True;
+  FBpInt64List.Add(5);
+  try
+    FBpInt64List.Add(5);
+    Fail('dupError must refuse an equal item');
+  except
+    on E: EListError do
+      ; // expected
+  end;
+  CheckEquals(1, FBpInt64List.Count, 'and must not have added it');
+end;
+
+// Duplicates is read by Add on a Sorted list only, as in TStringList
+procedure TBpInt64ListTests.TestDuplicatesAcceptKeepsTheRun;
+begin
+  FBpInt64List.Duplicates := dupError;
+  FBpInt64List.Add(5);
+  FBpInt64List.Add(5);
+  CheckEquals(2, FBpInt64List.Count, 'an unsorted list ignores Duplicates entirely');
+  FBpInt64List.Clear;
+  FBpInt64List.Duplicates := dupAccept;
+  FBpInt64List.Sorted := True;
+  FBpInt64List.Add(5);
+  FBpInt64List.Add(5);
+  CheckEquals(2, FBpInt64List.Count, 'dupAccept keeps both');
+end;
+
+procedure TBpInt64ListTests.TestDeleteFromSortedList;
+var
+  lvIndex: Integer;
+begin
+  FBpInt64List.CommaText := '5,3,9,1';
+  FBpInt64List.Sorted := True;
+  CheckTrue(FBpInt64List.Find(5, lvIndex), 'the value is there before the delete');
+  FBpInt64List.Delete(lvIndex);
+  CheckEquals('1,3,9', FBpInt64List.CommaText, 'the rest keeps its order');
+  CheckFalse(FBpInt64List.Find(5, lvIndex), 'and the value is gone');
+  CheckEquals(2, lvIndex, 'a miss reports the insertion point');
+end;
+
+procedure TBpInt64ListTests.TestCapacityBelowCountRaises;
+begin
+  FBpInt64List.Add(1);
+  FBpInt64List.Add(2);
+  try
+    FBpInt64List.Capacity := 1;
+    Fail('shrinking below Count would drop values in silence');
+  except
+    on E: EListError do
+      ; // expected
+  end;
+  CheckEquals(2, FBpInt64List.Count, 'and nothing was dropped');
+end;
+
+procedure TBpInt64ListTests.TestCapacityPresizesWithoutChangingCount;
+begin
+  FBpInt64List.Capacity := 1000;
+  CheckEquals(1000, FBpInt64List.Capacity, 'a list of known size can be presized');
+  CheckEquals(0, FBpInt64List.Count, 'which adds no items');
+  FBpInt64List.Add(1);
+  CheckEquals(1000, FBpInt64List.Capacity, 'and the first Add does not grow');
+end;
+
+procedure TBpInt64ListTests.TestAssignCopiesContentAndFlags;
+var
+  lvOther: TbpInt64List;
+begin
+  lvOther := TbpInt64List.Create;
+  try
+    FBpInt64List.Delimiter := ';';
+    FBpInt64List.Duplicates := dupError;
+    FBpInt64List.CommaText := '3,1,2';
+    FBpInt64List.Sorted := True;
+    lvOther.Assign(FBpInt64List);
+    CheckEquals('1;2;3', lvOther.DelimitedText, 'the values and the delimiter come across');
+    CheckTrue(lvOther.Sorted, 'and so does Sorted');
+    Check(lvOther.Duplicates = dupError, 'and Duplicates');
+    CheckTrue(lvOther.SameAs(FBpInt64List), 'the copy has the same content');
+  finally
+    lvOther.Free;
+  end;
+end;
+
+procedure TBpInt64ListTests.TestSameAs;
+var
+  lvOther: TbpInt64List;
+begin
+  lvOther := TbpInt64List.Create;
+  try
+    CheckTrue(FBpInt64List.SameAs(lvOther), 'two empty lists');
+    CheckFalse(FBpInt64List.SameAs(nil), 'nil is never equal');
+    FBpInt64List.CommaText := '1,2,3';
+    CheckFalse(FBpInt64List.SameAs(lvOther), 'different counts');
+    lvOther.CommaText := '1,2,4';
+    CheckFalse(FBpInt64List.SameAs(lvOther), 'same count, different values');
+    lvOther.CommaText := '1,2,3';
+    CheckTrue(FBpInt64List.SameAs(lvOther), 'same content');
+  finally
+    lvOther.Free;
+  end;
+end;
+
+procedure TBpInt64ListTests.TestLoadFromStreamSkipsUtf8Bom;
+var
+  lvStream: TMemoryStream;
+  lvText: AnsiString;
+begin
+  lvText := #$EF#$BB#$BF + '1,2,3';
+  lvStream := TMemoryStream.Create;
+  try
+    lvStream.WriteBuffer(lvText[1], Length(lvText));
+    lvStream.Position := 0;
+    FBpInt64List.LoadFromStream(lvStream);
+  finally
+    lvStream.Free;
+  end;
+  CheckEquals('1,2,3', FBpInt64List.CommaText, 'a BOM is not part of the first number');
+end;
+
+procedure TBpInt64ListTests.TestLoadFromStreamRejectsUtf16;
+var
+  lvStream: TMemoryStream;
+  lvText: AnsiString;
+begin
+  // '1,2,3' as UTF-16LE: the NUL bytes used to end the parse after the first value
+  lvText := '1'#0','#0'2'#0','#0'3'#0;
+  lvStream := TMemoryStream.Create;
+  try
+    lvStream.WriteBuffer(lvText[1], Length(lvText));
+    lvStream.Position := 0;
+    try
+      FBpInt64List.LoadFromStream(lvStream);
+      Fail('a NUL byte must be reported, not silently end the parse');
+    except
+      on E: EConvertError do
+        ; // expected
+    end;
+  finally
+    lvStream.Free;
+  end;
+end;
+
+procedure TBpInt64ListTests.TestDelimitedTextLineSeparated;
+begin
+  FBpInt64List.DelimitedText := '10'#13#10'20'#13#10'30';
+  CheckEquals(3, FBpInt64List.Count, 'one value per line loads without a delimiter in sight');
+  CheckEquals('10,20,30', FBpInt64List.CommaText, 'in file order');
+end;
+
 initialization
   RegisterTest(TBpInt64ListTests.Suite);
-  RegisterTest(TBpInt64ListMemoryTests.Suite);
 
 end.

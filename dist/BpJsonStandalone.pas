@@ -4,7 +4,7 @@ unit BpJsonStandalone;
 // Single-file bundle amalgamated from the DelphiBoostPack modular units:
 //   src\Core\Classes\BpStringBuilder.pas
 //   src\Core\Classes\BpJson.pas
-// Source commit f47b4e2, generated 2026-09-04 by tools\Amalgamate.ps1.
+// Source commit 77a27be, generated 2026-09-05 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
 // One bundle per project: two that share a helper declare it twice.
@@ -544,6 +544,8 @@ begin
   SetLength(aWide, lvLen);  // never more UTF-16 units than bytes
   lvIdx := 1;
   lvOut := 0;
+  lvCode := 0;
+  lvExtra := 0;
   while lvIdx <= lvLen do
   begin
     lvByte := Byte(aValue[lvIdx]);
@@ -836,6 +838,7 @@ begin
   end;
   // Val stores through Extended into the Double, so anything past Double range
   // raises EOverflow, which is not EbpJson and would escape Parse and TryParse
+  lvFloat := 0;
   try
     Val(lvToken, lvFloat, lvErr);
   except

@@ -8,7 +8,7 @@ unit BpHashes;
 //   src\Core\Classes\BpMD5.pas
 //   src\Core\Classes\BpHMACSHA256.pas
 //   src\Core\Classes\BpPasswordHash.pas
-// Source commit f47b4e2, generated 2026-09-04 by tools\Amalgamate.ps1.
+// Source commit 77a27be, generated 2026-09-05 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
 // One bundle per project: two that share a helper declare it twice.
@@ -1301,6 +1301,9 @@ var
   lvIterations: Integer;
 begin
   Result := False;
+  // above the early exits: Delphi 7 counts the implicit finalisation as a use
+  lvSaltBytes := nil;
+  lvHashBytes := nil;
   try
     // expected shape: $pbkdf2-sha256$<iterations>$<saltB64>$<hashB64>
     if (aStored = '') or (aStored[1] <> '$') then

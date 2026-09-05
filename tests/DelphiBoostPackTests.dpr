@@ -15,7 +15,7 @@ uses
 {$IFDEF BENCHMARK}
   // performance benchmarks, opt-in: build with BENCHMARK defined to include them
   BpBaseBenchmarkTestCase in 'Benchmarks\BpBaseBenchmarkTestCase.pas',
-  BpIntListBenchmark in 'Core\BpIntListBenchmark.pas',
+  BpIntListBenchmark in 'Benchmarks\BpIntListBenchmark.pas',
   BpStringOperationsBenchmark in 'Benchmarks\BpStringOperationsBenchmark.pas',
   BpStrDictionaryBenchmark in 'Benchmarks\BpStrDictionaryBenchmark.pas',
   BpIntDictionaryBenchmark in 'Benchmarks\BpIntDictionaryBenchmark.pas',
@@ -28,11 +28,8 @@ uses
 {$ENDIF}
   BpIntListTests in 'Core\BpIntListTests.pas',
   BpIntList in '..\src\Core\Classes\BpIntList.pas',
-  BpIntListIntf in '..\src\Core\Interfaces\BpIntListIntf.pas',
-  BpIntListMemoryTests in 'Core\BpIntListMemoryTests.pas',
   BpInt64ListTests in 'Core\BpInt64ListTests.pas',
   BpInt64List in '..\src\Core\Classes\BpInt64List.pas',
-  BpInt64ListIntf in '..\src\Core\Interfaces\BpInt64ListIntf.pas',
   BpObjectComparerCollectionClasses in 'Core\BpObjectComparerCollectionClasses.pas',
   BpObjectComparerSimpleClasses in 'Core\BpObjectComparerSimpleClasses.pas',
   BpObjectComparerSimpleTests in 'Core\BpObjectComparerSimpleTests.pas',

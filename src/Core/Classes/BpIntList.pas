@@ -1,169 +1,365 @@
-{.$DEFINE BENCHMARK}
-
 unit BpIntList;
 
-// A list of integers that behaves like TStringList: sorting, delimited text, indexing.
+// A list of integers with O(1) IndexOf. The values stay dense in one array, so
+// reading Items[] is a single memory access and a sort is in place. The hash
+// index is built on the first IndexOf, kept across an append and dropped by any
+// mutation that moves a position, so a list that is only appended to keeps it
+// and one that is rebuilt pays a rescan, never more than the linear search it
+// replaces. Nothing is hashed until the first lookup, and a Sorted list builds
+// no index at all because it bisects instead.
 
 interface
 
 uses
-  Classes, SysUtils, BpIntListIntf;
+  SysUtils, Classes;
 
 type
-  TbpIntListDefined = set of (idDelimiter, idLineBreak, idStrictDelimiter);
-
-  TbpIntList = class(TInterfacedObject, IBpIntList)
+  TbpIntList = class
   private
-    {$IFDEF BENCHMARK}
-    FStepCount: Integer;
-    {$ENDIF}
     FList: array of Integer;
-    FDefined: TbpIntListDefined;
-    FUpdateCount: Integer;
     FCount: Integer;
+    FBuckets: array of Integer;   // chain heads, nil until the first IndexOf
+    FNext: array of Integer;      // next position in the chain, by position
     FSorted: Boolean;
-    FSortedInsert: Boolean;
+    FDuplicates: TDuplicates;
     FDelimiter: Char;
     function GetItem(aIndex: Integer): Integer;
-    procedure SetItem(aIndex: Integer; const aValue: Integer);
-    procedure SetCapacity(const aNewCapacity: Integer);
-    procedure ExchangeItems(aIndex1, aIndex2: Integer);
+    procedure SetItem(aIndex: Integer; aValue: Integer);
+    function GetCapacity: Integer;
+    procedure SetCapacity(aValue: Integer);
+    procedure SetSorted(aValue: Boolean);
     procedure Grow;
+    procedure BuildIndex;
+    procedure LinkAppend(aPos: Integer);
+    procedure CheckIndex(aIndex: Integer);
+    procedure CheckNotSorted;
+    procedure InsertItem(aIndex, aItem: Integer);
+    procedure Swap(aIndex1, aIndex2: Integer);
     procedure QuickSort(aL, aR, aDepthBudget: Integer);
     procedure HeapSortRange(aL, aR: Integer);
-    function SortedInsertIndex(const aItem: Integer): Integer;
+    procedure SiftDown(aL, aRoot, aLast: Integer);
+    function TextWith(aDelimiter: Char): string;
+    procedure ParseWith(const aText: string; aDelimiter: Char);
     function GetDelimitedText: string;
     procedure SetDelimitedText(const aValue: string);
-    function GetDelimiter: Char;
-    procedure SetDelimiter(const aValue: Char);
-    function GetCount: Integer;
     function GetCommaText: string;
     procedure SetCommaText(const aValue: string);
-    procedure SetSorted(const aValue: Boolean);
-    function GetSorted: Boolean;
-  protected
-    property UpdateCount: Integer read FUpdateCount;
   public
     constructor Create;
-    destructor Destroy; override;
-    function Add(const aItem: Integer): Integer;
-    procedure Delete(const aIndex: Integer);
+    function Add(aItem: Integer): Integer;
+    procedure Assign(aSource: TbpIntList);
     procedure Clear;
-    procedure Exchange(aIndex1, aIndex2: Integer); virtual;
-    function IndexOf(const aItem: Integer): Integer;
-    function BinarySearch(const aItem: Integer; out aFoundIndex: Integer): Boolean;
-    procedure Insert(aIndex: Integer; const aItem: Integer);
-    procedure Sort; virtual;
-
-    procedure LoadFromFile(const aFileName: string); virtual;
-    procedure LoadFromStream(aStream: TStream); virtual;
-    procedure SaveToFile(const aFileName: string); virtual;
-    procedure SaveToStream(aStream: TStream); virtual;
-    class function CompareInt(aI1, aI2: Integer): Integer;
-  public
+    procedure Delete(aIndex: Integer);
+    procedure Exchange(aIndex1, aIndex2: Integer);
+    // Sorted: a binary search, aIndex the insertion point on a miss. First equal item.
+    function Find(aItem: Integer; var aIndex: Integer): Boolean;
+    function IndexOf(aItem: Integer): Integer;
+    procedure Insert(aIndex, aItem: Integer);
+    // content equality; Equals is left alone, it means identity from Delphi 2009 on
+    function SameAs(aOther: TbpIntList): Boolean;
+    procedure Sort;
+    procedure LoadFromFile(const aFileName: string);
+    procedure LoadFromStream(aStream: TStream);
+    procedure SaveToFile(const aFileName: string);
+    procedure SaveToStream(aStream: TStream);
+    property Capacity: Integer read GetCapacity write SetCapacity;
+    property Count: Integer read FCount;
     property Items[aIndex: Integer]: Integer read GetItem write SetItem; default;
     property CommaText: string read GetCommaText write SetCommaText;
-    property Count: Integer read GetCount;
-    property Delimiter: Char read GetDelimiter write SetDelimiter;
+    // whitespace separates too, so a space or line separated file loads as it is
+    property Delimiter: Char read FDelimiter write FDelimiter;
     property DelimitedText: string read GetDelimitedText write SetDelimitedText;
-    property Sorted: Boolean read GetSorted write SetSorted;
-
-    {$IFDEF BENCHMARK}
-    property StepCount: Integer read FStepCount;
-    {$ENDIF}
+    // consulted by Add on a Sorted list only, as in TStringList
+    property Duplicates: TDuplicates read FDuplicates write FDuplicates;
+    property Sorted: Boolean read FSorted write SetSorted;
   end;
-
-{$IFNDEF NEXTGEN}
-  TIntegerList = class(TbpIntList)
-  end;
-  TIntList = class(TbpIntList)
-  end;
-{$ENDIF}
 
 implementation
 
-{$IF not Declared(CharInSet)}
-// Delphi 2007 and earlier lack CharInSet; there Char is single-byte, so a plain set test suffices.
-function CharInSet(C: Char; const CharSet: TSysCharSet): Boolean;
-begin
-  Result := C in CharSet;
-end;
-{$IFEND}
+uses
+  RTLConsts;
+
+const
+  gcBpMinBuckets = 16;
+  gcBpMinCapacity = 16;
 
 resourcestring
-  SListCapacityError = 'List capacity out of bounds (%d)';
-  SListCountError = 'List count out of bounds (%d)';
-  SListIndexError = 'List index out of bounds (%d)';
-  SListMustBeSortedForBinarySearch = 'List must be sorted before performing binary search';
-  SSortedListError = 'Operation not allowed on sorted list';
+  SBpDuplicateItem = 'List does not allow duplicates';
+  SBpNotSingleByteText = 'The stream is not single byte text: a NUL byte at offset %d';
+
+// murmur3 finaliser, so keys with a common stride do not share a bucket
+{$IFOPT Q+}{$DEFINE BPINTLIST_Q}{$Q-}{$ENDIF}
+function IntListHash(aItem: Integer): Cardinal;
+begin
+  Result := Cardinal(aItem);
+  Result := Result xor (Result shr 16);
+  Result := Result * $85EBCA6B;
+  Result := Result xor (Result shr 13);
+  Result := Result * $C2B2AE35;
+  Result := Result xor (Result shr 16);
+end;
+{$IFDEF BPINTLIST_Q}{$Q+}{$UNDEF BPINTLIST_Q}{$ENDIF}
+
+function IntListIsSep(aCh: Char): Boolean;
+begin
+  Result := (aCh = ' ') or (aCh = #9) or (aCh = #10) or (aCh = #13);
+end;
+
+// storage
 
 constructor TbpIntList.Create;
 begin
-  inherited;
-  FCount := 0;
-  FSorted := False;
-  SetCapacity(0);
+  inherited Create;
+  FDelimiter := ',';
 end;
 
-destructor TbpIntList.Destroy;
+function TbpIntList.GetCapacity: Integer;
 begin
-  inherited Destroy;
-  FCount := 0;
-  SetCapacity(0);
+  Result := Length(FList);
+end;
+
+procedure TbpIntList.SetCapacity(aValue: Integer);
+begin
+  // shrinking below Count would drop values without saying so
+  if aValue < FCount then
+    raise EListError.CreateFmt(SListCapacityError, [aValue]);
+  SetLength(FList, aValue);
+  if FBuckets <> nil then
+    SetLength(FNext, aValue);
+end;
+
+procedure TbpIntList.Grow;
+var
+  lvCapacity: Integer;
+begin
+  lvCapacity := Length(FList);
+  if lvCapacity < gcBpMinCapacity then
+    lvCapacity := gcBpMinCapacity
+  else
+    lvCapacity := lvCapacity + lvCapacity div 2;
+  SetCapacity(lvCapacity);
+end;
+
+procedure TbpIntList.CheckIndex(aIndex: Integer);
+begin
+  if (aIndex < 0) or (aIndex >= FCount) then
+    raise EListError.CreateFmt(SListIndexError, [aIndex]);
+end;
+
+procedure TbpIntList.CheckNotSorted;
+begin
+  if FSorted then
+    raise EListError.CreateFmt(SSortedListError, [0]);
 end;
 
 function TbpIntList.GetItem(aIndex: Integer): Integer;
 begin
-  if (aIndex < 0) or (aIndex >= FCount) then
-    raise EListError.Create('List index out of bounds');
+  CheckIndex(aIndex);
   Result := FList[aIndex];
 end;
 
-procedure TbpIntList.SetItem(aIndex: Integer; const aValue: Integer);
+// an unchecked write would leave the binary search on unordered data
+procedure TbpIntList.SetItem(aIndex: Integer; aValue: Integer);
 begin
-  // an unchecked write would defeat the binary search, as in TStringList
-  if FSorted then
-    raise EListError.Create(SSortedListError);
-  if (aIndex < 0) or (aIndex >= FCount) then
-    raise EListError.Create('List index out of bounds');
+  CheckNotSorted;
+  CheckIndex(aIndex);
   FList[aIndex] := aValue;
+  FBuckets := nil;
 end;
 
-function TbpIntList.GetSorted: Boolean;
-begin
-  Result := FSorted;
-end;
+// the index
 
-procedure TbpIntList.SetSorted(const aValue: Boolean);
+procedure TbpIntList.BuildIndex;
+var
+  i, lvBuckets, lvBucket: Integer;
 begin
-  if FSorted <> aValue then
+  lvBuckets := gcBpMinBuckets;
+  while lvBuckets * 3 div 4 < FCount do
+    lvBuckets := lvBuckets * 2;
+  SetLength(FBuckets, lvBuckets);
+  for i := 0 to lvBuckets - 1 do
+    FBuckets[i] := -1;
+  SetLength(FNext, Length(FList));
+  for i := 0 to FCount - 1 do
   begin
-    if aValue then
-      Sort;
-    FSorted := aValue;
+    lvBucket := Integer(IntListHash(FList[i]) and Cardinal(lvBuckets - 1));
+    FNext[i] := FBuckets[lvBucket];
+    FBuckets[lvBucket] := i;
   end;
 end;
 
-procedure TbpIntList.SetCapacity(const aNewCapacity: Integer);
+// only an append can keep the index: every other move renumbers positions
+procedure TbpIntList.LinkAppend(aPos: Integer);
+var
+  lvBucket: Integer;
 begin
-  if aNewCapacity < FCount then
-    FCount := aNewCapacity; // Reduce count if reducing capacity below count
-  if aNewCapacity <> Length(FList) then
-    SetLength(FList, aNewCapacity);
+  if FCount > Length(FBuckets) * 3 div 4 then
+  begin
+    // a whole rebuild on the next lookup, amortised away by geometric growth
+    FBuckets := nil;
+    Exit;
+  end;
+  lvBucket := Integer(IntListHash(FList[aPos]) and Cardinal(Length(FBuckets) - 1));
+  FNext[aPos] := FBuckets[lvBucket];
+  FBuckets[lvBucket] := aPos;
+end;
+
+// lookups
+
+function TbpIntList.IndexOf(aItem: Integer): Integer;
+var
+  lvPos: Integer;
+begin
+  if FSorted then
+  begin
+    if not Find(aItem, Result) then
+      Result := -1;
+    Exit;
+  end;
+  Result := -1;
+  if FCount = 0 then
+    Exit;
+  if FBuckets = nil then
+    BuildIndex;
+  lvPos := FBuckets[Integer(IntListHash(aItem) and Cardinal(Length(FBuckets) - 1))];
+  // the whole chain, because the answer is the lowest position among duplicates
+  while lvPos >= 0 do
+  begin
+    if (FList[lvPos] = aItem) and ((Result < 0) or (lvPos < Result)) then
+      Result := lvPos;
+    lvPos := FNext[lvPos];
+  end;
+end;
+
+function TbpIntList.Find(aItem: Integer; var aIndex: Integer): Boolean;
+var
+  lvLow, lvHigh, lvMid: Integer;
+begin
+  if not FSorted then
+  begin
+    aIndex := IndexOf(aItem);
+    Result := aIndex >= 0;
+    if not Result then
+      aIndex := FCount;
+    Exit;
+  end;
+  Result := False;
+  lvLow := 0;
+  lvHigh := FCount - 1;
+  // keeps bisecting on a hit, so aIndex lands on the first equal item
+  while lvLow <= lvHigh do
+  begin
+    lvMid := (lvLow + lvHigh) shr 1;
+    if FList[lvMid] < aItem then
+      lvLow := lvMid + 1
+    else
+    begin
+      lvHigh := lvMid - 1;
+      if FList[lvMid] = aItem then
+        Result := True;
+    end;
+  end;
+  aIndex := lvLow;
+end;
+
+// mutation
+
+procedure TbpIntList.InsertItem(aIndex, aItem: Integer);
+begin
+  if FCount = Length(FList) then
+    Grow;
+  if aIndex < FCount then
+  begin
+    System.Move(FList[aIndex], FList[aIndex + 1], (FCount - aIndex) * SizeOf(Integer));
+    FBuckets := nil;
+  end;
+  FList[aIndex] := aItem;
+  Inc(FCount);
+  if FBuckets <> nil then
+    LinkAppend(aIndex);   // only an append gets here, the branch above dropped the rest
+end;
+
+function TbpIntList.Add(aItem: Integer): Integer;
+begin
+  if FSorted then
+  begin
+    if Find(aItem, Result) then
+    begin
+      case FDuplicates of
+        dupIgnore: Exit;
+        dupError: raise EListError.Create(SBpDuplicateItem);
+      end;
+      // past the equal run, so equal values stay in insertion order
+      while (Result < FCount) and (FList[Result] = aItem) do
+        Inc(Result);
+    end;
+  end
+  else
+    Result := FCount;
+  InsertItem(Result, aItem);
+end;
+
+procedure TbpIntList.Insert(aIndex, aItem: Integer);
+begin
+  CheckNotSorted;
+  if (aIndex < 0) or (aIndex > FCount) then
+    raise EListError.CreateFmt(SListIndexError, [aIndex]);
+  InsertItem(aIndex, aItem);
+end;
+
+procedure TbpIntList.Delete(aIndex: Integer);
+begin
+  CheckIndex(aIndex);
+  Dec(FCount);
+  if aIndex < FCount then
+    System.Move(FList[aIndex + 1], FList[aIndex], (FCount - aIndex) * SizeOf(Integer));
+  FBuckets := nil;
+end;
+
+procedure TbpIntList.Clear;
+begin
+  FList := nil;
+  FBuckets := nil;
+  FNext := nil;
+  FCount := 0;
 end;
 
 procedure TbpIntList.Exchange(aIndex1, aIndex2: Integer);
+var
+  lvTemp: Integer;
 begin
-  if FSorted then
-    raise EListError.Create(SSortedListError);
-  if (aIndex1 < 0) or (aIndex1 >= FCount) then
-    raise EListError.CreateFmt(SListIndexError, [aIndex1]);
-  if (aIndex2 < 0) or (aIndex2 >= FCount) then
-    raise EListError.CreateFmt(SListIndexError, [aIndex2]);
-  ExchangeItems(aIndex1, aIndex2);
+  CheckNotSorted;
+  CheckIndex(aIndex1);
+  CheckIndex(aIndex2);
+  lvTemp := FList[aIndex1];
+  FList[aIndex1] := FList[aIndex2];
+  FList[aIndex2] := lvTemp;
+  FBuckets := nil;
 end;
 
-procedure TbpIntList.ExchangeItems(aIndex1, aIndex2: Integer);
+procedure TbpIntList.Assign(aSource: TbpIntList);
+begin
+  if aSource = Self then
+    Exit;
+  Clear;
+  FCount := aSource.FCount;
+  SetLength(FList, FCount);
+  if FCount > 0 then
+    System.Move(aSource.FList[0], FList[0], FCount * SizeOf(Integer));
+  FDelimiter := aSource.FDelimiter;
+  FDuplicates := aSource.FDuplicates;
+  FSorted := aSource.FSorted;
+end;
+
+function TbpIntList.SameAs(aOther: TbpIntList): Boolean;
+begin
+  Result := (aOther <> nil) and (aOther.FCount = FCount) and
+    ((FCount = 0) or CompareMem(@FList[0], @aOther.FList[0], FCount * SizeOf(Integer)));
+end;
+
+// sorting
+
+procedure TbpIntList.Swap(aIndex1, aIndex2: Integer);
 var
   lvTemp: Integer;
 begin
@@ -172,67 +368,44 @@ begin
   FList[aIndex2] := lvTemp;
 end;
 
-procedure TbpIntList.Grow;
+// sifts aRoot down to aLast, both relative to aL
+procedure TbpIntList.SiftDown(aL, aRoot, aLast: Integer);
 var
-  lvNewCapacity: Integer;
+  lvChild, lvSwap: Integer;
 begin
-  if Length(FList) > 64 then
-    lvNewCapacity := Length(FList) + (Length(FList) div 4)
-  else if Length(FList) > 8 then
-    lvNewCapacity := Length(FList) + 16
-  else
-    lvNewCapacity := Length(FList) + 4;
-  SetCapacity(lvNewCapacity);
+  while (aRoot * 2 + 1) <= aLast do
+  begin
+    lvChild := aRoot * 2 + 1;
+    lvSwap := aRoot;
+    if FList[aL + lvSwap] < FList[aL + lvChild] then
+      lvSwap := lvChild;
+    if (lvChild + 1 <= aLast) and (FList[aL + lvSwap] < FList[aL + lvChild + 1]) then
+      lvSwap := lvChild + 1;
+    if lvSwap = aRoot then
+      Exit;
+    Swap(aL + aRoot, aL + lvSwap);
+    aRoot := lvSwap;
+  end;
 end;
 
-// sifts the subtree rooted at aRoot, indices relative to aL
 procedure TbpIntList.HeapSortRange(aL, aR: Integer);
 var
-  lvCount, lvIdx, lvRoot, lvChild, lvSwap: Integer;
+  lvCount, lvIdx: Integer;
 begin
   lvCount := aR - aL + 1;
   for lvIdx := (lvCount - 2) div 2 downto 0 do
-  begin
-    lvRoot := lvIdx;
-    while (lvRoot * 2 + 1) <= lvCount - 1 do
-    begin
-      lvChild := lvRoot * 2 + 1;
-      lvSwap := lvRoot;
-      if FList[aL + lvSwap] < FList[aL + lvChild] then
-        lvSwap := lvChild;
-      if (lvChild + 1 <= lvCount - 1) and (FList[aL + lvSwap] < FList[aL + lvChild + 1]) then
-        lvSwap := lvChild + 1;
-      if lvSwap = lvRoot then
-        Break;
-      ExchangeItems(aL + lvRoot, aL + lvSwap);
-      lvRoot := lvSwap;
-    end;
-  end;
+    SiftDown(aL, lvIdx, lvCount - 1);
   for lvIdx := lvCount - 1 downto 1 do
   begin
-    ExchangeItems(aL, aL + lvIdx);
-    lvRoot := 0;
-    while (lvRoot * 2 + 1) <= lvIdx - 1 do
-    begin
-      lvChild := lvRoot * 2 + 1;
-      lvSwap := lvRoot;
-      if FList[aL + lvSwap] < FList[aL + lvChild] then
-        lvSwap := lvChild;
-      if (lvChild + 1 <= lvIdx - 1) and (FList[aL + lvSwap] < FList[aL + lvChild + 1]) then
-        lvSwap := lvChild + 1;
-      if lvSwap = lvRoot then
-        Break;
-      ExchangeItems(aL + lvRoot, aL + lvSwap);
-      lvRoot := lvSwap;
-    end;
+    Swap(aL, aL + lvIdx);
+    SiftDown(aL, 0, lvIdx - 1);
   end;
 end;
 
 // introsort: recurses into the smaller side, heapsort when the pivot splits badly
 procedure TbpIntList.QuickSort(aL, aR, aDepthBudget: Integer);
 var
-  I, J, lvMid: Integer;
-  lvPivot: Integer;
+  I, J, lvMid, lvPivot: Integer;
 begin
   while aL < aR do
   begin
@@ -245,11 +418,11 @@ begin
     lvMid := aL + (aR - aL) div 2;
     // median of three, so sorted and reverse sorted input split evenly
     if FList[lvMid] < FList[aL] then
-      ExchangeItems(lvMid, aL);
+      Swap(lvMid, aL);
     if FList[aR] < FList[aL] then
-      ExchangeItems(aR, aL);
+      Swap(aR, aL);
     if FList[aR] < FList[lvMid] then
-      ExchangeItems(aR, lvMid);
+      Swap(aR, lvMid);
     lvPivot := FList[lvMid];
     I := aL;
     J := aR;
@@ -261,7 +434,7 @@ begin
       if I <= J then
       begin
         if I <> J then
-          ExchangeItems(I, J);
+          Swap(I, J);
         Inc(I);
         Dec(J);
       end;
@@ -281,180 +454,155 @@ begin
   end;
 end;
 
-function TbpIntList.Add(const aItem: Integer): Integer;
-begin
-  // on a sorted list the item lands at its ordered position, not at the end
-  if FSorted then
-    Result := SortedInsertIndex(aItem)
-  else
-    Result := FCount;
-  FSortedInsert := True;
-  try
-    Insert(Result, aItem);
-  finally
-    FSortedInsert := False;
-  end;
-end;
-
-// lowest index at which aItem keeps the list ordered
-function TbpIntList.SortedInsertIndex(const aItem: Integer): Integer;
+procedure TbpIntList.Sort;
 var
-  lvLow, lvHigh, lvMid: Integer;
+  lvBudget, lvSpan: Integer;
 begin
-  lvLow := 0;
-  lvHigh := FCount - 1;
-  while lvLow <= lvHigh do
+  if FSorted or (FCount < 2) then
+    Exit;
+  // 2*log2(Count) partitions before heapsort takes over
+  lvBudget := 0;
+  lvSpan := FCount;
+  while lvSpan > 1 do
   begin
-    lvMid := lvLow + (lvHigh - lvLow) div 2;
-    if FList[lvMid] < aItem then
-      lvLow := lvMid + 1
-    else
-      lvHigh := lvMid - 1;
+    lvSpan := lvSpan shr 1;
+    Inc(lvBudget);
   end;
-  Result := lvLow;
+  QuickSort(0, FCount - 1, lvBudget * 2);
+  FBuckets := nil;
 end;
 
-procedure TbpIntList.Delete(const aIndex: Integer);
+procedure TbpIntList.SetSorted(aValue: Boolean);
 begin
-  if (aIndex < 0) or (aIndex >= FCount) then
-    raise EListError.Create('List index out of bounds');
-  Dec(FCount);
-  if (aIndex < FCount) then
-    System.Move(FList[aIndex + 1], FList[aIndex], (FCount - aIndex) * SizeOf(Integer));
+  if aValue = FSorted then
+    Exit;
+  if aValue then
+    Sort;
+  FSorted := aValue;
 end;
 
-procedure TbpIntList.Clear;
+// text
+
+function TbpIntList.TextWith(aDelimiter: Char): string;
+var
+  i, lvLen: Integer;
+  lvPart: string;
+  lvOut: PChar;
 begin
-  if FCount <> 0 then
+  Result := '';
+  if FCount = 0 then
+    Exit;
+  // one pass to size, one to fill: no reallocation per item
+  lvLen := FCount - 1;
+  for i := 0 to FCount - 1 do
+    Inc(lvLen, Length(IntToStr(FList[i])));
+  SetLength(Result, lvLen);
+  lvOut := PChar(Result);
+  for i := 0 to FCount - 1 do
   begin
-    FCount := 0;
-    SetCapacity(0);
+    if i > 0 then
+    begin
+      lvOut^ := aDelimiter;
+      Inc(lvOut);
+    end;
+    lvPart := IntToStr(FList[i]);
+    System.Move(PChar(lvPart)^, lvOut^, Length(lvPart) * SizeOf(Char));
+    Inc(lvOut, Length(lvPart));
   end;
 end;
 
-function TbpIntList.GetDelimiter: Char;
+procedure TbpIntList.ParseWith(const aText: string; aDelimiter: Char);
+var
+  P, lvStart: PChar;
+  lvPart: string;
+  lvNum: Integer;
 begin
-  if not (idDelimiter in FDefined) then
-    Delimiter := ',';
-  Result := FDelimiter;
+  Clear;
+  P := PChar(aText);
+  while P^ <> #0 do
+  begin
+    lvStart := P;
+    while (P^ <> #0) and (P^ <> aDelimiter) and not IntListIsSep(P^) do
+      Inc(P);
+    SetString(lvPart, lvStart, P - lvStart);
+    if lvPart <> '' then
+    begin
+      if not TryStrToInt(lvPart, lvNum) then
+        raise EConvertError.CreateFmt('Cannot convert string "%s" to integer', [lvPart]);
+      Add(lvNum);
+    end;
+    while (P^ = aDelimiter) or IntListIsSep(P^) do
+      Inc(P);
+  end;
 end;
 
-procedure TbpIntList.SetDelimiter(const aValue: Char);
+function TbpIntList.GetDelimitedText: string;
 begin
-  if (FDelimiter <> aValue) or not (idDelimiter in FDefined) then
-  begin
-    Include(FDefined, idDelimiter);
-    FDelimiter := aValue;
-  end
+  Result := TextWith(FDelimiter);
+end;
+
+procedure TbpIntList.SetDelimitedText(const aValue: string);
+begin
+  ParseWith(aValue, FDelimiter);
 end;
 
 function TbpIntList.GetCommaText: string;
-var
-  lvOldDefined: TbpIntListDefined;
-  lvOldDelimiter: Char;
 begin
-  lvOldDefined := FDefined;
-  lvOldDelimiter := Delimiter;
-  Delimiter := ',';
-  try
-    Result := GetDelimitedText;
-  finally
-    Delimiter := lvOldDelimiter;
-    FDefined := lvOldDefined;
-  end;
+  Result := TextWith(',');
 end;
 
 procedure TbpIntList.SetCommaText(const aValue: string);
 begin
-  Delimiter := ',';
-  SetDelimitedText(aValue);
+  ParseWith(aValue, ',');
 end;
 
-function TbpIntList.GetCount: Integer;
-begin
-  Result := FCount;
-end;
-
-function TbpIntList.GetDelimitedText: string;
-var
-  i: Integer;
-begin
-  Result := '';
-  for i := 0 to Count - 1 do
-  begin
-    Result := Result + IntToStr(FList[i]);
-    if i < Count - 1 then
-      Result := Result + Delimiter;
-  end;
-end;
-
-procedure TbpIntList.SetDelimitedText(const aValue: string);
-var
-  P, lvStart: PChar;
-  lvS: string;
-  lvNum: Integer;
-begin
-  Clear;
-  P := PChar(aValue);
-  while P^ <> #0 do
-  begin
-    lvStart := P;
-    while (P^ <> #0) and (P^ <> Delimiter) and not CharInSet(P^, [#9, #10, #13, ' ']) do
-      Inc(P);
-
-    SetString(lvS, lvStart, P - lvStart);
-    if lvS <> '' then
-    begin
-      if TryStrToInt(lvS, lvNum) then
-        Add(lvNum)
-      else
-        raise EConvertError.CreateFmt('Cannot convert string "%s" to integer', [lvS]);
-    end;
-
-    while (P^ = Delimiter) or CharInSet(P^, [#9, #10, #13, ' ']) do
-      Inc(P);
-  end;
-end;
-
+// streams
 
 procedure TbpIntList.LoadFromFile(const aFileName: string);
 var
-  lvFileStream: TFileStream;
+  lvStream: TFileStream;
 begin
-  lvFileStream := TFileStream.Create(aFileName, fmOpenRead or fmShareDenyWrite);
+  lvStream := TFileStream.Create(aFileName, fmOpenRead or fmShareDenyWrite);
   try
-    LoadFromStream(lvFileStream);
+    LoadFromStream(lvStream);
   finally
-    lvFileStream.Free;
+    lvStream.Free;
   end;
 end;
 
+// single byte text from the current position, the way TStrings reads a stream
 procedure TbpIntList.LoadFromStream(aStream: TStream);
 var
-  lvS: string;
-  lvBuffer: array of Byte;
-  lvSize: Integer;
+  lvText: AnsiString;
+  lvSize, lvFrom, i: Integer;
 begin
   Clear;
-  // from the current position, the way TStrings does it
   lvSize := aStream.Size - aStream.Position;
   if lvSize <= 0 then
     Exit;
-  SetLength(lvBuffer, lvSize);
-  aStream.ReadBuffer(lvBuffer[0], lvSize);
-  SetString(lvS, PAnsiChar(@lvBuffer[0]), Length(lvBuffer));
-  SetDelimitedText(lvS);
+  SetLength(lvText, lvSize);
+  aStream.ReadBuffer(lvText[1], lvSize);
+  lvFrom := 1;
+  // a UTF-8 BOM would otherwise reach TryStrToInt as part of the first number
+  if (lvSize >= 3) and (Ord(lvText[1]) = $EF) and (Ord(lvText[2]) = $BB) and
+    (Ord(lvText[3]) = $BF) then
+    lvFrom := 4;
+  // and a NUL would end the parse in silence, which is what UTF-16 looks like here
+  for i := lvFrom to lvSize do
+    if Ord(lvText[i]) = 0 then
+      raise EConvertError.CreateFmt(SBpNotSingleByteText, [i - 1]);
+  ParseWith(string(Copy(lvText, lvFrom, lvSize - lvFrom + 1)), FDelimiter);
 end;
 
 procedure TbpIntList.SaveToFile(const aFileName: string);
 var
-  lvFileStream: TFileStream;
+  lvStream: TFileStream;
 begin
-  lvFileStream := TFileStream.Create(aFileName, fmCreate);
+  lvStream := TFileStream.Create(aFileName, fmCreate);
   try
-    SaveToStream(lvFileStream);
+    SaveToStream(lvStream);
   finally
-    lvFileStream.Free;
+    lvStream.Free;
   end;
 end;
 
@@ -468,122 +616,4 @@ begin
     aStream.WriteBuffer(lvText[1], Length(lvText));
 end;
 
-function TbpIntList.IndexOf(const aItem: Integer): Integer;
-var
-  lvFound: Boolean;
-  lvFoundIndex: Integer;
-begin
-  Result := -1;
-  {$IFDEF BENCHMARK}
-  FStepCount := 0;
-  {$ENDIF}
-  if Sorted then
-  begin
-    lvFound := BinarySearch(aItem, lvFoundIndex);
-    if lvFound then
-      Result := lvFoundIndex
-    else
-      Result := -1;
-  end
-  else
-  begin
-    for lvFoundIndex := 0 to FCount - 1 do
-    begin
-      {$IFDEF BENCHMARK}
-      Inc(FStepCount);
-      {$ENDIF}
-      if (FList[lvFoundIndex] = aItem) then
-      begin
-        Result := lvFoundIndex;
-        Break;
-      end;
-    end;
-  end;
-end;
-
-function TbpIntList.BinarySearch(const aItem: Integer; out aFoundIndex: Integer): Boolean;
-var
-  L, H, M: Integer;
-  lvCompResult: Integer;
-begin
-  aFoundIndex := -1;
-  if not Sorted then
-    raise EListError.Create(SListMustBeSortedForBinarySearch);
-
-  L := 0;
-  H := FCount - 1;
-  {$IFDEF BENCHMARK}
-  FStepCount := 0;
-  {$ENDIF}
-  while L <= H do
-  begin
-    M := (L + H) shr 1;
-    {$IFDEF BENCHMARK}
-    Inc(FStepCount);
-    {$ENDIF}
-    lvCompResult := CompareInt(FList[M], aItem);
-    if lvCompResult < 0 then
-      L := M + 1
-    else if lvCompResult > 0 then
-      H := M - 1
-    else
-    begin
-      aFoundIndex := M;
-      Result := True;
-      Exit;
-    end;
-  end;
-  aFoundIndex := L; // Return the insertion point if not found
-  Result := False;
-end;
-
-class function TbpIntList.CompareInt(aI1, aI2: Integer): Integer;
-begin
-  if aI1 < aI2 then
-    Result := -1
-  else if aI1 > aI2 then
-    Result := 1
-  else
-    Result := 0;
-end;
-
-procedure TbpIntList.Insert(aIndex: Integer; const aItem: Integer);
-begin
-  if FSorted then
-  begin
-    // Add is the only entry point on a sorted list; an index would be a lie
-    if not FSortedInsert then
-      raise EListError.Create(SSortedListError);
-    aIndex := SortedInsertIndex(aItem);
-  end
-  else if (aIndex < 0) or (aIndex > Count) then
-    raise EListError.Create('List index out of bounds');
-
-  if Count = Length(FList) then
-    Grow;
-
-  if aIndex < Count then
-    System.Move(FList[aIndex], FList[aIndex + 1], (Count - aIndex) * SizeOf(Integer));
-
-  FList[aIndex] := aItem;
-  Inc(FCount);
-end;
-
-procedure TbpIntList.Sort;
-var
-  lvBudget, lvSpan: Integer;
-begin
-  if FCount <= 1 then
-    Exit;
-  lvBudget := 0;
-  lvSpan := FCount;
-  while lvSpan > 1 do
-  begin
-    lvSpan := lvSpan shr 1;
-    Inc(lvBudget);
-  end;
-  QuickSort(0, FCount - 1, lvBudget * 2);
-end;
-
 end.
-

@@ -7,7 +7,7 @@ unit BpIntDictionary;
 interface
 
 uses
-  Windows, SysUtils, Classes, Variants;
+  SysUtils, Classes, Variants;
 
 type
   // raised for missing keys, duplicate keys and failed typed conversions
@@ -31,6 +31,8 @@ type
     FItems: TbpIntDictItemArray;
     FCount: Integer;
     FGrowThreshold: Integer;
+    FIterating: Boolean;
+    procedure CheckNotIterating;
     // the slot index when found, else the complement of the first empty slot
     function GetBucketIndex(aKey: Int64; aHashCode: Integer): Integer;
     procedure DoAdd(aHashCode, aIndex: Integer; aKey: Int64; const aValue: Variant);
@@ -110,6 +112,13 @@ begin
   Result := gcIntPositiveMask and ((gcIntPositiveMask and BpHashInt64(aKey)) + 1);
 end;
 
+// a callback that adds or removes would make the scan skip or revisit entries
+procedure TbpIntDictionary.CheckNotIterating;
+begin
+  if FIterating then
+    raise EbpIntDictionary.Create('The dictionary cannot be changed while ForEach runs');
+end;
+
 constructor TbpIntDictionary.Create(aInitialCapacity: Integer);
 begin
   inherited Create;
@@ -163,6 +172,8 @@ var
   lvIndex: Integer;
   i: Integer;
 begin
+  // above the early exits: Delphi 7 counts the implicit finalisation as a use
+  lvOldItems := nil;
   if aNewCapacity = Length(FItems) then
     Exit;
   if aNewCapacity < 0 then
@@ -174,14 +185,15 @@ begin
     FItems[i].HashCode := gcIntEmptyHash;
   // grow at 75% load; guarantees at least one always-empty slot
   FGrowThreshold := aNewCapacity shr 1 + aNewCapacity shr 2;
-  // reinsert using the cached hash codes, no rehashing of the keys
+  // reinsert on the cached hash codes, moving each entry as raw bits: a field
+  // copy would pay a VarCopy per item and deep-copy every variant array
   for i := 0 to Length(lvOldItems) - 1 do
     if lvOldItems[i].HashCode <> gcIntEmptyHash then
     begin
       lvIndex := not GetBucketIndex(lvOldItems[i].Key, lvOldItems[i].HashCode);
-      FItems[lvIndex].HashCode := lvOldItems[i].HashCode;
-      FItems[lvIndex].Key := lvOldItems[i].Key;
-      FItems[lvIndex].Value := lvOldItems[i].Value;
+      System.Move(lvOldItems[i], FItems[lvIndex], SizeOf(TbpIntDictItem));
+      // the old slot must forget what it no longer owns, or finalisation frees it
+      FillChar(lvOldItems[i], SizeOf(TbpIntDictItem), 0);
     end;
 end;
 
@@ -199,6 +211,7 @@ procedure TbpIntDictionary.SetCapacity(aCapacity: Integer);
 var
   lvNewCapacity: Integer;
 begin
+  CheckNotIterating;
   if aCapacity < FCount then
     raise EbpIntDictionary.Create('Capacity cannot be less than Count');
   if aCapacity = 0 then
@@ -225,12 +238,17 @@ procedure TbpIntDictionary.Add(aKey: Int64; const aValue: Variant);
 var
   lvHashCode, lvIndex: Integer;
 begin
-  if FCount >= FGrowThreshold then
-    Grow;
+  CheckNotIterating;
   lvHashCode := PositiveHashOf(aKey);
   lvIndex := GetBucketIndex(aKey, lvHashCode);
   if lvIndex >= 0 then
     raise EbpIntDictionary.CreateFmt('Duplicate key: %d', [aKey]);
+  // grow only on a genuine new insert; the array moves, so probe again
+  if FCount >= FGrowThreshold then
+  begin
+    Grow;
+    lvIndex := GetBucketIndex(aKey, lvHashCode);
+  end;
   DoAdd(lvHashCode, not lvIndex, aKey, aValue);
 end;
 
@@ -238,6 +256,7 @@ procedure TbpIntDictionary.AddOrSet(aKey: Int64; const aValue: Variant);
 var
   lvHashCode, lvIndex: Integer;
 begin
+  CheckNotIterating;
   lvHashCode := PositiveHashOf(aKey);
   lvIndex := GetBucketIndex(aKey, lvHashCode);
   if lvIndex >= 0 then
@@ -284,6 +303,7 @@ var
   end;
 
 begin
+  CheckNotIterating;
   lvIndex := GetBucketIndex(aKey, PositiveHashOf(aKey));
   Result := lvIndex >= 0;
   if not Result then
@@ -312,6 +332,7 @@ end;
 
 procedure TbpIntDictionary.Clear;
 begin
+  CheckNotIterating;
   FItems := nil;
   FCount := 0;
   FGrowThreshold := 0;
@@ -325,13 +346,18 @@ begin
   if not Assigned(aCallback) then
     Exit;
   lvStop := False;
-  for i := 0 to Length(FItems) - 1 do
-    if FItems[i].HashCode <> gcIntEmptyHash then
-    begin
-      aCallback(FItems[i].Key, FItems[i].Value, lvStop);
-      if lvStop then
-        Exit;
-    end;
+  FIterating := True;
+  try
+    for i := 0 to Length(FItems) - 1 do
+      if FItems[i].HashCode <> gcIntEmptyHash then
+      begin
+        aCallback(FItems[i].Key, FItems[i].Value, lvStop);
+        if lvStop then
+          Exit;
+      end;
+  finally
+    FIterating := False;
+  end;
 end;
 
 function TbpIntDictionary.GetKeys: TbpInt64DynArray;

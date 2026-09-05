@@ -5,7 +5,7 @@ unit BpIntListTests;
 interface
 
 uses
-  TestFramework, Classes, BpIntListIntf, BpIntList, SysUtils;
+  TestFramework, Classes, BpIntList, SysUtils;
 
 type
   TBpIntListTests = class(TTestCase)
@@ -22,9 +22,9 @@ type
     procedure TestDeleteWithInvalidIndex;
     procedure TestClear;
     procedure TestIndexOf;
-    procedure TestBinarySearchEmptyList;
-    procedure TestBinarySearchSingleElement;
-    procedure TestBinarySearchMultipleElements;
+    procedure TestFindEmptyList;
+    procedure TestFindSingleElement;
+    procedure TestFindMultipleElements;
     procedure TestExchangeValidIndices;
     procedure TestExchangeSameIndex;
     procedure TestExchangeInvalidIndex;
@@ -78,18 +78,32 @@ type
     procedure TestLoadFromStreamWithInvalidFormat;
     procedure TestSaveToStreamBasic;
     procedure TestSaveToStreamEmptyList;
-    procedure TestBinarySearchOnUnsortedListRaises;
-    procedure TestSortThenBinarySearch;
+    procedure TestSortThenFind;
     procedure TestSortOrganPipe;
     procedure TestFileRoundTripBetweenLists;
     procedure TestExchangeWhenSortedRaises;
     procedure TestInsertWhenSortedRaises;
     procedure TestSortReSortsAfterUncheckedWrite;
-    procedure TestSortedReadableThroughInterface;
     procedure TestDelimitedTextWhitespaceSeparated;
     procedure TestDelimitedTextTabSeparated;
     procedure TestDelimitedTextSpaceBeforeDelimiter;
     procedure TestDelimitedTextWhitespaceOnly;
+    procedure TestFindOnUnsortedListUsesTheIndex;
+    procedure TestIndexOfReturnsFirstOfDuplicates;
+    procedure TestIndexOfSurvivesAnAppend;
+    procedure TestIndexOfAfterDeleteRebuilds;
+    procedure TestIndexOfOnSortedListFindsFirstOfRun;
+    procedure TestDuplicatesIgnoreDropsOnSortedAdd;
+    procedure TestDuplicatesErrorRaisesOnSortedAdd;
+    procedure TestDuplicatesAcceptKeepsTheRun;
+    procedure TestDeleteFromSortedList;
+    procedure TestCapacityBelowCountRaises;
+    procedure TestCapacityPresizesWithoutChangingCount;
+    procedure TestAssignCopiesContentAndFlags;
+    procedure TestSameAs;
+    procedure TestLoadFromStreamSkipsUtf8Bom;
+    procedure TestLoadFromStreamRejectsUtf16;
+    procedure TestDelimitedTextLineSeparated;
   end;
 
 implementation
@@ -183,28 +197,28 @@ begin
   CheckEquals(-1, FBpIntList.IndexOf(30), 'IndexOf should return -1 for a non-existent item');
 end;
 
-procedure TBpIntListTests.TestBinarySearchEmptyList;
+procedure TBpIntListTests.TestFindEmptyList;
 var
   FoundIndex: Integer;
 begin
   FBpIntList.Sorted := True;
-  CheckFalse(FBpIntList.BinarySearch(10, FoundIndex), 'Search in an empty list should return False.');
+  CheckFalse(FBpIntList.Find(10, FoundIndex), 'Search in an empty list should return False.');
 end;
 
-procedure TBpIntListTests.TestBinarySearchSingleElement;
+procedure TBpIntListTests.TestFindSingleElement;
 var
   FoundIndex: Integer;
 begin
   FBpIntList.Add(5);
   FBpIntList.Sorted := True;
-  CheckTrue(FBpIntList.BinarySearch(5, FoundIndex), 'Item should be found.');
+  CheckTrue(FBpIntList.Find(5, FoundIndex), 'Item should be found.');
   CheckEquals(0, FoundIndex, 'FoundIndex should be 0.');
 
-  CheckFalse(FBpIntList.BinarySearch(3, FoundIndex), 'Item should not be found.');
+  CheckFalse(FBpIntList.Find(3, FoundIndex), 'Item should not be found.');
   CheckEquals(0, FoundIndex, 'Insertion index should be 0 for a smaller element.');
 end;
 
-procedure TBpIntListTests.TestBinarySearchMultipleElements;
+procedure TBpIntListTests.TestFindMultipleElements;
 var
   FoundIndex: Integer;
 begin
@@ -213,16 +227,16 @@ begin
   FBpIntList.Add(20);
   FBpIntList.Sorted := True;
 
-  CheckTrue(FBpIntList.BinarySearch(10, FoundIndex), 'Item should be found.');
+  CheckTrue(FBpIntList.Find(10, FoundIndex), 'Item should be found.');
   CheckEquals(1, FoundIndex, 'FoundIndex should be 1.');
 
-  CheckFalse(FBpIntList.BinarySearch(15, FoundIndex), 'Item should not be found.');
+  CheckFalse(FBpIntList.Find(15, FoundIndex), 'Item should not be found.');
   CheckEquals(2, FoundIndex, 'Insertion index should be 2.');
 
-  CheckTrue(FBpIntList.BinarySearch(5, FoundIndex), 'First element should be found.');
+  CheckTrue(FBpIntList.Find(5, FoundIndex), 'First element should be found.');
   CheckEquals(0, FoundIndex, 'FoundIndex should be 0.');
 
-  CheckTrue(FBpIntList.BinarySearch(20, FoundIndex), 'Last element should be found.');
+  CheckTrue(FBpIntList.Find(20, FoundIndex), 'Last element should be found.');
   CheckEquals(2, FoundIndex, 'FoundIndex should be 2.');
 end;
 
@@ -841,25 +855,8 @@ begin
 end;
 
 
-procedure TBpIntListTests.TestBinarySearchOnUnsortedListRaises;
-var
-  lvFound: Integer;
-begin
-  FBpIntList.Add(30);
-  FBpIntList.Add(10);
-  // a bare Sort orders the values but does not set the flag BinarySearch wants
-  FBpIntList.Sort;
-  try
-    FBpIntList.BinarySearch(10, lvFound);
-    Fail('BinarySearch must refuse a list that is not marked Sorted');
-  except
-    // narrow, or Fail is caught by its own handler
-    on E: EListError do
-      ; // expected
-  end;
-end;
 
-procedure TBpIntListTests.TestSortThenBinarySearch;
+procedure TBpIntListTests.TestSortThenFind;
 var
   lvFound: Integer;
 begin
@@ -868,9 +865,9 @@ begin
   FBpIntList.Add(10);
   FBpIntList.Add(20);
   FBpIntList.Sorted := True;
-  CheckTrue(FBpIntList.BinarySearch(20, lvFound), '20 is in the list');
+  CheckTrue(FBpIntList.Find(20, lvFound), '20 is in the list');
   CheckEquals(1, lvFound);
-  CheckFalse(FBpIntList.BinarySearch(25, lvFound), '25 is not');
+  CheckFalse(FBpIntList.Find(25, lvFound), '25 is not');
   CheckEquals(2, lvFound, 'a miss reports where it would go');
 end;
 
@@ -978,15 +975,6 @@ begin
   CheckEquals(99, FBpIntList.Items[2], 'the written value ends up last');
 end;
 
-procedure TBpIntListTests.TestSortedReadableThroughInterface;
-var
-  lvIntf: IBpIntList;
-begin
-  lvIntf := TbpIntList.Create;
-  CheckEquals(False, lvIntf.Sorted, 'a fresh list is unsorted');
-  lvIntf.Sorted := True;
-  CheckEquals(True, lvIntf.Sorted, 'the interface must be able to read the flag back');
-end;
 
 procedure TBpIntListTests.TestDelimitedTextWhitespaceSeparated;
 begin
@@ -1014,6 +1002,236 @@ procedure TBpIntListTests.TestDelimitedTextWhitespaceOnly;
 begin
   FBpIntList.DelimitedText := '   '#9;
   CheckEquals(0, FBpIntList.Count, 'whitespace-only input is an empty list, not an error');
+end;
+
+// the hash index answers where the old linear scan did
+procedure TBpIntListTests.TestFindOnUnsortedListUsesTheIndex;
+var
+  lvIndex: Integer;
+begin
+  FBpIntList.Add(30);
+  FBpIntList.Add(10);
+  CheckTrue(FBpIntList.Find(10, lvIndex), 'an unsorted list still answers Find');
+  CheckEquals(1, lvIndex, 'the position of the item, not an insertion point');
+  CheckFalse(FBpIntList.Find(99, lvIndex), 'a miss stays a miss');
+  CheckEquals(2, lvIndex, 'a miss reports Count');
+end;
+
+procedure TBpIntListTests.TestIndexOfReturnsFirstOfDuplicates;
+var
+  i: Integer;
+begin
+  for i := 0 to 9 do
+    FBpIntList.Add(7);
+  FBpIntList.Add(8);
+  CheckEquals(0, FBpIntList.IndexOf(7), 'the lowest position among equal items');
+  CheckEquals(10, FBpIntList.IndexOf(8), 'and the only position of a unique one');
+end;
+
+// an append is the one mutation the index survives, so the answer must stay right
+procedure TBpIntListTests.TestIndexOfSurvivesAnAppend;
+var
+  i: Integer;
+begin
+  for i := 0 to 99 do
+    FBpIntList.Add(i);
+  CheckEquals(50, FBpIntList.IndexOf(50), 'builds the index');
+  for i := 100 to 999 do
+    FBpIntList.Add(i);
+  CheckEquals(50, FBpIntList.IndexOf(50), 'an item from before the appends');
+  CheckEquals(999, FBpIntList.IndexOf(999), 'and one appended after the build');
+  CheckEquals(-1, FBpIntList.IndexOf(1000), 'a value that was never added');
+end;
+
+procedure TBpIntListTests.TestIndexOfAfterDeleteRebuilds;
+var
+  i: Integer;
+begin
+  for i := 0 to 99 do
+    FBpIntList.Add(i);
+  CheckEquals(50, FBpIntList.IndexOf(50), 'builds the index');
+  FBpIntList.Delete(0);
+  CheckEquals(49, FBpIntList.IndexOf(50), 'every position above the gap moved by one');
+  FBpIntList.Insert(0, 500);
+  CheckEquals(50, FBpIntList.IndexOf(50), 'and back again after an insert at the head');
+  CheckEquals(0, FBpIntList.IndexOf(500), 'the inserted value is findable too');
+end;
+
+procedure TBpIntListTests.TestIndexOfOnSortedListFindsFirstOfRun;
+var
+  i: Integer;
+begin
+  FBpIntList.Duplicates := dupAccept;
+  FBpIntList.Sorted := True;
+  FBpIntList.Add(1);
+  for i := 0 to 4 do
+    FBpIntList.Add(5);
+  FBpIntList.Add(9);
+  CheckEquals(7, FBpIntList.Count, 'the run is kept');
+  CheckEquals(1, FBpIntList.IndexOf(5), 'the first of the equal run, not any of it');
+  CheckEquals(0, FBpIntList.IndexOf(1), 'first');
+  CheckEquals(6, FBpIntList.IndexOf(9), 'last');
+  CheckEquals(-1, FBpIntList.IndexOf(4), 'a value between two present ones');
+end;
+
+procedure TBpIntListTests.TestDuplicatesIgnoreDropsOnSortedAdd;
+begin
+  FBpIntList.Sorted := True;
+  CheckEquals(0, FBpIntList.Add(5), 'the first 5 lands at 0');
+  CheckEquals(0, FBpIntList.Add(5), 'the second returns the position of the first');
+  CheckEquals(1, FBpIntList.Count, 'dupIgnore is the default, as in TStringList');
+end;
+
+procedure TBpIntListTests.TestDuplicatesErrorRaisesOnSortedAdd;
+begin
+  FBpIntList.Duplicates := dupError;
+  FBpIntList.Sorted := True;
+  FBpIntList.Add(5);
+  try
+    FBpIntList.Add(5);
+    Fail('dupError must refuse an equal item');
+  except
+    on E: EListError do
+      ; // expected
+  end;
+  CheckEquals(1, FBpIntList.Count, 'and must not have added it');
+end;
+
+// Duplicates is read by Add on a Sorted list only, as in TStringList
+procedure TBpIntListTests.TestDuplicatesAcceptKeepsTheRun;
+begin
+  FBpIntList.Duplicates := dupError;
+  FBpIntList.Add(5);
+  FBpIntList.Add(5);
+  CheckEquals(2, FBpIntList.Count, 'an unsorted list ignores Duplicates entirely');
+  FBpIntList.Clear;
+  FBpIntList.Duplicates := dupAccept;
+  FBpIntList.Sorted := True;
+  FBpIntList.Add(5);
+  FBpIntList.Add(5);
+  CheckEquals(2, FBpIntList.Count, 'dupAccept keeps both');
+end;
+
+procedure TBpIntListTests.TestDeleteFromSortedList;
+var
+  lvIndex: Integer;
+begin
+  FBpIntList.CommaText := '5,3,9,1';
+  FBpIntList.Sorted := True;
+  CheckTrue(FBpIntList.Find(5, lvIndex), 'the value is there before the delete');
+  FBpIntList.Delete(lvIndex);
+  CheckEquals('1,3,9', FBpIntList.CommaText, 'the rest keeps its order');
+  CheckFalse(FBpIntList.Find(5, lvIndex), 'and the value is gone');
+  CheckEquals(2, lvIndex, 'a miss reports the insertion point');
+end;
+
+procedure TBpIntListTests.TestCapacityBelowCountRaises;
+begin
+  FBpIntList.Add(1);
+  FBpIntList.Add(2);
+  try
+    FBpIntList.Capacity := 1;
+    Fail('shrinking below Count would drop values in silence');
+  except
+    on E: EListError do
+      ; // expected
+  end;
+  CheckEquals(2, FBpIntList.Count, 'and nothing was dropped');
+end;
+
+procedure TBpIntListTests.TestCapacityPresizesWithoutChangingCount;
+begin
+  FBpIntList.Capacity := 1000;
+  CheckEquals(1000, FBpIntList.Capacity, 'a list of known size can be presized');
+  CheckEquals(0, FBpIntList.Count, 'which adds no items');
+  FBpIntList.Add(1);
+  CheckEquals(1000, FBpIntList.Capacity, 'and the first Add does not grow');
+end;
+
+procedure TBpIntListTests.TestAssignCopiesContentAndFlags;
+var
+  lvOther: TbpIntList;
+begin
+  lvOther := TbpIntList.Create;
+  try
+    FBpIntList.Delimiter := ';';
+    FBpIntList.Duplicates := dupError;
+    FBpIntList.CommaText := '3,1,2';
+    FBpIntList.Sorted := True;
+    lvOther.Assign(FBpIntList);
+    CheckEquals('1;2;3', lvOther.DelimitedText, 'the values and the delimiter come across');
+    CheckTrue(lvOther.Sorted, 'and so does Sorted');
+    Check(lvOther.Duplicates = dupError, 'and Duplicates');
+    CheckTrue(lvOther.SameAs(FBpIntList), 'the copy has the same content');
+  finally
+    lvOther.Free;
+  end;
+end;
+
+procedure TBpIntListTests.TestSameAs;
+var
+  lvOther: TbpIntList;
+begin
+  lvOther := TbpIntList.Create;
+  try
+    CheckTrue(FBpIntList.SameAs(lvOther), 'two empty lists');
+    CheckFalse(FBpIntList.SameAs(nil), 'nil is never equal');
+    FBpIntList.CommaText := '1,2,3';
+    CheckFalse(FBpIntList.SameAs(lvOther), 'different counts');
+    lvOther.CommaText := '1,2,4';
+    CheckFalse(FBpIntList.SameAs(lvOther), 'same count, different values');
+    lvOther.CommaText := '1,2,3';
+    CheckTrue(FBpIntList.SameAs(lvOther), 'same content');
+  finally
+    lvOther.Free;
+  end;
+end;
+
+procedure TBpIntListTests.TestLoadFromStreamSkipsUtf8Bom;
+var
+  lvStream: TMemoryStream;
+  lvText: AnsiString;
+begin
+  lvText := #$EF#$BB#$BF + '1,2,3';
+  lvStream := TMemoryStream.Create;
+  try
+    lvStream.WriteBuffer(lvText[1], Length(lvText));
+    lvStream.Position := 0;
+    FBpIntList.LoadFromStream(lvStream);
+  finally
+    lvStream.Free;
+  end;
+  CheckEquals('1,2,3', FBpIntList.CommaText, 'a BOM is not part of the first number');
+end;
+
+procedure TBpIntListTests.TestLoadFromStreamRejectsUtf16;
+var
+  lvStream: TMemoryStream;
+  lvText: AnsiString;
+begin
+  // '1,2,3' as UTF-16LE: the NUL bytes used to end the parse after the first value
+  lvText := '1'#0','#0'2'#0','#0'3'#0;
+  lvStream := TMemoryStream.Create;
+  try
+    lvStream.WriteBuffer(lvText[1], Length(lvText));
+    lvStream.Position := 0;
+    try
+      FBpIntList.LoadFromStream(lvStream);
+      Fail('a NUL byte must be reported, not silently end the parse');
+    except
+      on E: EConvertError do
+        ; // expected
+    end;
+  finally
+    lvStream.Free;
+  end;
+end;
+
+procedure TBpIntListTests.TestDelimitedTextLineSeparated;
+begin
+  FBpIntList.DelimitedText := '10'#13#10'20'#13#10'30';
+  CheckEquals(3, FBpIntList.Count, 'one value per line loads without a delimiter in sight');
+  CheckEquals('10,20,30', FBpIntList.CommaText, 'in file order');
 end;
 
 initialization
