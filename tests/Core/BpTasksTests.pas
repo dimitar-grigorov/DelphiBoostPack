@@ -8,8 +8,7 @@ uses
   TestFramework, SysUtils, Classes, Windows, BpTasks;
 
 type
-  // all offline, all console mode (aMarshalToMainThread=False): a test
-  // runner has no message loop, so events fire on the worker thread
+  // all offline; marshalled tests pump the queue themselves
   TBpTasksTests = class(TTestCase)
   private
     FWorkRan: Boolean;
@@ -18,14 +17,32 @@ type
     FErrorCount: Integer;
     FLastErrorMessage: string;
     FStateInComplete: TbpTaskState;
+    FCompleteThreadId: Cardinal;
+    FErrorBeforeComplete: Boolean;
+    FFreedInHandler: Boolean;
+    FInHandler: Boolean;
+    FHandlerDone: Boolean;
+    FWorkerIdSeen: Cardinal;
+    FWorkerIdActual: Cardinal;
     procedure WorkQuick(aSender: TObject; aToken: TbpTaskToken);
     procedure WorkRaise(aSender: TObject; aToken: TbpTaskToken);
     procedure WorkLoopUntilCancelled(aSender: TObject; aToken: TbpTaskToken);
+    procedure WorkRecordThreadId(aSender: TObject; aToken: TbpTaskToken);
     procedure HandleComplete(aSender: TObject);
     procedure HandleError(aSender: TObject; const aErrorMessage: string);
+    procedure HandleCompleteAndFree(aSender: TObject);
+    procedure HandleErrorAndFree(aSender: TObject; const aErrorMessage: string);
+    procedure HandleCompleteSlow(aSender: TObject);
+    procedure HandleCompleteRaise(aSender: TObject);
     function WaitForFlag(var aFlag: Boolean; aTimeoutMs: Cardinal): Boolean;
+    procedure PumpMessages;
+    function PumpUntilFlag(var aFlag: Boolean; aTimeoutMs: Cardinal): Boolean;
+    function PumpUntilCount(var aCounter: Integer; aTarget: Integer;
+      aTimeoutMs: Cardinal): Boolean;
+    procedure PumpFor(aMs: Cardinal);
   protected
     procedure SetUp; override;
+    procedure TearDown; override;
   published
     procedure TestTokenCancelIsSticky;
     procedure TestInitialState;
@@ -35,18 +52,134 @@ type
     procedure TestCancelDuringRun;
     procedure TestWaitForJoins;
     procedure TestOnCompleteFiresExactlyOnce;
-    procedure TestDestroyRunningTaskCancelsAndJoins;
+    procedure TestDestroyRunningTaskCancelsAndFiresNothing;
     procedure TestDoubleStartRaises;
     procedure TestStartWithoutWorkRaises;
     procedure TestRunAsyncFactory;
     procedure TestRunAsyncWithNilComplete;
+    procedure TestWorkerThreadIdKnownBeforeWorkRuns;
+    procedure TestFailedThreadCreationLeavesTaskPending;
+    procedure TestFreeFromInsideOwnCompleteDirect;
+    procedure TestFreeFromInsideOwnErrorSkipsComplete;
+    procedure TestHandlerExceptionReachesHookDirect;
+    procedure TestMarshalledCompleteArrivesOnMainThread;
+    procedure TestMarshalledErrorPrecedesComplete;
+    procedure TestMarshalledFreeBeforePumpDropsCompletion;
+    procedure TestMarshalledFreeFromInsideOwnComplete;
+    procedure TestMarshalledTasksFromWorkerThreadsCompleteOnMainThread;
+    procedure TestMarshalledFreeFromForeignThread;
+    procedure TestMarshalledFreeFromForeignThreadWaitsForHandler;
+    procedure TestHandlerExceptionReachesHookMarshalled;
   end;
 
 implementation
 
 type
-  // a distinct class so the test can check ErrorClass capture
+  // distinct class to check ErrorClass capture
   EbpTasksTestError = class(Exception);
+
+  // fails Start a given number of times
+  TbpFailingStartTask = class(TbpTask)
+  private
+    FFailuresLeft: Integer;
+  protected
+    function CreateWorkerThread: TThread; override;
+  end;
+
+  // frees a task from a third thread once aGo turns on
+  TForeignFreeThread = class(TThread)
+  private
+    FTask: TbpTask;
+    FGo: PBoolean;
+    FDone: PBoolean;
+    FDoneWhenFreed: Boolean;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(aTask: TbpTask; aGo, aDone: PBoolean);
+    property DoneWhenFreed: Boolean read FDoneWhenFreed;
+  end;
+
+  TbpTaskArray = array of TbpTask;
+
+  // starts marshalled tasks on a worker thread
+  TTaskCreatorThread = class(TThread)
+  private
+    FWork: TbpTaskWorkEvent;
+    FOnComplete: TbpTaskCompleteEvent;
+    FTasks: TbpTaskArray;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(aCount: Integer; aWork: TbpTaskWorkEvent;
+      aOnComplete: TbpTaskCompleteEvent);
+    property Tasks: TbpTaskArray read FTasks;
+  end;
+
+var
+  gvHookCount: Integer;
+  gvHookTask: TbpTask;
+  gvHookMessage: string;
+  gvHookThreadId: Cardinal;
+
+procedure TestExceptionHook(aTask: TbpTask; aException: Exception);
+begin
+  Inc(gvHookCount);
+  gvHookTask := aTask;
+  gvHookMessage := aException.Message;
+  gvHookThreadId := GetCurrentThreadId;
+end;
+
+{ TbpFailingStartTask }
+
+function TbpFailingStartTask.CreateWorkerThread: TThread;
+begin
+  if FFailuresLeft > 0 then
+  begin
+    Dec(FFailuresLeft);
+    raise EbpTasksTestError.Create('no thread for you');
+  end;
+  Result := inherited CreateWorkerThread;
+end;
+
+{ TForeignFreeThread }
+
+constructor TForeignFreeThread.Create(aTask: TbpTask; aGo, aDone: PBoolean);
+begin
+  FTask := aTask;
+  FGo := aGo;
+  FDone := aDone;
+  FreeOnTerminate := False;
+  inherited Create(False);
+end;
+
+procedure TForeignFreeThread.Execute;
+begin
+  while not FGo^ do
+    Sleep(1);
+  FTask.Free;
+  FDoneWhenFreed := FDone^;
+end;
+
+{ TTaskCreatorThread }
+
+constructor TTaskCreatorThread.Create(aCount: Integer;
+  aWork: TbpTaskWorkEvent; aOnComplete: TbpTaskCompleteEvent);
+begin
+  SetLength(FTasks, aCount);
+  FWork := aWork;
+  FOnComplete := aOnComplete;
+  FreeOnTerminate := False;
+  inherited Create(False);
+end;
+
+procedure TTaskCreatorThread.Execute;
+var
+  i: Integer;
+begin
+  for i := 0 to High(FTasks) do
+    FTasks[i] := BpRunAsync(FWork, FOnComplete);
+end;
 
 { TBpTasksTests }
 
@@ -59,6 +192,25 @@ begin
   FErrorCount := 0;
   FLastErrorMessage := '';
   FStateInComplete := tskPending;
+  FCompleteThreadId := 0;
+  FErrorBeforeComplete := False;
+  FFreedInHandler := False;
+  FInHandler := False;
+  FHandlerDone := False;
+  FWorkerIdSeen := 0;
+  FWorkerIdActual := 0;
+  gvHookCount := 0;
+  gvHookTask := nil;
+  gvHookMessage := '';
+  gvHookThreadId := 0;
+end;
+
+procedure TBpTasksTests.TearDown;
+begin
+  BpSetTaskExceptionHook(nil);
+  // no stray completion for the next test
+  PumpMessages;
+  inherited;
 end;
 
 procedure TBpTasksTests.WorkQuick(aSender: TObject; aToken: TbpTaskToken);
@@ -78,18 +230,26 @@ var
   lvDeadline: Cardinal;
 begin
   FWorkRan := True;
-  // cooperative worker: polls the token, gives up after 10 s so a broken
-  // cancel cannot hang the suite
+  // gives up after 10 s so a broken cancel cannot hang the suite
   lvDeadline := GetTickCount + 10000;
   while not aToken.IsCancellationRequested and (GetTickCount < lvDeadline) do
     Sleep(10);
   FWorkExited := True;
 end;
 
+procedure TBpTasksTests.WorkRecordThreadId(aSender: TObject;
+  aToken: TbpTaskToken);
+begin
+  FWorkerIdSeen := TbpTask(aSender).WorkerThreadId;
+  FWorkerIdActual := GetCurrentThreadId;
+  FWorkRan := True;
+end;
+
 procedure TBpTasksTests.HandleComplete(aSender: TObject);
 begin
   Inc(FCompleteCount);
   FStateInComplete := TbpTask(aSender).State;
+  FCompleteThreadId := GetCurrentThreadId;
 end;
 
 procedure TBpTasksTests.HandleError(aSender: TObject;
@@ -97,9 +257,39 @@ procedure TBpTasksTests.HandleError(aSender: TObject;
 begin
   Inc(FErrorCount);
   FLastErrorMessage := aErrorMessage;
+  FErrorBeforeComplete := FCompleteCount = 0;
 end;
 
-// polls a worker-written flag from this thread; True when it turned on in time
+procedure TBpTasksTests.HandleCompleteAndFree(aSender: TObject);
+begin
+  Inc(FCompleteCount);
+  aSender.Free;
+  // set after Free returned
+  FFreedInHandler := True;
+end;
+
+procedure TBpTasksTests.HandleErrorAndFree(aSender: TObject;
+  const aErrorMessage: string);
+begin
+  Inc(FErrorCount);
+  aSender.Free;
+  FFreedInHandler := True;
+end;
+
+procedure TBpTasksTests.HandleCompleteSlow(aSender: TObject);
+begin
+  FInHandler := True;
+  Sleep(200);
+  Inc(FCompleteCount);
+  FHandlerDone := True;
+end;
+
+procedure TBpTasksTests.HandleCompleteRaise(aSender: TObject);
+begin
+  Inc(FCompleteCount);
+  raise EbpTasksTestError.Create('handler boom');
+end;
+
 function TBpTasksTests.WaitForFlag(var aFlag: Boolean;
   aTimeoutMs: Cardinal): Boolean;
 var
@@ -111,6 +301,58 @@ begin
   Result := aFlag;
 end;
 
+procedure TBpTasksTests.PumpMessages;
+var
+  lvMsg: TMsg;
+begin
+  while PeekMessage(lvMsg, 0, 0, 0, PM_REMOVE) do
+  begin
+    TranslateMessage(lvMsg);
+    DispatchMessage(lvMsg);
+  end;
+end;
+
+function TBpTasksTests.PumpUntilFlag(var aFlag: Boolean;
+  aTimeoutMs: Cardinal): Boolean;
+var
+  lvDeadline: Cardinal;
+begin
+  lvDeadline := GetTickCount + aTimeoutMs;
+  while not aFlag and (GetTickCount < lvDeadline) do
+  begin
+    PumpMessages;
+    Sleep(5);
+  end;
+  Result := aFlag;
+end;
+
+function TBpTasksTests.PumpUntilCount(var aCounter: Integer; aTarget: Integer;
+  aTimeoutMs: Cardinal): Boolean;
+var
+  lvDeadline: Cardinal;
+begin
+  lvDeadline := GetTickCount + aTimeoutMs;
+  while (aCounter < aTarget) and (GetTickCount < lvDeadline) do
+  begin
+    PumpMessages;
+    Sleep(5);
+  end;
+  Result := aCounter >= aTarget;
+end;
+
+// to prove that nothing arrives
+procedure TBpTasksTests.PumpFor(aMs: Cardinal);
+var
+  lvDeadline: Cardinal;
+begin
+  lvDeadline := GetTickCount + aMs;
+  while GetTickCount < lvDeadline do
+  begin
+    PumpMessages;
+    Sleep(5);
+  end;
+end;
+
 procedure TBpTasksTests.TestTokenCancelIsSticky;
 var
   lvToken: TbpTaskToken;
@@ -120,7 +362,7 @@ begin
     CheckFalse(lvToken.IsCancellationRequested, 'fresh token is not cancelled');
     lvToken.Cancel;
     CheckTrue(lvToken.IsCancellationRequested);
-    // a second cancel is a no-op, not an error
+    // a second cancel is a no-op
     lvToken.Cancel;
     CheckTrue(lvToken.IsCancellationRequested);
   finally
@@ -138,6 +380,7 @@ begin
     CheckFalse(lvTask.IsFinished);
     CheckFalse(lvTask.WaitFor(0), 'a never-started task has not finished');
     CheckFalse(lvTask.MarshalToMainThread);
+    Check(lvTask.WorkerThreadId = 0, 'no worker before Start');
     CheckEquals('', lvTask.ErrorMessage);
     CheckEquals('', lvTask.ErrorClass);
     Check(lvTask.Token <> nil, 'token exists from creation');
@@ -168,6 +411,8 @@ begin
     CheckEquals(1, FCompleteCount, 'OnComplete fires on success');
     Check(FStateInComplete = tskSucceeded, 'state is terminal inside OnComplete');
     CheckEquals(0, FErrorCount, 'OnError must not fire on success');
+    Check(FCompleteThreadId <> GetCurrentThreadId,
+      'direct mode fires on the worker');
   finally
     lvTask.Free;
   end;
@@ -190,6 +435,7 @@ begin
     CheckEquals(1, FErrorCount, 'OnError fires on failure');
     CheckEquals('boom', FLastErrorMessage);
     CheckEquals(1, FCompleteCount, 'OnComplete fires on every terminal state');
+    CheckTrue(FErrorBeforeComplete, 'OnError precedes OnComplete');
   finally
     lvTask.Free;
   end;
@@ -205,7 +451,6 @@ begin
     lvTask.OnComplete := HandleComplete;
     lvTask.OnError := HandleError;
     lvTask.Cancel;
-    // the pre-cancelled token stops the worker before the work runs
     lvTask.Start;
     CheckTrue(lvTask.WaitFor(5000), 'worker must finish promptly');
     Check(lvTask.State = tskCancelled, 'cancel before start wins');
@@ -265,8 +510,7 @@ begin
     lvTask.OnComplete := HandleComplete;
     lvTask.Start;
     CheckTrue(lvTask.WaitFor(5000), 'worker must finish promptly');
-    // the join guarantees the direct-mode event already fired; a short
-    // grace period would catch an erroneous second notification
+    // a grace period would catch a second notification
     Sleep(50);
     CheckEquals(1, FCompleteCount, 'OnComplete fires exactly once');
   finally
@@ -274,18 +518,19 @@ begin
   end;
 end;
 
-procedure TBpTasksTests.TestDestroyRunningTaskCancelsAndJoins;
+procedure TBpTasksTests.TestDestroyRunningTaskCancelsAndFiresNothing;
 var
   lvTask: TbpTask;
 begin
   lvTask := TbpTask.Create(False);
   lvTask.Work := WorkLoopUntilCancelled;
+  lvTask.OnComplete := HandleComplete;
   lvTask.Start;
   CheckTrue(WaitForFlag(FWorkRan, 5000), 'the work must start');
-  // the destructor cancels the token and joins the worker; afterwards the
-  // work must have seen the cancel and returned on its own
   lvTask.Free;
   CheckTrue(FWorkExited, 'destructor waited for the cooperative exit');
+  // the owner is usually tearing itself down here
+  CheckEquals(0, FCompleteCount, 'no OnComplete after Free');
 end;
 
 procedure TBpTasksTests.TestDoubleStartRaises;
@@ -304,7 +549,7 @@ begin
     end;
     lvTask.Cancel;
     CheckTrue(lvTask.WaitFor(5000), 'worker must finish promptly');
-    // one-shot: a finished task refuses a restart too
+    // a finished task refuses a restart too
     try
       lvTask.Start;
       Fail('expected raise: task already finished');
@@ -338,7 +583,6 @@ procedure TBpTasksTests.TestRunAsyncFactory;
 var
   lvTask: TbpTask;
 begin
-  // hot task: created, wired and already started
   lvTask := BpRunAsync(WorkQuick, HandleComplete, False);
   try
     Check(lvTask.State in [tskRunning, tskSucceeded],
@@ -357,13 +601,305 @@ procedure TBpTasksTests.TestRunAsyncWithNilComplete;
 var
   lvTask: TbpTask;
 begin
-  // nil for the completion event must compile and run (the factory is a
-  // single name, not an overload, exactly because of the D7/2007 E2250 trap)
+  // nil must compile: the factory is no overload because of D7/2007 E2250
   lvTask := BpRunAsync(WorkQuick, nil, False);
   try
     CheckTrue(lvTask.WaitFor(5000), 'worker must finish promptly');
     Check(lvTask.State = tskSucceeded);
     CheckTrue(FWorkRan);
+  finally
+    lvTask.Free;
+  end;
+end;
+
+procedure TBpTasksTests.TestWorkerThreadIdKnownBeforeWorkRuns;
+var
+  lvTask: TbpTask;
+begin
+  lvTask := TbpTask.Create(False);
+  try
+    lvTask.Work := WorkRecordThreadId;
+    lvTask.Start;
+    CheckTrue(lvTask.WaitFor(5000), 'worker must finish promptly');
+    CheckTrue(FWorkRan);
+    Check(FWorkerIdSeen <> 0, 'WorkerThreadId is set when Work begins');
+    Check(FWorkerIdSeen = FWorkerIdActual, 'and it is the worker itself');
+    Check(lvTask.WorkerThreadId = FWorkerIdActual,
+      'it stays readable after the join');
+  finally
+    lvTask.Free;
+  end;
+end;
+
+procedure TBpTasksTests.TestFailedThreadCreationLeavesTaskPending;
+var
+  lvTask: TbpFailingStartTask;
+begin
+  lvTask := TbpFailingStartTask.Create(False);
+  try
+    lvTask.FFailuresLeft := 1;
+    lvTask.Work := WorkQuick;
+    lvTask.OnComplete := HandleComplete;
+    try
+      lvTask.Start;
+      Fail('expected raise: the worker could not be created');
+    except
+      on EbpTasksTestError do ;
+    end;
+    Check(lvTask.State = tskPending, 'a failed Start leaves the task pending');
+    Check(lvTask.WorkerThreadId = 0);
+    CheckFalse(lvTask.WaitFor(0));
+    lvTask.Start;
+    CheckTrue(lvTask.WaitFor(5000), 'worker must finish promptly');
+    Check(lvTask.State = tskSucceeded);
+    CheckEquals(1, FCompleteCount);
+  finally
+    lvTask.Free;
+  end;
+end;
+
+procedure TBpTasksTests.TestFreeFromInsideOwnCompleteDirect;
+var
+  lvTask: TbpTask;
+begin
+  // the old code self-joined here
+  lvTask := TbpTask.Create(False);
+  lvTask.Work := WorkQuick;
+  lvTask.OnComplete := HandleCompleteAndFree;
+  lvTask.Start;
+  CheckTrue(WaitForFlag(FFreedInHandler, 5000),
+    'Free from inside OnComplete must return, not deadlock');
+  CheckEquals(1, FCompleteCount);
+  // the worker frees itself
+  Sleep(50);
+end;
+
+procedure TBpTasksTests.TestFreeFromInsideOwnErrorSkipsComplete;
+var
+  lvTask: TbpTask;
+begin
+  lvTask := TbpTask.Create(False);
+  lvTask.Work := WorkRaise;
+  lvTask.OnError := HandleErrorAndFree;
+  lvTask.OnComplete := HandleComplete;
+  lvTask.Start;
+  CheckTrue(WaitForFlag(FFreedInHandler, 5000),
+    'Free from inside OnError must return, not deadlock');
+  Sleep(50);
+  CheckEquals(1, FErrorCount);
+  CheckEquals(0, FCompleteCount, 'no OnComplete after the handler freed the task');
+end;
+
+procedure TBpTasksTests.TestHandlerExceptionReachesHookDirect;
+var
+  lvTask: TbpTask;
+begin
+  BpSetTaskExceptionHook(TestExceptionHook);
+  lvTask := TbpTask.Create(False);
+  try
+    lvTask.Work := WorkQuick;
+    lvTask.OnComplete := HandleCompleteRaise;
+    lvTask.Start;
+    CheckTrue(lvTask.WaitFor(5000), 'worker must finish promptly');
+    CheckEquals(1, FCompleteCount);
+    // reported instead of dying in TThread.FatalException
+    CheckEquals(1, gvHookCount, 'the hook saw the handler exception');
+    CheckEquals('handler boom', gvHookMessage);
+    Check(gvHookTask = lvTask, 'the hook receives the task');
+    Check(gvHookThreadId = lvTask.WorkerThreadId, 'reported on the worker');
+    Check(lvTask.State = tskSucceeded, 'a handler failure does not fail the work');
+  finally
+    lvTask.Free;
+  end;
+end;
+
+procedure TBpTasksTests.TestMarshalledCompleteArrivesOnMainThread;
+var
+  lvTask: TbpTask;
+begin
+  lvTask := TbpTask.Create;
+  try
+    CheckTrue(lvTask.MarshalToMainThread, 'marshalling is the default');
+    lvTask.Work := WorkQuick;
+    lvTask.OnComplete := HandleComplete;
+    lvTask.OnError := HandleError;
+    lvTask.Start;
+    CheckTrue(lvTask.WaitFor(5000), 'worker must finish promptly');
+    Check(lvTask.State = tskSucceeded);
+    Sleep(20);
+    CheckEquals(0, FCompleteCount, 'nothing fires until the queue is pumped');
+    CheckTrue(PumpUntilCount(FCompleteCount, 1, 5000),
+      'OnComplete arrives through the message queue');
+    Check(FCompleteThreadId = GetCurrentThreadId,
+      'and runs on the pumping (main) thread');
+    Check(FStateInComplete = tskSucceeded);
+    CheckEquals(0, FErrorCount);
+    PumpFor(50);
+    CheckEquals(1, FCompleteCount, 'exactly once');
+  finally
+    lvTask.Free;
+  end;
+end;
+
+procedure TBpTasksTests.TestMarshalledErrorPrecedesComplete;
+var
+  lvTask: TbpTask;
+begin
+  lvTask := BpRunAsync(WorkRaise, HandleComplete);
+  try
+    lvTask.OnError := HandleError;
+    CheckTrue(PumpUntilCount(FCompleteCount, 1, 5000));
+    CheckEquals(1, FErrorCount, 'OnError fires on failure');
+    CheckEquals('boom', FLastErrorMessage);
+    CheckTrue(FErrorBeforeComplete, 'OnError precedes OnComplete');
+    Check(FStateInComplete = tskFailed);
+    Check(FCompleteThreadId = GetCurrentThreadId);
+  finally
+    lvTask.Free;
+  end;
+end;
+
+procedure TBpTasksTests.TestMarshalledFreeBeforePumpDropsCompletion;
+var
+  lvTask: TbpTask;
+begin
+  lvTask := BpRunAsync(WorkQuick, HandleComplete);
+  CheckTrue(lvTask.WaitFor(5000), 'worker must finish promptly');
+  // queued but not dispatched
+  lvTask.Free;
+  PumpFor(100);
+  CheckEquals(0, FCompleteCount, 'a completion posted before Free is dropped');
+
+  // a new task must not inherit the stale completion
+  lvTask := BpRunAsync(WorkLoopUntilCancelled, HandleComplete);
+  try
+    CheckTrue(WaitForFlag(FWorkRan, 5000));
+    PumpFor(100);
+    CheckEquals(0, FCompleteCount, 'the new task fires nothing while running');
+    lvTask.Cancel;
+    CheckTrue(lvTask.WaitFor(5000));
+    CheckTrue(PumpUntilCount(FCompleteCount, 1, 5000), 'its own completion arrives');
+    Check(FStateInComplete = tskCancelled);
+  finally
+    lvTask.Free;
+  end;
+end;
+
+procedure TBpTasksTests.TestMarshalledFreeFromInsideOwnComplete;
+begin
+  BpRunAsync(WorkQuick, HandleCompleteAndFree);
+  CheckTrue(PumpUntilFlag(FFreedInHandler, 5000), 'the handler ran and freed');
+  CheckEquals(1, FCompleteCount);
+  PumpFor(50);
+  CheckEquals(1, FCompleteCount, 'nothing fires twice');
+end;
+
+procedure TBpTasksTests.TestMarshalledTasksFromWorkerThreadsCompleteOnMainThread;
+const
+  gcThreads = 4;
+  gcPerThread = 5;
+var
+  lvCreators: array[0..gcThreads - 1] of TTaskCreatorThread;
+  i, j: Integer;
+  lvTask: TbpTask;
+begin
+  // concurrent creation used to race AllocateHWnd
+  for i := 0 to gcThreads - 1 do
+    lvCreators[i] := TTaskCreatorThread.Create(gcPerThread, WorkQuick,
+      HandleComplete);
+  try
+    for i := 0 to gcThreads - 1 do
+      lvCreators[i].WaitFor;
+    CheckTrue(PumpUntilCount(FCompleteCount, gcThreads * gcPerThread, 5000),
+      'every task completes, got ' + IntToStr(FCompleteCount));
+    Check(FCompleteThreadId = GetCurrentThreadId,
+      'events run on the main thread, whoever created the task');
+    for i := 0 to gcThreads - 1 do
+      for j := 0 to gcPerThread - 1 do
+      begin
+        lvTask := lvCreators[i].Tasks[j];
+        Check(lvTask <> nil, 'creator stored its task');
+        Check(lvTask.State = tskSucceeded, 'every task succeeded');
+        Check(lvTask.WorkerThreadId <> GetCurrentThreadId);
+      end;
+    PumpFor(50);
+    CheckEquals(gcThreads * gcPerThread, FCompleteCount, 'each exactly once');
+  finally
+    // any thread may free
+    for i := 0 to gcThreads - 1 do
+    begin
+      for j := 0 to gcPerThread - 1 do
+        lvCreators[i].Tasks[j].Free;
+      lvCreators[i].Free;
+    end;
+  end;
+end;
+
+procedure TBpTasksTests.TestMarshalledFreeFromForeignThread;
+var
+  lvTask: TbpTask;
+  lvFreer: TForeignFreeThread;
+  lvGo: Boolean;
+begin
+  // the old per-task window leaked here and its thunk hit the next task
+  lvTask := BpRunAsync(WorkQuick, HandleComplete);
+  CheckTrue(lvTask.WaitFor(5000), 'worker must finish promptly');
+  lvGo := True;
+  lvFreer := TForeignFreeThread.Create(lvTask, @lvGo, @FHandlerDone);
+  try
+    lvFreer.WaitFor;
+  finally
+    lvFreer.Free;
+  end;
+  PumpFor(100);
+  CheckEquals(0, FCompleteCount, 'the queued completion is dropped');
+
+  lvTask := BpRunAsync(WorkLoopUntilCancelled, HandleComplete);
+  try
+    CheckTrue(WaitForFlag(FWorkRan, 5000));
+    PumpFor(100);
+    CheckEquals(0, FCompleteCount, 'no stray event while it runs');
+    lvTask.Cancel;
+    CheckTrue(lvTask.WaitFor(5000));
+    CheckTrue(PumpUntilCount(FCompleteCount, 1, 5000));
+    Check(FStateInComplete = tskCancelled);
+  finally
+    lvTask.Free;
+  end;
+end;
+
+procedure TBpTasksTests.TestMarshalledFreeFromForeignThreadWaitsForHandler;
+var
+  lvTask: TbpTask;
+  lvFreer: TForeignFreeThread;
+begin
+  // Free must wait for the handler running here
+  lvTask := BpRunAsync(WorkQuick, HandleCompleteSlow);
+  lvFreer := TForeignFreeThread.Create(lvTask, @FInHandler, @FHandlerDone);
+  try
+    CheckTrue(PumpUntilFlag(FHandlerDone, 5000), 'the slow handler ran');
+    lvFreer.WaitFor;
+    CheckTrue(lvFreer.DoneWhenFreed,
+      'Free returned only after the running handler finished');
+  finally
+    lvFreer.Free;
+  end;
+  CheckEquals(1, FCompleteCount);
+end;
+
+procedure TBpTasksTests.TestHandlerExceptionReachesHookMarshalled;
+var
+  lvTask: TbpTask;
+begin
+  BpSetTaskExceptionHook(TestExceptionHook);
+  lvTask := BpRunAsync(WorkQuick, HandleCompleteRaise);
+  try
+    // not thrown through the window procedure
+    CheckTrue(PumpUntilCount(gvHookCount, 1, 5000), 'the hook saw the exception');
+    CheckEquals('handler boom', gvHookMessage);
+    Check(gvHookTask = lvTask);
+    Check(gvHookThreadId = GetCurrentThreadId, 'reported on the main thread');
+    CheckEquals(1, FCompleteCount);
   finally
     lvTask.Free;
   end;

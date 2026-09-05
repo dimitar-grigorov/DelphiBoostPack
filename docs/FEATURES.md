@@ -161,7 +161,7 @@ The C# `CancellationToken` for Delphi 7: one side calls `Cancel`, the working si
 
 ### [TbpTask](../src/Core/Classes/BpTasks.pas)
 
-Run any method on a worker thread and get the result back on the thread that started it. Self-contained (`Classes, SysUtils, Windows, Messages`), one thread per task, no pool.
+Run any method on a worker thread and get the result back on the main thread. Self-contained (`Classes, SysUtils, Windows, Messages`), one thread per task, no pool.
 
 ```pascal
 uses BpTasks;
@@ -172,18 +172,22 @@ begin
     CrunchNextChunk;   // worker thread, no UI calls in here
 end;
 
-FTask := BpRunAsync(DoCrunch, HandleDone);   // HandleDone runs on this thread
+FTask := BpRunAsync(DoCrunch, HandleDone);   // HandleDone runs on the main thread
 ```
 
-Cancellation is cooperative, so no thread is killed, and `Free` cancels, joins and cleans up in any state. An exception in the work body is recorded in `ErrorClass` and `ErrorMessage` rather than crossing the thread boundary. `OnError` fires first, then `OnComplete` on every terminal state.
+Cancellation is cooperative, so no thread is killed. An exception in the work body is recorded in `ErrorClass` and `ErrorMessage` rather than crossing the thread boundary. `OnError` fires first, then `OnComplete` on every terminal state.
+
+**Lifetime rules.** The caller owns the task and frees it, from any thread. `Free` cancels, joins the worker and cleans up in any state, and from the moment it is entered no further event of that task starts: a completion still queued is dropped, and a handler already running on another thread finishes before `Free` returns. A handler may free its own task; the events still due for it are then skipped. In the default mode the events go through one hidden dispatcher window that the unit creates when it initialises, on the thread that loaded the module, so they run on the main thread whichever thread created the task, and that thread has to pump messages (a VCL application does). `Create(False)` runs the events on the worker right after `Work` returns, for services and console programs. An exception escaping `OnError` or `OnComplete` never crosses a thread: it goes to the hook set with `BpSetTaskExceptionHook`, else on the main thread to `Classes.ApplicationHandleException` (the VCL dialog), else to `SysUtils.ShowException`.
 
 | Member | Notes |
 |--------|-------|
 | `Work` | `procedure(aSender: TObject; aToken: TbpTaskToken) of object` |
 | `Token` | owned; the same instance the work receives |
-| `State` | `tskPending` / `tskRunning` / `tskSucceeded` / `tskFailed` / `tskCancelled` |
-| `IsFinished` / `WaitFor(aTimeoutMs)` | terminal state reached; blocking wait |
+| `State` | `tskPending` / `tskRunning` / `tskSucceeded` / `tskFailed` / `tskCancelled`; a `Start` that cannot create the thread raises and leaves the task pending |
+| `IsFinished` / `WaitFor(aTimeoutMs)` | terminal state reached; blocking wait for the work, not for the events |
+| `WorkerThreadId` | 0 before `Start`, already set when `Work` begins |
 | `Create(False)` | no marshalling - events fire on the worker thread |
+| `BpSetTaskExceptionHook` | one per process; receives an exception that escaped a handler |
 
 **Two tokens, on purpose.** `TbpTaskToken` is a bare interlocked flag for polling work; [TbpCancellationToken](#tbpcancellationtoken) adds cleanups that run inside `Cancel`, for when something must be torn down to make the cancel prompt.
 
