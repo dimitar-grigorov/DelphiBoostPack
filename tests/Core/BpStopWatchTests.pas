@@ -1,5 +1,7 @@
 unit BpStopWatchTests;
 
+{$TYPEINFO ON}
+
 interface
 
 {$IF CompilerVersion < 20.0} // the unit itself stops there

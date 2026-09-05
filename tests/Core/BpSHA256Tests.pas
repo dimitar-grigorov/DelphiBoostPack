@@ -5,7 +5,7 @@ unit BpSHA256Tests;
 interface
 
 uses
-  TestFramework, SysUtils, Classes, BpSHA256;
+  TestFramework, Windows, SysUtils, Classes, BpSHA256;
 
 type
   TBpSHA256Tests = class(TTestCase)

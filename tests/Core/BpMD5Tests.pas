@@ -5,7 +5,7 @@ unit BpMD5Tests;
 interface
 
 uses
-  TestFramework, SysUtils, Classes, BpMD5;
+  TestFramework, Windows, SysUtils, Classes, BpMD5;
 
 type
   TBpMD5Tests = class(TTestCase)

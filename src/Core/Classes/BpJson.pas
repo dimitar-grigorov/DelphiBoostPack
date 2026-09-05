@@ -238,6 +238,8 @@ begin
   SetLength(aWide, lvLen);  // never more UTF-16 units than bytes
   lvIdx := 1;
   lvOut := 0;
+  lvCode := 0;
+  lvExtra := 0;
   while lvIdx <= lvLen do
   begin
     lvByte := Byte(aValue[lvIdx]);
@@ -530,6 +532,7 @@ begin
   end;
   // Val stores through Extended into the Double, so anything past Double range
   // raises EOverflow, which is not EbpJson and would escape Parse and TryParse
+  lvFloat := 0;
   try
     Val(lvToken, lvFloat, lvErr);
   except

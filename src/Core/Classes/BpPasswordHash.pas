@@ -197,6 +197,9 @@ var
   lvIterations: Integer;
 begin
   Result := False;
+  // above the early exits: Delphi 7 counts the implicit finalisation as a use
+  lvSaltBytes := nil;
+  lvHashBytes := nil;
   try
     // expected shape: $pbkdf2-sha256$<iterations>$<saltB64>$<hashB64>
     if (aStored = '') or (aStored[1] <> '$') then

@@ -1,5 +1,7 @@
 unit BpKeyFoldTests;
 
+{$TYPEINFO ON}
+
 interface
 
 uses
