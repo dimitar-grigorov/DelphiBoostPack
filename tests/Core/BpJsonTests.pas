@@ -315,12 +315,12 @@ begin
 end;
 
 procedure TBpJsonTests.TestSurrogatePair;
+// U+1F600 as the surrogate pair D83D DE00; a supplementary-plane char needs
+// a Unicode string, so this round-trip only holds on Delphi 2009 and later
+{$IF CompilerVersion >= 20.0}
 var
   lvValue: TbpJsonValue;
 begin
-  // U+1F600 as the surrogate pair D83D DE00; a supplementary-plane char needs
-  // a Unicode string, so this round-trip only holds on Delphi 2009 and later
-{$IF CompilerVersion >= 20.0}
   lvValue := TbpJsonValue.Parse('"\uD83D\uDE00"');
   try
     // one code point survives as two UTF-16 units
@@ -329,6 +329,8 @@ begin
   finally
     lvValue.Free;
   end;
+{$ELSE}
+begin
 {$IFEND}
 end;
 

@@ -1,5 +1,7 @@
 unit BpStringListTests;
 
+{$TYPEINFO ON}
+
 interface
 
 uses
