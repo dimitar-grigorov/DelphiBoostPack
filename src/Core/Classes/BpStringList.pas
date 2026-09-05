@@ -457,6 +457,7 @@ begin
     FOnChange(Self);
 end;
 
+// a handler may mutate, so an index captured before this call is checked again after it
 procedure TbpStringList.Changing;
 begin
   if (UpdateCount = 0) and Assigned(FOnChanging) then
@@ -477,6 +478,8 @@ var
   lvSlot: Integer;
 begin
   Changing;
+  if (aIndex < 0) or (aIndex > FCount) then
+    Error(@SListIndexError, aIndex);
   lvSlot := AllocSlot;
   FSlots[lvSlot].Str := aStr;
   FSlots[lvSlot].Obj := aObject;
@@ -544,6 +547,7 @@ begin
   CheckNotSorted;
   CheckIndex(aIndex);
   Changing;
+  CheckIndex(aIndex);
   lvSlot := FOrder[aIndex];
   if FBuckets <> nil then
     UnlinkValue(lvSlot);
@@ -561,6 +565,7 @@ procedure TbpStringList.PutObject(aIndex: Integer; aObject: TObject);
 begin
   CheckIndex(aIndex);
   Changing;
+  CheckIndex(aIndex);
   FSlots[FOrder[aIndex]].Obj := aObject;
   Changed;
 end;
@@ -571,6 +576,7 @@ var
 begin
   CheckIndex(aIndex);
   Changing;
+  CheckIndex(aIndex);
   lvSlot := FOrder[aIndex];
   if FBuckets <> nil then
     UnlinkValue(lvSlot);
@@ -589,10 +595,15 @@ begin
 end;
 
 procedure TbpStringList.Clear;
+var
+  lvHadRows: Boolean;
 begin
-  if FCount = 0 then
+  // rows deleted one at a time leave every slot free but the arrays at their peak
+  if (FCount = 0) and (FSlotsUsed = 0) then
     Exit;
-  Changing;
+  lvHadRows := FCount > 0;
+  if lvHadRows then
+    Changing;
   FSlots := nil;
   FOrder := nil;
   FPos := nil;
@@ -602,7 +613,8 @@ begin
   FSlotsUsed := 0;
   FFree := -1;
   FPosValid := 0;
-  Changed;
+  if lvHadRows then
+    Changed;
 end;
 
 procedure TbpStringList.Exchange(aIndex1, aIndex2: Integer);
@@ -613,6 +625,8 @@ begin
   CheckIndex(aIndex1);
   CheckIndex(aIndex2);
   Changing;
+  CheckIndex(aIndex1);
+  CheckIndex(aIndex2);
   lvSlot := FOrder[aIndex1];
   FOrder[aIndex1] := FOrder[aIndex2];
   FOrder[aIndex2] := lvSlot;
@@ -635,6 +649,8 @@ begin
   if aCurIndex = aNewIndex then
     Exit;
   Changing;
+  CheckIndex(aCurIndex);
+  CheckIndex(aNewIndex);
   lvSlot := FOrder[aCurIndex];
   if aCurIndex < aNewIndex then
   begin

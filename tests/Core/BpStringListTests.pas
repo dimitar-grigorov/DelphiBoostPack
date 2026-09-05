@@ -17,6 +17,7 @@ type
     procedure CountChange(Sender: TObject);
     procedure LookupOnChange(Sender: TObject);
     procedure AppendOnChange(Sender: TObject);
+    procedure DeleteOnChanging(Sender: TObject);
     // every mutation goes to both, so TStringList is the oracle where the two agree
     procedure BothAdd(const aStr: string);
     procedure BothInsert(aIndex: Integer; const aStr: string);
@@ -80,6 +81,8 @@ type
     procedure TestBeginUpdateSuppressesNotifications;
     procedure TestLookupFromAChangeHandler;
     procedure TestNestedMutationFromAChangeHandler;
+    procedure TestMutationFromAChangingHandlerRaises;
+    procedure TestClearReleasesSlotsEmptiedRowByRow;
   end;
 
 implementation
@@ -110,7 +113,8 @@ begin
   inherited;
 end;
 
-// three case variants of the same key, so folding is exercised on every test
+// three case variants of one shape: folding is exercised everywhere, and the folded
+// ordinal order still matches the locale, so TStringList stays a valid oracle for Text
 function TBpStringListTests.MakeKey(aIndex: Integer): string;
 begin
   case aIndex mod 3 of
@@ -1020,6 +1024,70 @@ begin
   CheckSameAnswers('after a handler added a row of its own', False);
   CheckEquals(FRef.IndexOf('AddedByTheHandler'), FList.IndexOf('AddedByTheHandler'),
     'the row the handler added is findable');
+end;
+
+// OnChanging fires before the mutator reads its index, so the index goes stale
+procedure TBpStringListTests.DeleteOnChanging(Sender: TObject);
+begin
+  if FChangingHits > 0 then
+    Exit;
+  Inc(FChangingHits);
+  FList.Delete(FList.Count - 1);
+end;
+
+procedure TBpStringListTests.TestMutationFromAChangingHandlerRaises;
+var
+  i: Integer;
+begin
+  for i := 0 to 4 do
+    FList.Add(MakeKey(i));
+  // warm both indexes and the whole position array, so a stale hit would be silent
+  FList.IndexOf(MakeKey(0));
+  FList.IndexOfName(MakeKey(0));
+  FList.OnChanging := DeleteOnChanging;
+  FChangingHits := 0;
+  try
+    FList.Delete(4);
+    Fail('the handler already removed row 4, so Delete must raise');
+  except
+    // narrow, or Fail is caught by its own handler
+    on E: EStringListError do
+      CheckEquals(4, FList.Count, 'only the handler''s delete happened');
+  end;
+  FChangingHits := 0;
+  try
+    FList.Add('X');
+    Fail('the handler shrank the list under the captured index, so Add must raise');
+  except
+    on E: EStringListError do
+      CheckEquals(3, FList.Count, 'and nothing was appended');
+  end;
+  FList.OnChanging := nil;
+  CheckEveryLookup('after a handler mutated from OnChanging');
+  FList.Add('X');
+  CheckEquals(3, FList.IndexOf('X'), 'the slot allocator survived');
+end;
+
+procedure TBpStringListTests.TestClearReleasesSlotsEmptiedRowByRow;
+var
+  i: Integer;
+begin
+  for i := 0 to 999 do
+    FList.Add(IntToStr(i));
+  CheckTrue(FList.Capacity >= 1000, 'grew to hold them');
+  for i := 999 downto 0 do
+    FList.Delete(i);
+  CheckEquals(0, FList.Count, 'every row gone');
+  FList.Capacity := 0;
+  CheckTrue(FList.Capacity >= 1000, 'the free list still owns every slot');
+  FList.OnChange := CountChange;
+  FChangeHits := 0;
+  FList.Clear;
+  FList.OnChange := nil;
+  CheckEquals(0, FList.Capacity, 'Clear releases them');
+  CheckEquals(0, FChangeHits, 'and notifies nobody, there were no rows');
+  FList.Add('again');
+  CheckEquals(0, FList.IndexOf('again'), 'and the list still works');
 end;
 
 initialization
