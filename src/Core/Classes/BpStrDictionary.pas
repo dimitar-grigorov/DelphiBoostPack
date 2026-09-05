@@ -88,6 +88,9 @@ implementation
 uses
   BpHashBobJenkins;
 
+// the hash normalisation below wraps into the sign bit
+{$Q-}
+
 // per-unit names so amalgamated bundles can embed both dictionaries
 const
   gcStrEmptyHash = -1;                         // sentinel: slot is free
