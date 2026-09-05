@@ -4,11 +4,10 @@ unit BpDictionaries;
 // Single-file bundle amalgamated from the DelphiBoostPack modular units:
 //   src\Core\Units\BpCompat.pas
 //   src\Core\Units\BpKeyFold.pas
-//   src\Core\Classes\BpHashBobJenkins.pas
 //   src\Core\Units\BpVariantUtils.pas
 //   src\Core\Classes\BpStrDictionary.pas
 //   src\Core\Classes\BpIntDictionary.pas
-// Source commit d621938, generated 2026-09-05 by tools\Amalgamate.ps1.
+// Source commit 77a27be, generated 2026-09-05 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
 // One bundle per project: two that share a helper declare it twice.
@@ -79,46 +78,6 @@ function BpFoldInto(const aKey: string; var aBuf; aBufChars: Integer): Integer;
 {$IFDEF BPAMALG_R}{$R+}{$ELSE}{$R-}{$ENDIF}{$IFDEF BPAMALG_Q}{$Q+}{$ELSE}{$Q-}{$ENDIF}
 // ------------------ end BpKeyFold.pas interface -------------------
 
-// -------------- begin BpHashBobJenkins.pas interface --------------
-
-// Bob Jenkins lookup3 hash (public domain) for Delphi 7/2007+, seeded to
-// interoperate with the RTL's BobJenkinsHash. Hashing a string hashes its
-// bytes, so Ansi and Unicode builds differ: use the buffer overload.
-
-{$IF CompilerVersion >= 18}
-  {$DEFINE Delphi_2007_UP}
-{$IFEND}
-
-
-type
-  TbpHashBobJenkins = class
-  private
-    FHash: Integer;
-    function GetDigest: TBytes;
-    class function HashLittle(const Data; Len, InitVal: Integer): Integer;
-      {$IFDEF Delphi_2007_UP} static; {$ENDIF}
-  public
-    constructor Create;
-    procedure Reset(aInitialValue: Integer = 0);
-    procedure Update(const aData; aLength: Cardinal); overload;
-    // aLength < 0 means the whole array; an explicit 0 hashes nothing
-    procedure Update(const aData: TBytes; aLength: Integer = -1); overload;
-    procedure Update(const Input: string); overload;
-    function HashAsBytes: TBytes;
-    function HashAsInteger: Integer;
-    function HashAsString: string;
-    class function GetHashBytes(const aData: string): TBytes;
-      {$IFDEF Delphi_2007_UP} static; {$ENDIF}
-    class function GetHashString(const aString: string): string;
-      {$IFDEF Delphi_2007_UP} static; {$ENDIF}
-    class function GetHashValue(const aData: string): Integer; overload;
-      {$IFDEF Delphi_2007_UP} static; inline; {$ENDIF}
-    class function GetHashValue(const aData; aLength: Integer; aInitialValue: Integer = 0): Integer; overload;
-      {$IFDEF Delphi_2007_UP} static; inline; {$ENDIF}
-  end;
-{$IFDEF BPAMALG_R}{$R+}{$ELSE}{$R-}{$ENDIF}{$IFDEF BPAMALG_Q}{$Q+}{$ELSE}{$Q-}{$ENDIF}
-// --------------- end BpHashBobJenkins.pas interface ---------------
-
 // --------------- begin BpVariantUtils.pas interface ---------------
 
 // Strict Variant-to-native conversions shared by the Bp dictionary units.
@@ -147,8 +106,9 @@ function BpTryVarToIntArray(const aValue: Variant; out aResult: TbpIntegerDynArr
 // -------------- begin BpStrDictionary.pas interface ---------------
 
 // String-key dictionary for Delphi 7/2007+ (no generics), TDictionary-style API.
-// Open addressing with linear probing, power-of-two capacity, backward-shift
-// deletion, BpHashBobJenkins hashing and opt-in case-insensitive keys.
+// Open addressing with linear probing, power-of-two capacity and backward-shift
+// deletion. Hash and equality are the one ordinal relation from BpKeyFold, so a
+// case-insensitive key folds as it is hashed instead of through a copy.
 
 type
   // raised for missing keys, duplicate keys and failed typed conversions
@@ -171,6 +131,8 @@ type
     FCount: Integer;
     FGrowThreshold: Integer;
     FCaseInsensitive: Boolean;
+    FIterating: Boolean;
+    procedure CheckNotIterating;
     function HashOf(const aKey: string): Integer;
     function KeysEqual(const aKey1, aKey2: string): Boolean;
     // the slot index when found, else the complement of the first empty slot
@@ -254,6 +216,8 @@ type
     FItems: TbpIntDictItemArray;
     FCount: Integer;
     FGrowThreshold: Integer;
+    FIterating: Boolean;
+    procedure CheckNotIterating;
     // the slot index when found, else the complement of the first empty slot
     function GetBucketIndex(aKey: Int64; aHashCode: Integer): Integer;
     procedure DoAdd(aHashCode, aIndex: Integer; aKey: Int64; const aValue: Variant);
@@ -447,7 +411,11 @@ end;
 
 function BpKeyEquals(const aA, aB: string; aFold: Boolean): Boolean;
 begin
-  Result := BpKeyEqualsBuf(aA, PChar(aB), Length(aB), aFold);
+  // unfolded is plain ordinal equality, and the RTL compares a word at a time
+  if aFold then
+    Result := BpKeyEqualsBuf(aA, PChar(aB), Length(aB), True)
+  else
+    Result := aA = aB;
 end;
 
 function BpKeyCompare(const aA, aB: string; aFold: Boolean): Integer;
@@ -507,239 +475,6 @@ begin
 end;
 {$IFDEF BPAMALG_R}{$R+}{$ELSE}{$R-}{$ENDIF}{$IFDEF BPAMALG_Q}{$Q+}{$ELSE}{$Q-}{$ENDIF}
 // ---------------- end BpKeyFold.pas implementation ----------------
-
-// ----------- begin BpHashBobJenkins.pas implementation ------------
-
-{$Q-}
-{$R-}
-
-type
-  // three consecutive 32-bit words, for aligned block reads
-  TCardinalTriple = array[0..2] of Cardinal;
-  PCardinalTriple = ^TCardinalTriple;
-
-function Rot(x, k: Cardinal): Cardinal; {$IFDEF Delphi_2007_UP} inline; {$ENDIF}
-begin
-  Result := (x shl k) or (x shr (32 - k));
-end;
-
-procedure Mix(var a, b, c: Cardinal); {$IFDEF Delphi_2007_UP} inline; {$ENDIF}
-begin
-  Dec(a, c); a := a xor Rot(c, 4); Inc(c, b);
-  Dec(b, a); b := b xor Rot(a, 6); Inc(a, c);
-  Dec(c, b); c := c xor Rot(b, 8); Inc(b, a);
-  Dec(a, c); a := a xor Rot(c, 16); Inc(c, b);
-  Dec(b, a); b := b xor Rot(a, 19); Inc(a, c);
-  Dec(c, b); c := c xor Rot(b, 4); Inc(b, a);
-end;
-
-procedure Final(var a, b, c: Cardinal); {$IFDEF Delphi_2007_UP} inline; {$ENDIF}
-begin
-  c := c xor b; Dec(c, Rot(b, 14));
-  a := a xor c; Dec(a, Rot(c, 11));
-  b := b xor a; Dec(b, Rot(a, 25));
-  c := c xor b; Dec(c, Rot(b, 16));
-  a := a xor c; Dec(a, Rot(c, 4));
-  b := b xor a; Dec(b, Rot(a, 14));
-  c := c xor b; Dec(c, Rot(b, 24));
-end;
-
-constructor TbpHashBobJenkins.Create;
-begin
-  inherited Create;
-  FHash := 0;
-end;
-
-procedure TbpHashBobJenkins.Reset(aInitialValue: Integer = 0);
-begin
-  FHash := aInitialValue;
-end;
-
-procedure TbpHashBobJenkins.Update(const aData; aLength: Cardinal);
-begin
-  FHash := HashLittle(aData, aLength, FHash);
-end;
-
-procedure TbpHashBobJenkins.Update(const aData: TBytes; aLength: Integer);
-begin
-  if aLength < 0 then
-    aLength := Length(aData);
-  if aLength > Length(aData) then
-    raise ERangeError.CreateFmt('Update: aLength %d exceeds the %d bytes available',
-      [aLength, Length(aData)]);
-  Update(Pointer(aData)^, Cardinal(aLength));
-end;
-
-procedure TbpHashBobJenkins.Update(const Input: string);
-begin
-  Update(Pointer(Input)^, Length(Input) * SizeOf(Char));
-end;
-
-function TbpHashBobJenkins.HashAsBytes: TBytes;
-begin
-  Result := GetDigest;
-end;
-
-function TbpHashBobJenkins.HashAsInteger: Integer;
-begin
-  Result := FHash;
-end;
-
-function TbpHashBobJenkins.HashAsString: string;
-begin
-  Result := IntToHex(FHash, 8);
-end;
-
-class function TbpHashBobJenkins.GetHashBytes(const aData: string): TBytes;
-begin
-  SetLength(Result, 4);
-  PCardinal(@Result[0])^ := Cardinal(GetHashValue(aData));
-end;
-
-class function TbpHashBobJenkins.GetHashString(const aString: string): string;
-begin
-  Result := IntToHex(GetHashValue(aString), 8);
-end;
-
-class function TbpHashBobJenkins.GetHashValue(const aData: string): Integer;
-begin
-  Result := HashLittle(Pointer(aData)^, Length(aData) * SizeOf(Char), 0);
-end;
-
-class function TbpHashBobJenkins.GetHashValue(const aData; aLength: Integer; aInitialValue: Integer): Integer;
-begin
-  Result := HashLittle(aData, aLength, aInitialValue);
-end;
-
-function TbpHashBobJenkins.GetDigest: TBytes;
-begin
-  SetLength(Result, 4);
-  Move(FHash, Result[0], 4);
-end;
-
-// lookup3 mix and final. The last 12-byte block is folded by Final rather
-// than in the loop, Len = 0 exits early, and the tail never reads past Data.
-class function TbpHashBobJenkins.HashLittle(const Data; Len, InitVal: Integer): Integer;
-var
-  a, b, c: Cardinal;
-  pd: PCardinalTriple;
-  pb: PByteArray;
-begin
-  // seed with the byte length: hashword counts words, hashlittle bytes
-  a := Cardinal($DEADBEEF) + Cardinal(Len) + Cardinal(InitVal);
-  b := a;
-  c := a;
-
-  if (TbpUIntPtr(@Data) and 3) = 0 then
-  begin
-    // 4-byte aligned data
-    pd := PCardinalTriple(@Data);
-    while Len > 12 do
-    begin
-      Inc(a, pd^[0]);
-      Inc(b, pd^[1]);
-      Inc(c, pd^[2]);
-      Mix(a, b, c);
-      Dec(Len, 12);
-      Inc(pd); // one 12-byte block
-    end;
-
-    case Len of
-      0:
-      begin
-        Result := Integer(c);
-        Exit;
-      end;
-      1: Inc(a, pd^[0] and $FF);
-      2: Inc(a, pd^[0] and $FFFF);
-      3: Inc(a, pd^[0] and $FFFFFF);
-      4: Inc(a, pd^[0]);
-      5:
-      begin
-        Inc(a, pd^[0]);
-        Inc(b, pd^[1] and $FF);
-      end;
-      6:
-      begin
-        Inc(a, pd^[0]);
-        Inc(b, pd^[1] and $FFFF);
-      end;
-      7:
-      begin
-        Inc(a, pd^[0]);
-        Inc(b, pd^[1] and $FFFFFF);
-      end;
-      8:
-      begin
-        Inc(a, pd^[0]);
-        Inc(b, pd^[1]);
-      end;
-      9:
-      begin
-        Inc(a, pd^[0]);
-        Inc(b, pd^[1]);
-        Inc(c, pd^[2] and $FF);
-      end;
-      10:
-      begin
-        Inc(a, pd^[0]);
-        Inc(b, pd^[1]);
-        Inc(c, pd^[2] and $FFFF);
-      end;
-      11:
-      begin
-        Inc(a, pd^[0]);
-        Inc(b, pd^[1]);
-        Inc(c, pd^[2] and $FFFFFF);
-      end;
-      12:
-      begin
-        Inc(a, pd^[0]);
-        Inc(b, pd^[1]);
-        Inc(c, pd^[2]);
-      end;
-    end;
-  end
-  else
-  begin
-    // unaligned data: byte-by-byte reads, never past the end
-    pb := PByteArray(@Data);
-    while Len > 12 do
-    begin
-      Inc(a, Cardinal(pb^[0]) + Cardinal(pb^[1]) shl 8 + Cardinal(pb^[2]) shl 16 + Cardinal(pb^[3]) shl 24);
-      Inc(b, Cardinal(pb^[4]) + Cardinal(pb^[5]) shl 8 + Cardinal(pb^[6]) shl 16 + Cardinal(pb^[7]) shl 24);
-      Inc(c, Cardinal(pb^[8]) + Cardinal(pb^[9]) shl 8 + Cardinal(pb^[10]) shl 16 + Cardinal(pb^[11]) shl 24);
-      Mix(a, b, c);
-      Dec(Len, 12);
-      pb := PByteArray(TbpUIntPtr(pb) + 12);
-    end;
-
-    if Len = 0 then
-    begin
-      Result := Integer(c);
-      Exit;
-    end;
-
-    // cumulative tail: byte i goes to word i div 4, shifted (i mod 4) * 8
-    if Len >= 12 then Inc(c, Cardinal(pb^[11]) shl 24);
-    if Len >= 11 then Inc(c, Cardinal(pb^[10]) shl 16);
-    if Len >= 10 then Inc(c, Cardinal(pb^[9]) shl 8);
-    if Len >= 9 then Inc(c, Cardinal(pb^[8]));
-    if Len >= 8 then Inc(b, Cardinal(pb^[7]) shl 24);
-    if Len >= 7 then Inc(b, Cardinal(pb^[6]) shl 16);
-    if Len >= 6 then Inc(b, Cardinal(pb^[5]) shl 8);
-    if Len >= 5 then Inc(b, Cardinal(pb^[4]));
-    if Len >= 4 then Inc(a, Cardinal(pb^[3]) shl 24);
-    if Len >= 3 then Inc(a, Cardinal(pb^[2]) shl 16);
-    if Len >= 2 then Inc(a, Cardinal(pb^[1]) shl 8);
-    Inc(a, Cardinal(pb^[0]));
-  end;
-
-  Final(a, b, c);
-  Result := Integer(c);
-end;
-{$IFDEF BPAMALG_R}{$R+}{$ELSE}{$R-}{$ENDIF}{$IFDEF BPAMALG_Q}{$Q+}{$ELSE}{$Q-}{$ENDIF}
-// ------------ end BpHashBobJenkins.pas implementation -------------
 
 // ------------ begin BpVariantUtils.pas implementation -------------
 
@@ -913,7 +648,6 @@ end;
 
 // ------------ begin BpStrDictionary.pas implementation ------------
 
-// the hash normalisation below wraps into the sign bit
 {$Q-}
 
 // per-unit names so amalgamated bundles can embed both dictionaries
@@ -933,36 +667,24 @@ begin
   // with capacity 0 the grow threshold is 0, so the first Add grows to 4
 end;
 
+// one relation with KeysEqual and with TbpStringList: equal keys hash equal
 function TbpStrDictionary.HashOf(const aKey: string): Integer;
-var
-  lvStack: array[0..255] of Char;
-  lvFoldedLen: Integer;
-  lvFolded: string;
 begin
-  if FCaseInsensitive then
-  begin
-    lvFoldedLen := BpFoldInto(aKey, lvStack, Length(lvStack));
-    if lvFoldedLen >= 0 then
-      Result := TbpHashBobJenkins.GetHashValue(lvStack, lvFoldedLen * SizeOf(Char), 0)
-    else
-    begin
-      // key too long for the buffer, or a code page the table cannot fold
-      lvFolded := AnsiUpperCase(aKey);
-      Result := TbpHashBobJenkins.GetHashValue(Pointer(lvFolded)^, Length(lvFolded) * SizeOf(Char), 0);
-    end;
-  end
-  else
-    Result := TbpHashBobJenkins.GetHashValue(Pointer(aKey)^, Length(aKey) * SizeOf(Char), 0);
+  Result := Integer(BpKeyHash(aKey, FCaseInsensitive));
   // force the hash into 0..MaxInt so it can never collide with gcStrEmptyHash
   Result := gcStrPositiveMask and ((gcStrPositiveMask and Result) + 1);
 end;
 
 function TbpStrDictionary.KeysEqual(const aKey1, aKey2: string): Boolean;
 begin
-  if FCaseInsensitive then
-    Result := BpFoldedSame(aKey1, aKey2)
-  else
-    Result := aKey1 = aKey2;
+  Result := BpKeyEquals(aKey1, aKey2, FCaseInsensitive);
+end;
+
+// a callback that adds or removes would make the scan skip or revisit entries
+procedure TbpStrDictionary.CheckNotIterating;
+begin
+  if FIterating then
+    raise EbpStrDictionary.Create('The dictionary cannot be changed while ForEach runs');
 end;
 
 function TbpStrDictionary.GetBucketIndex(const aKey: string; aHashCode: Integer): Integer;
@@ -1008,6 +730,8 @@ var
   lvIndex: Integer;
   i: Integer;
 begin
+  // above the early exits: Delphi 7 counts the implicit finalisation as a use
+  lvOldItems := nil;
   if aNewCapacity = Length(FItems) then
     Exit;
   if aNewCapacity < 0 then
@@ -1019,14 +743,15 @@ begin
     FItems[i].HashCode := gcStrEmptyHash;
   // grow at 75% load; guarantees at least one always-empty slot
   FGrowThreshold := aNewCapacity shr 1 + aNewCapacity shr 2;
-  // reinsert using the cached hash codes, no rehashing of the keys
+  // reinsert on the cached hash codes, moving each entry as raw bits: a field
+  // copy would pay a refcount pair per string and deep-copy every variant array
   for i := 0 to Length(lvOldItems) - 1 do
     if lvOldItems[i].HashCode <> gcStrEmptyHash then
     begin
       lvIndex := not GetBucketIndex(lvOldItems[i].Key, lvOldItems[i].HashCode);
-      FItems[lvIndex].HashCode := lvOldItems[i].HashCode;
-      FItems[lvIndex].Key := lvOldItems[i].Key;
-      FItems[lvIndex].Value := lvOldItems[i].Value;
+      System.Move(lvOldItems[i], FItems[lvIndex], SizeOf(TbpStrDictItem));
+      // the old slot must forget what it no longer owns, or finalisation frees it
+      FillChar(lvOldItems[i], SizeOf(TbpStrDictItem), 0);
     end;
 end;
 
@@ -1044,6 +769,7 @@ procedure TbpStrDictionary.SetCapacity(aCapacity: Integer);
 var
   lvNewCapacity: Integer;
 begin
+  CheckNotIterating;
   if aCapacity < FCount then
     raise EbpStrDictionary.Create('Capacity cannot be less than Count');
   if aCapacity = 0 then
@@ -1070,12 +796,17 @@ procedure TbpStrDictionary.Add(const aKey: string; const aValue: Variant);
 var
   lvHashCode, lvIndex: Integer;
 begin
-  if FCount >= FGrowThreshold then
-    Grow;
+  CheckNotIterating;
   lvHashCode := HashOf(aKey);
   lvIndex := GetBucketIndex(aKey, lvHashCode);
   if lvIndex >= 0 then
     raise EbpStrDictionary.CreateFmt('Duplicate key: "%s"', [aKey]);
+  // grow only on a genuine new insert; the array moves, so probe again
+  if FCount >= FGrowThreshold then
+  begin
+    Grow;
+    lvIndex := GetBucketIndex(aKey, lvHashCode);
+  end;
   DoAdd(lvHashCode, not lvIndex, aKey, aValue);
 end;
 
@@ -1083,6 +814,7 @@ procedure TbpStrDictionary.AddOrSet(const aKey: string; const aValue: Variant);
 var
   lvHashCode, lvIndex: Integer;
 begin
+  CheckNotIterating;
   lvHashCode := HashOf(aKey);
   lvIndex := GetBucketIndex(aKey, lvHashCode);
   if lvIndex >= 0 then
@@ -1129,6 +861,7 @@ var
   end;
 
 begin
+  CheckNotIterating;
   lvIndex := GetBucketIndex(aKey, HashOf(aKey));
   Result := lvIndex >= 0;
   if not Result then
@@ -1157,6 +890,7 @@ end;
 
 procedure TbpStrDictionary.Clear;
 begin
+  CheckNotIterating;
   FItems := nil;
   FCount := 0;
   FGrowThreshold := 0;
@@ -1170,13 +904,18 @@ begin
   if not Assigned(aCallback) then
     Exit;
   lvStop := False;
-  for i := 0 to Length(FItems) - 1 do
-    if FItems[i].HashCode <> gcStrEmptyHash then
-    begin
-      aCallback(FItems[i].Key, FItems[i].Value, lvStop);
-      if lvStop then
-        Exit;
-    end;
+  FIterating := True;
+  try
+    for i := 0 to Length(FItems) - 1 do
+      if FItems[i].HashCode <> gcStrEmptyHash then
+      begin
+        aCallback(FItems[i].Key, FItems[i].Value, lvStop);
+        if lvStop then
+          Exit;
+      end;
+  finally
+    FIterating := False;
+  end;
 end;
 
 procedure TbpStrDictionary.GetKeys(aList: TStrings);
@@ -1418,6 +1157,13 @@ begin
   Result := gcIntPositiveMask and ((gcIntPositiveMask and BpHashInt64(aKey)) + 1);
 end;
 
+// a callback that adds or removes would make the scan skip or revisit entries
+procedure TbpIntDictionary.CheckNotIterating;
+begin
+  if FIterating then
+    raise EbpIntDictionary.Create('The dictionary cannot be changed while ForEach runs');
+end;
+
 constructor TbpIntDictionary.Create(aInitialCapacity: Integer);
 begin
   inherited Create;
@@ -1471,6 +1217,8 @@ var
   lvIndex: Integer;
   i: Integer;
 begin
+  // above the early exits: Delphi 7 counts the implicit finalisation as a use
+  lvOldItems := nil;
   if aNewCapacity = Length(FItems) then
     Exit;
   if aNewCapacity < 0 then
@@ -1482,14 +1230,15 @@ begin
     FItems[i].HashCode := gcIntEmptyHash;
   // grow at 75% load; guarantees at least one always-empty slot
   FGrowThreshold := aNewCapacity shr 1 + aNewCapacity shr 2;
-  // reinsert using the cached hash codes, no rehashing of the keys
+  // reinsert on the cached hash codes, moving each entry as raw bits: a field
+  // copy would pay a VarCopy per item and deep-copy every variant array
   for i := 0 to Length(lvOldItems) - 1 do
     if lvOldItems[i].HashCode <> gcIntEmptyHash then
     begin
       lvIndex := not GetBucketIndex(lvOldItems[i].Key, lvOldItems[i].HashCode);
-      FItems[lvIndex].HashCode := lvOldItems[i].HashCode;
-      FItems[lvIndex].Key := lvOldItems[i].Key;
-      FItems[lvIndex].Value := lvOldItems[i].Value;
+      System.Move(lvOldItems[i], FItems[lvIndex], SizeOf(TbpIntDictItem));
+      // the old slot must forget what it no longer owns, or finalisation frees it
+      FillChar(lvOldItems[i], SizeOf(TbpIntDictItem), 0);
     end;
 end;
 
@@ -1507,6 +1256,7 @@ procedure TbpIntDictionary.SetCapacity(aCapacity: Integer);
 var
   lvNewCapacity: Integer;
 begin
+  CheckNotIterating;
   if aCapacity < FCount then
     raise EbpIntDictionary.Create('Capacity cannot be less than Count');
   if aCapacity = 0 then
@@ -1533,12 +1283,17 @@ procedure TbpIntDictionary.Add(aKey: Int64; const aValue: Variant);
 var
   lvHashCode, lvIndex: Integer;
 begin
-  if FCount >= FGrowThreshold then
-    Grow;
+  CheckNotIterating;
   lvHashCode := PositiveHashOf(aKey);
   lvIndex := GetBucketIndex(aKey, lvHashCode);
   if lvIndex >= 0 then
     raise EbpIntDictionary.CreateFmt('Duplicate key: %d', [aKey]);
+  // grow only on a genuine new insert; the array moves, so probe again
+  if FCount >= FGrowThreshold then
+  begin
+    Grow;
+    lvIndex := GetBucketIndex(aKey, lvHashCode);
+  end;
   DoAdd(lvHashCode, not lvIndex, aKey, aValue);
 end;
 
@@ -1546,6 +1301,7 @@ procedure TbpIntDictionary.AddOrSet(aKey: Int64; const aValue: Variant);
 var
   lvHashCode, lvIndex: Integer;
 begin
+  CheckNotIterating;
   lvHashCode := PositiveHashOf(aKey);
   lvIndex := GetBucketIndex(aKey, lvHashCode);
   if lvIndex >= 0 then
@@ -1592,6 +1348,7 @@ var
   end;
 
 begin
+  CheckNotIterating;
   lvIndex := GetBucketIndex(aKey, PositiveHashOf(aKey));
   Result := lvIndex >= 0;
   if not Result then
@@ -1620,6 +1377,7 @@ end;
 
 procedure TbpIntDictionary.Clear;
 begin
+  CheckNotIterating;
   FItems := nil;
   FCount := 0;
   FGrowThreshold := 0;
@@ -1633,13 +1391,18 @@ begin
   if not Assigned(aCallback) then
     Exit;
   lvStop := False;
-  for i := 0 to Length(FItems) - 1 do
-    if FItems[i].HashCode <> gcIntEmptyHash then
-    begin
-      aCallback(FItems[i].Key, FItems[i].Value, lvStop);
-      if lvStop then
-        Exit;
-    end;
+  FIterating := True;
+  try
+    for i := 0 to Length(FItems) - 1 do
+      if FItems[i].HashCode <> gcIntEmptyHash then
+      begin
+        aCallback(FItems[i].Key, FItems[i].Value, lvStop);
+        if lvStop then
+          Exit;
+      end;
+  finally
+    FIterating := False;
+  end;
 end;
 
 function TbpIntDictionary.GetKeys: TbpInt64DynArray;

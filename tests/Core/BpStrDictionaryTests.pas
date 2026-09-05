@@ -21,6 +21,8 @@ type
     procedure CallGetIntOnTooBigInt64;
     procedure CallGetIntArrayOnInt;
     procedure CallSetCapacityBelowCount;
+    procedure AddInsideCallback(const aKey: string; const aValue: Variant; var aStop: Boolean);
+    procedure RemoveInsideCallback(const aKey: string; const aValue: Variant; var aStop: Boolean);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -49,6 +51,13 @@ type
     procedure TestCaseInsensitiveMode;
     procedure TestCaseInsensitiveNonAscii;
     // iteration
+    procedure TestForEachRefusesAnAddFromTheCallback;
+    procedure TestForEachRefusesARemoveFromTheCallback;
+    procedure TestForEachIsUsableAgainAfterARefusal;
+    procedure TestDuplicateAddDoesNotGrow;
+    procedure TestGrowKeepsStringsAndVariantArrays;
+    procedure TestCaseInsensitiveSurvivesGrow;
+    procedure TestSetCapacityResizesBothWays;
     procedure TestForEachVisitsAll;
     procedure TestForEachEarlyStop;
     procedure TestGetKeys;
@@ -500,6 +509,143 @@ begin
   end;
 end;
 
+
+procedure TBpStrDictionaryTests.AddInsideCallback(const aKey: string;
+  const aValue: Variant; var aStop: Boolean);
+begin
+  FDict.SetInt('added-while-iterating', 1);
+end;
+
+procedure TBpStrDictionaryTests.RemoveInsideCallback(const aKey: string;
+  const aValue: Variant; var aStop: Boolean);
+begin
+  FDict.Remove(aKey);
+end;
+
+// a rehash under the scan would skip or revisit entries, so it is refused
+procedure TBpStrDictionaryTests.TestForEachRefusesAnAddFromTheCallback;
+begin
+  FDict.SetInt('a', 1);
+  FDict.SetInt('b', 2);
+  try
+    FDict.ForEach(AddInsideCallback);
+    Fail('an Add from inside ForEach must be refused');
+  except
+    on E: EbpStrDictionary do
+      ; // expected
+  end;
+  CheckEquals(2, FDict.Count, 'and must not have happened');
+end;
+
+procedure TBpStrDictionaryTests.TestForEachRefusesARemoveFromTheCallback;
+begin
+  FDict.SetInt('a', 1);
+  FDict.SetInt('b', 2);
+  try
+    FDict.ForEach(RemoveInsideCallback);
+    Fail('a Remove from inside ForEach must be refused');
+  except
+    on E: EbpStrDictionary do
+      ; // expected
+  end;
+  CheckEquals(2, FDict.Count, 'and must not have happened');
+end;
+
+// the guard is released even when the callback leaves through an exception
+procedure TBpStrDictionaryTests.TestForEachIsUsableAgainAfterARefusal;
+begin
+  FDict.SetInt('a', 1);
+  try
+    FDict.ForEach(AddInsideCallback);
+  except
+    on E: EbpStrDictionary do
+      ; // expected
+  end;
+  FDict.SetInt('b', 2);
+  FDict.ForEach(VisitCallback);
+  CheckEquals(2, FVisitCount, 'the dictionary is writable and iterable again');
+end;
+
+procedure TBpStrDictionaryTests.TestDuplicateAddDoesNotGrow;
+var
+  i, lvCapacity: Integer;
+begin
+  for i := 1 to 3 do
+    FDict.Add(IntToStr(i), i);
+  lvCapacity := FDict.Capacity;
+  for i := 1 to 20 do
+    try
+      FDict.Add('1', 1);
+      Fail('a duplicate must raise');
+    except
+      on E: EbpStrDictionary do
+        ; // expected
+    end;
+  CheckEquals(lvCapacity, FDict.Capacity, 'a refused Add must not double the table');
+  CheckEquals(3, FDict.Count, 'nor add anything');
+end;
+
+// Rehash hands the entries over as raw bits, so a refcount slip shows up here
+procedure TBpStrDictionaryTests.TestGrowKeepsStringsAndVariantArrays;
+var
+  i: Integer;
+  lvValues: TbpIntegerDynArray;
+begin
+  for i := 1 to 500 do
+  begin
+    FDict.SetStr('s' + IntToStr(i), StringOfChar('x', 40) + IntToStr(i));
+    FDict.SetIntArray('a' + IntToStr(i), [i, i * 2, i * 3]);
+  end;
+  CheckEquals(1000, FDict.Count, 'every key is there after many grows');
+  for i := 1 to 500 do
+  begin
+    CheckEquals(StringOfChar('x', 40) + IntToStr(i), FDict.GetStr('s' + IntToStr(i)),
+      'the string value survived every rehash');
+    lvValues := FDict.GetIntArray('a' + IntToStr(i));
+    CheckEquals(3, Length(lvValues), 'and so did the variant array');
+    CheckEquals(i, lvValues[0], 'first element');
+    CheckEquals(i * 3, lvValues[2], 'last element');
+  end;
+end;
+
+// the fold is part of the hash, so it has to hold across a rehash too
+procedure TBpStrDictionaryTests.TestCaseInsensitiveSurvivesGrow;
+var
+  lvDict: TbpStrDictionary;
+  i: Integer;
+begin
+  lvDict := TbpStrDictionary.Create(True);
+  try
+    for i := 1 to 300 do
+      lvDict.SetInt('MixedCaseKey' + IntToStr(i), i);
+    CheckEquals(300, lvDict.Count, 'every key is distinct');
+    for i := 1 to 300 do
+    begin
+      CheckEquals(i, lvDict.GetInt('mixedcasekey' + IntToStr(i)), 'lower case finds it');
+      CheckEquals(i, lvDict.GetInt('MIXEDCASEKEY' + IntToStr(i)), 'upper case finds it');
+    end;
+    Check(not lvDict.ContainsKey('MixedCaseKey301'), 'and a miss stays a miss');
+  finally
+    lvDict.Free;
+  end;
+end;
+
+procedure TBpStrDictionaryTests.TestSetCapacityResizesBothWays;
+var
+  i, lvSmall: Integer;
+begin
+  for i := 1 to 10 do
+    FDict.SetInt(IntToStr(i), i);
+  lvSmall := FDict.Capacity;
+  FDict.SetCapacity(4096);
+  Check(FDict.Capacity >= 4096, 'the table actually grew');
+  CheckEquals(10, FDict.Count, 'without touching the entries');
+  FDict.SetCapacity(10);
+  Check(FDict.Capacity < 4096, 'and it shrinks back');
+  Check(FDict.Capacity >= lvSmall, 'to at least what ten entries need');
+  for i := 1 to 10 do
+    CheckEquals(i, FDict.GetInt(IntToStr(i)), 'every key survived both resizes');
+end;
 
 initialization
   RegisterTest(TBpStrDictionaryTests.Suite);

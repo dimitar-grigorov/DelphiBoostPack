@@ -173,7 +173,11 @@ end;
 
 function BpKeyEquals(const aA, aB: string; aFold: Boolean): Boolean;
 begin
-  Result := BpKeyEqualsBuf(aA, PChar(aB), Length(aB), aFold);
+  // unfolded is plain ordinal equality, and the RTL compares a word at a time
+  if aFold then
+    Result := BpKeyEqualsBuf(aA, PChar(aB), Length(aB), True)
+  else
+    Result := aA = aB;
 end;
 
 function BpKeyCompare(const aA, aB: string; aFold: Boolean): Integer;

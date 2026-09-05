@@ -29,7 +29,7 @@ The suite is split so you can run only what fits the moment: fast checks on ever
 
 Pure, offline, deterministic, fast. Every `Bp*Tests.pas` in [Core/](Core) except the network parts of the HTTP tests:
 
-- collections: `BpIntListTests`, `BpIntListMemoryTests`, `BpInt64ListTests`, `BpIntDictionaryTests`, `BpStrDictionaryTests`
+- collections: `BpIntListTests`, `BpInt64ListTests`, `BpIntDictionaryTests`, `BpStrDictionaryTests`, `BpStringListTests`
 - strings: `BpStringBuilderTests`, `BpStringListTests`, `BpStrUtilsTests`
 - hashing and encoding: `BpSHA256Tests`, `BpMD5Tests`, `BpHMACSHA256Tests`, `BpPasswordHashTests`, `BpHashBobJenkinsTests`, `BpBase64Tests` (crypto and hash checked against the Windows CryptoAPI, the XE6 RTL and the published FIPS/RFC vectors)
 - HTTP offline: `BpHttpClientTests` (URL parsing, header building, auth, error classification) and the offline half of `BpHttpDownloadTests` (progress math, `Content-Length` parsing, argument validation, the task state machine)
@@ -47,7 +47,7 @@ Pass `/nointeg` for an offline, socket-free run (handy in locked-down CI or when
 
 ### Benchmarks
 
-Off by default. [Benchmarks/](Benchmarks) times the performance units against their RTL equivalents so the speed claims in the main README are measured, not asserted: `BpStringBuilderBenchmark`, `BpStrUtilsBenchmark`, `BpStrDictionaryBenchmark`, `BpIntDictionaryBenchmark`, `BpBase64Benchmark`, `BpHashBenchmark`, `BpStringOperationsBenchmark`, `BpTypesOperationsBenchmark`, plus `BpIntListBenchmark` in `Core/`. They share `BpBaseBenchmarkTestCase` for timing and status output, and back off gracefully on a low-memory box instead of failing the run. Only performance-sensitive units get a benchmark.
+Off by default. [Benchmarks/](Benchmarks) times the performance units against their RTL equivalents so the speed claims in the main README are measured, not asserted: `BpStringBuilderBenchmark`, `BpStrUtilsBenchmark`, `BpStrDictionaryBenchmark`, `BpIntDictionaryBenchmark`, `BpBase64Benchmark`, `BpHashBenchmark`, `BpStringOperationsBenchmark`, `BpTypesOperationsBenchmark`, `BpStringListBenchmark`, `BpIntListBenchmark`. They share `BpBaseBenchmarkTestCase` for timing and status output, and back off gracefully on a low-memory box instead of failing the run. Only performance-sensitive units get a benchmark.
 
 ## Adding a test
 

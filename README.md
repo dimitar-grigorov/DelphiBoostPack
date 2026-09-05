@@ -13,7 +13,7 @@ HTTP, JSON, hash dictionaries, SHA-256, background tasks. Pure Pascal source, no
 
 Nothing to install, two ways in:
 
-- **Modular.** Put `src\Core\Classes`, `src\Core\Units` and `src\Core\Interfaces` on your library path, or copy the units you use. A few want a companion: the dictionaries want `BpVariantUtils`, `BpHashBobJenkins` and `BpKeyFold`, `TbpStringList` wants `BpKeyFold`, `BpJson` wants `BpStringBuilder`, `BpHttpClient` and the hashes want `BpBase64`, and everything that touches `TBytes` wants `BpCompat`.
+- **Modular.** Put `src\Core\Classes`, `src\Core\Units` and `src\Core\Interfaces` on your library path, or copy the units you use. A few want a companion: the dictionaries want `BpVariantUtils` and `BpKeyFold`, `TbpStringList` wants `BpKeyFold`, `BpJson` wants `BpStringBuilder`, `BpHttpClient` and the hashes want `BpBase64`, and everything that touches `TBytes` wants `BpCompat`.
 - **One file.** Take a bundle from [dist/](dist/) instead. Each is self-contained, so do not also use the modular units it embeds.
 
 An HTTPS call and a JSON parse, on a 2007 compiler, with nothing else installed:
@@ -65,7 +65,7 @@ Full descriptions and examples in the [feature guide](docs/FEATURES.md).
 | [BpDateUtils](docs/FEATURES.md#bpdateutils) | ISO 8601 / RFC 3339 and Unix time both ways, in `Int64` - what D2007 has no `ISO8601ToDate` for |
 | [TbpStrDictionary](docs/FEATURES.md#tbpstrdictionary) / [TbpIntDictionary](docs/FEATURES.md#tbpintdictionary) | real hash maps for compilers with no generics, `TDictionary`-style API, typed accessors that refuse to coerce |
 | [TbpStringList](docs/FEATURES.md#tbpstringlist) | the `TStringList` API on a `TStrings` with O(1) `IndexOf` and `IndexOfName`, a stable `Sort` and one ordinal relation behind hash, equality and order |
-| [TbpIntList](docs/FEATURES.md#tbpintlist) | a list of integers that behaves like `TStringList` |
+| [TbpIntList](docs/FEATURES.md#tbpintlist) | a list of integers that behaves like `TStringList`, with O(1) `IndexOf` |
 | [TbpInt64List](docs/FEATURES.md#tbpint64list) | the same list for `Int64` - keys, file sizes, millisecond timestamps |
 
 **Strings**

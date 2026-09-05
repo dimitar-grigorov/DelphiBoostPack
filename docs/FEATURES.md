@@ -315,30 +315,36 @@ if lvDict.TryGetInt('port', lvPort) then ...
 
 Values are `Variant` and nothing is coerced: `'8080'` stored as a string will not answer `GetInt`. Each type gets three accessors, `GetInt` raising, `GetIntDef` returning the default and `TryGetInt` returning `False`, for both a missing key and the wrong type. The set is `Int`, `Int64`, `Str`, `Bool`, `Float` and `IntArray`, each with a matching `SetX`; the rules live in [BpVariantUtils](#bpvariantutils).
 
-Open addressing with linear probing, power-of-two capacity, 0.75 load factor and backward-shift deletion, so no tombstones slow down later lookups. Hashing is [BpHashBobJenkins](#bphashbobjenkins); folding cut a case-insensitive lookup from 9.96 ms to 2.55 ms over 20,000 keys on Delphi 2007.
+Open addressing with linear probing, power-of-two capacity, 0.75 load factor and backward-shift deletion, so no tombstones slow down later lookups. Hash and equality are the one ordinal relation from [BpKeyFold](#bpkeyfold), the same relation `TbpStringList` uses, so a case-insensitive key folds as it is hashed rather than through a copy. 10,000 lookups take 0.97 ms where `THashedStringList` takes 3.21 ms and `TStringList.IndexOf` takes 8.0 seconds.
+
+`ForEach` may read but not write: `Add`, `AddOrSet`, `Remove`, `Clear` and `SetCapacity` raise while a callback is running, because a rehash under the scan would skip or revisit entries. A grow moves each entry as raw bits instead of copying it field by field, so it pays no string refcount pair per item and does not deep-copy a stored variant array.
 
 ### [TbpIntDictionary](../src/Core/Classes/BpIntDictionary.pas)
 
-The same map with `Int64` keys. No case option, and `GetKeys` returns a `TbpInt64DynArray` instead of filling a `TStrings`. Keys go through the Thomas Wang 64-to-32 bit mix, exposed as `BpHashInt64`.
+The same map with `Int64` keys, the same `ForEach` guard and the same raw-bits grow. No case option, and `GetKeys` returns a `TbpInt64DynArray` instead of filling a `TStrings`. Keys go through the Thomas Wang 64-to-32 bit mix, exposed as `BpHashInt64`.
 
 ### [TbpIntList](../src/Core/Classes/BpIntList.pas)
 
-A list of integers that behaves like the `TStringList` you know: `Add`, `Delete`, `Insert`, `IndexOf`, `Sorted`, `CommaText`, `DelimitedText`, load and save.
+A list of integers that behaves like the `TStringList` you know, with an `IndexOf` that does not scan: `Add`, `Delete`, `Insert`, `IndexOf`, `Find`, `Sorted`, `Duplicates`, `Capacity`, `CommaText`, `DelimitedText`, load and save.
 
 ```pascal
 uses BpIntList;
 
 lvIds.CommaText := '5,3,9,1';
 lvIds.Sorted := True;                         // 1,3,5,9, and stays ordered
-if lvIds.BinarySearch(5, lvIndex) then
+if lvIds.Find(5, lvIndex) then
   lvIds.Delete(lvIndex);
 ```
 
-`BinarySearch` needs the `Sorted` flag, so set `Sorted := True` rather than calling a bare `Sort` when you intend to search. `IndexOf` is the linear fallback either way. While `Sorted` is on, `Items[]`, `Insert` and `Exchange` raise `EListError` as in `TStringList`, because an unchecked write would leave the binary search on unordered data. `DelimitedText` also treats spaces, tabs and line breaks as separators, so a whitespace-separated file loads. Sorting is an in-place introsort over a plain `array of Integer`, recursing into the smaller partition only and dropping to heapsort when the pivot keeps splitting badly: 400,000 organ-pipe values sort in 31 ms where a middle-pivot quicksort recurses 200,000 deep and dies. Implements `IBpIntList`; `TIntegerList` and `TIntList` are aliases for older code.
+`Find` answers either way: it bisects while `Sorted` and goes through the hash index otherwise, and on a miss it reports the insertion point. `IndexOf` returns the lowest position among equal values. 2,000 lookups over 20,000 values take 0.19 ms, where a `TList` scan takes 22.2 ms and a sorted `TStringList` of `IntToStr` keys takes 2.85 ms.
+
+The values stay dense in one `array of Integer`, so `Items[]` is a single memory access and a sort is in place. The hash index is built on the first `IndexOf`, survives an append and is dropped by any mutation that moves a position, so a list that is only appended to keeps it and one that is rebuilt pays a rescan, never more than the linear search it replaces. Nothing is hashed until the first lookup, and a `Sorted` list builds no index at all.
+
+While `Sorted` is on, `Items[]`, `Insert` and `Exchange` raise `EListError`, because an unchecked write would leave the binary search on unordered data, and `Add` reads `Duplicates` the way `TStringList` does: `dupIgnore` by default, `dupError` to raise, `dupAccept` to keep the run. `Capacity` presizes a list of known size and refuses to shrink below `Count` rather than dropping values. `DelimitedText` also treats spaces, tabs and line breaks as separators, so a whitespace-separated file loads; `LoadFromStream` skips a UTF-8 BOM and reports a NUL byte instead of quietly ending the parse on a UTF-16 file. Sorting is an in-place introsort, recursing into the smaller partition only and dropping to heapsort when the pivot keeps splitting badly: 400,000 organ-pipe values sort in 61 ms in the Debug test build (range and overflow checking on, optimisation off) where a middle-pivot quicksort recurses 200,000 deep and dies.
 
 ### [TbpInt64List](../src/Core/Classes/BpInt64List.pas)
 
-The same list over `array of Int64`, for database keys, file sizes or millisecond timestamps. Parsing goes through `TryStrToInt64`, so text outside the range raises `EConvertError` instead of quietly wrapping.
+The same list over `array of Int64`, for database keys, file sizes or millisecond timestamps. Same API line for line; the key goes through the Thomas Wang 64-to-32 bit mix instead of the 32-bit finaliser, and parsing goes through `TryStrToInt64`, so text outside the range raises `EConvertError` instead of quietly wrapping.
 
 ---
 
@@ -574,7 +580,7 @@ To avoid adding ten units to a project, take one self-contained file from [dist/
 
 | Bundle | Contains |
 |--------|----------|
-| [BpDictionaries.pas](../dist/BpDictionaries.pas) | both dictionaries, hash and Variant helpers baked in |
+| [BpDictionaries.pas](../dist/BpDictionaries.pas) | both dictionaries, the key fold and the Variant helpers baked in |
 | [BpHashes.pas](../dist/BpHashes.pas) | SHA-256, MD5, HMAC-SHA256, PBKDF2, Base64 |
 | [BpHttpClientStandalone.pas](../dist/BpHttpClientStandalone.pas) | HTTP client, downloads, async task, cancellation token, Base64 |
 | [BpJsonStandalone.pas](../dist/BpJsonStandalone.pas) | JSON reader/writer with the string builder baked in |

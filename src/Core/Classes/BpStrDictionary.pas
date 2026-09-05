@@ -1,13 +1,14 @@
 unit BpStrDictionary;
 
 // String-key dictionary for Delphi 7/2007+ (no generics), TDictionary-style API.
-// Open addressing with linear probing, power-of-two capacity, backward-shift
-// deletion, BpHashBobJenkins hashing and opt-in case-insensitive keys.
+// Open addressing with linear probing, power-of-two capacity and backward-shift
+// deletion. Hash and equality are the one ordinal relation from BpKeyFold, so a
+// case-insensitive key folds as it is hashed instead of through a copy.
 
 interface
 
 uses
-  Windows, SysUtils, Classes, Variants, BpVariantUtils, BpKeyFold;
+  SysUtils, Classes, Variants, BpVariantUtils, BpKeyFold;
 
 type
   // raised for missing keys, duplicate keys and failed typed conversions
@@ -30,6 +31,8 @@ type
     FCount: Integer;
     FGrowThreshold: Integer;
     FCaseInsensitive: Boolean;
+    FIterating: Boolean;
+    procedure CheckNotIterating;
     function HashOf(const aKey: string): Integer;
     function KeysEqual(const aKey1, aKey2: string): Boolean;
     // the slot index when found, else the complement of the first empty slot
@@ -85,9 +88,6 @@ type
 
 implementation
 
-uses
-  BpHashBobJenkins;
-
 // the hash normalisation below wraps into the sign bit
 {$Q-}
 
@@ -108,36 +108,24 @@ begin
   // with capacity 0 the grow threshold is 0, so the first Add grows to 4
 end;
 
+// one relation with KeysEqual and with TbpStringList: equal keys hash equal
 function TbpStrDictionary.HashOf(const aKey: string): Integer;
-var
-  lvStack: array[0..255] of Char;
-  lvFoldedLen: Integer;
-  lvFolded: string;
 begin
-  if FCaseInsensitive then
-  begin
-    lvFoldedLen := BpFoldInto(aKey, lvStack, Length(lvStack));
-    if lvFoldedLen >= 0 then
-      Result := TbpHashBobJenkins.GetHashValue(lvStack, lvFoldedLen * SizeOf(Char), 0)
-    else
-    begin
-      // key too long for the buffer, or a code page the table cannot fold
-      lvFolded := AnsiUpperCase(aKey);
-      Result := TbpHashBobJenkins.GetHashValue(Pointer(lvFolded)^, Length(lvFolded) * SizeOf(Char), 0);
-    end;
-  end
-  else
-    Result := TbpHashBobJenkins.GetHashValue(Pointer(aKey)^, Length(aKey) * SizeOf(Char), 0);
+  Result := Integer(BpKeyHash(aKey, FCaseInsensitive));
   // force the hash into 0..MaxInt so it can never collide with gcStrEmptyHash
   Result := gcStrPositiveMask and ((gcStrPositiveMask and Result) + 1);
 end;
 
 function TbpStrDictionary.KeysEqual(const aKey1, aKey2: string): Boolean;
 begin
-  if FCaseInsensitive then
-    Result := BpFoldedSame(aKey1, aKey2)
-  else
-    Result := aKey1 = aKey2;
+  Result := BpKeyEquals(aKey1, aKey2, FCaseInsensitive);
+end;
+
+// a callback that adds or removes would make the scan skip or revisit entries
+procedure TbpStrDictionary.CheckNotIterating;
+begin
+  if FIterating then
+    raise EbpStrDictionary.Create('The dictionary cannot be changed while ForEach runs');
 end;
 
 function TbpStrDictionary.GetBucketIndex(const aKey: string; aHashCode: Integer): Integer;
@@ -183,6 +171,8 @@ var
   lvIndex: Integer;
   i: Integer;
 begin
+  // above the early exits: Delphi 7 counts the implicit finalisation as a use
+  lvOldItems := nil;
   if aNewCapacity = Length(FItems) then
     Exit;
   if aNewCapacity < 0 then
@@ -194,14 +184,15 @@ begin
     FItems[i].HashCode := gcStrEmptyHash;
   // grow at 75% load; guarantees at least one always-empty slot
   FGrowThreshold := aNewCapacity shr 1 + aNewCapacity shr 2;
-  // reinsert using the cached hash codes, no rehashing of the keys
+  // reinsert on the cached hash codes, moving each entry as raw bits: a field
+  // copy would pay a refcount pair per string and deep-copy every variant array
   for i := 0 to Length(lvOldItems) - 1 do
     if lvOldItems[i].HashCode <> gcStrEmptyHash then
     begin
       lvIndex := not GetBucketIndex(lvOldItems[i].Key, lvOldItems[i].HashCode);
-      FItems[lvIndex].HashCode := lvOldItems[i].HashCode;
-      FItems[lvIndex].Key := lvOldItems[i].Key;
-      FItems[lvIndex].Value := lvOldItems[i].Value;
+      System.Move(lvOldItems[i], FItems[lvIndex], SizeOf(TbpStrDictItem));
+      // the old slot must forget what it no longer owns, or finalisation frees it
+      FillChar(lvOldItems[i], SizeOf(TbpStrDictItem), 0);
     end;
 end;
 
@@ -219,6 +210,7 @@ procedure TbpStrDictionary.SetCapacity(aCapacity: Integer);
 var
   lvNewCapacity: Integer;
 begin
+  CheckNotIterating;
   if aCapacity < FCount then
     raise EbpStrDictionary.Create('Capacity cannot be less than Count');
   if aCapacity = 0 then
@@ -245,12 +237,17 @@ procedure TbpStrDictionary.Add(const aKey: string; const aValue: Variant);
 var
   lvHashCode, lvIndex: Integer;
 begin
-  if FCount >= FGrowThreshold then
-    Grow;
+  CheckNotIterating;
   lvHashCode := HashOf(aKey);
   lvIndex := GetBucketIndex(aKey, lvHashCode);
   if lvIndex >= 0 then
     raise EbpStrDictionary.CreateFmt('Duplicate key: "%s"', [aKey]);
+  // grow only on a genuine new insert; the array moves, so probe again
+  if FCount >= FGrowThreshold then
+  begin
+    Grow;
+    lvIndex := GetBucketIndex(aKey, lvHashCode);
+  end;
   DoAdd(lvHashCode, not lvIndex, aKey, aValue);
 end;
 
@@ -258,6 +255,7 @@ procedure TbpStrDictionary.AddOrSet(const aKey: string; const aValue: Variant);
 var
   lvHashCode, lvIndex: Integer;
 begin
+  CheckNotIterating;
   lvHashCode := HashOf(aKey);
   lvIndex := GetBucketIndex(aKey, lvHashCode);
   if lvIndex >= 0 then
@@ -304,6 +302,7 @@ var
   end;
 
 begin
+  CheckNotIterating;
   lvIndex := GetBucketIndex(aKey, HashOf(aKey));
   Result := lvIndex >= 0;
   if not Result then
@@ -332,6 +331,7 @@ end;
 
 procedure TbpStrDictionary.Clear;
 begin
+  CheckNotIterating;
   FItems := nil;
   FCount := 0;
   FGrowThreshold := 0;
@@ -345,13 +345,18 @@ begin
   if not Assigned(aCallback) then
     Exit;
   lvStop := False;
-  for i := 0 to Length(FItems) - 1 do
-    if FItems[i].HashCode <> gcStrEmptyHash then
-    begin
-      aCallback(FItems[i].Key, FItems[i].Value, lvStop);
-      if lvStop then
-        Exit;
-    end;
+  FIterating := True;
+  try
+    for i := 0 to Length(FItems) - 1 do
+      if FItems[i].HashCode <> gcStrEmptyHash then
+      begin
+        aCallback(FItems[i].Key, FItems[i].Value, lvStop);
+        if lvStop then
+          Exit;
+      end;
+  finally
+    FIterating := False;
+  end;
 end;
 
 procedure TbpStrDictionary.GetKeys(aList: TStrings);
