@@ -8,7 +8,7 @@ unit BpHashes;
 //   src\Core\Classes\BpMD5.pas
 //   src\Core\Classes\BpHMACSHA256.pas
 //   src\Core\Classes\BpPasswordHash.pas
-// Source commit 77a27be, generated 2026-09-05 by tools\Amalgamate.ps1.
+// Source commit 7cc36a6, generated 2026-09-12 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
 // One bundle per project: two that share a helper declare it twice.
@@ -204,6 +204,11 @@ const
   // ceilings for a stored record: 10 million rounds is already ~40 s per verify
   gcBpPasswordHashMaxIterations = 10000000;
   gcBpPasswordHashMaxKeyLen = 64;
+  // a truncated record must not authenticate: one hash byte matches 1 in 256
+  gcBpPasswordHashMinKeyLen = 16;
+
+type
+  EbpPasswordHash = class(Exception);
 
 // raw derived key bytes in an AnsiString, plus a lowercase hex convenience wrapper
 function BpPBKDF2SHA256(const aPassword, aSalt: AnsiString;
@@ -1169,7 +1174,8 @@ var
   lvBlock, lvBlocks, lvIter, lvOffset, lvTake, i: Integer;
 begin
   if (aIterations < 1) or (aKeyLen < 1) then
-    raise Exception.Create('BpPBKDF2SHA256: iterations and key length must be positive');
+    raise EbpPasswordHash.Create(
+      'BpPBKDF2SHA256: iterations and key length must be positive');
   SetLength(Result, aKeyLen);
   lvBlocks := (aKeyLen + 31) div 32;
   lvOffset := 0;
@@ -1237,10 +1243,12 @@ begin
   SetLength(Result, aLen);
   // CRYPT_VERIFYCONTEXT: ephemeral context, no key container touched on disk
   if not CryptAcquireContextA(lvProv, nil, nil, gcBpProvRsaFull, gcBpCryptVerifyContext) then
-    raise Exception.Create('BpGenerateSalt: CryptAcquireContext failed');
+    raise EbpPasswordHash.CreateFmt(
+      'BpGenerateSalt: CryptAcquireContext failed, error %d', [GetLastError]);
   try
     if not CryptGenRandom(lvProv, aLen, PAnsiChar(Result)) then
-      raise Exception.Create('BpGenerateSalt: CryptGenRandom failed');
+      raise EbpPasswordHash.CreateFmt(
+        'BpGenerateSalt: CryptGenRandom failed, error %d', [GetLastError]);
   finally
     CryptReleaseContext(lvProv, 0);
   end;
@@ -1271,6 +1279,10 @@ function BpHashPassword(const aPassword: AnsiString; aIterations: Integer): stri
 var
   lvSalt, lvKey: AnsiString;
 begin
+  // past the ceiling the record would mint here and never verify again
+  if (aIterations < 1) or (aIterations > gcBpPasswordHashMaxIterations) then
+    raise EbpPasswordHash.CreateFmt('BpHashPassword: iterations must be 1..%d',
+      [gcBpPasswordHashMaxIterations]);
   lvSalt := BpGenerateSalt(gcBpPasswordHashSaltLen);
   lvKey := BpPBKDF2SHA256(aPassword, lvSalt, aIterations, gcBpPasswordHashKeyLen);
   Result := Format('$%s$%d$%s$%s', [gcBpPasswordHashScheme, aIterations,
@@ -1327,9 +1339,11 @@ begin
     // Base64Decode raises on garbage; the except below turns that into False
     lvSaltBytes := Base64Decode(lvSaltB64);
     lvHashBytes := Base64Decode(lvHashB64);
-    if (Length(lvSaltBytes) = 0) or (Length(lvHashBytes) = 0) then
+    if Length(lvSaltBytes) = 0 then
       Exit;
-    if Length(lvHashBytes) > gcBpPasswordHashMaxKeyLen then
+    // a floor as well as a ceiling, or a cut-off record verifies by chance
+    if (Length(lvHashBytes) < gcBpPasswordHashMinKeyLen) or
+      (Length(lvHashBytes) > gcBpPasswordHashMaxKeyLen) then
       Exit;
     SetString(lvSalt, PAnsiChar(@lvSaltBytes[0]), Length(lvSaltBytes));
     SetString(lvHash, PAnsiChar(@lvHashBytes[0]), Length(lvHashBytes));
