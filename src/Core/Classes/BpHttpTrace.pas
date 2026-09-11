@@ -69,10 +69,15 @@ end;
 
 class function TbpHttpTrace.Attach(aClient: TbpHttpClient;
   aProc: TbpHttpTraceProc): Boolean;
+var
+  lvSession: HINTERNET;
 begin
+  // opening the session can raise, and that must not arm the sink of a client
+  // that is already tracing
+  lvSession := aClient.SessionHandle;
   gvTraceProc := aProc;
   // the sentinel is -1 widened to a pointer, not a callback address
-  Result := Pointer(InternetSetStatusCallbackA(aClient.SessionHandle,
+  Result := Pointer(InternetSetStatusCallbackA(lvSession,
     PFNInternetStatusCallback(@TraceStatusCallback))) <>
     Pointer(TbpUIntPtr(INTERNET_INVALID_STATUS_CALLBACK));
   // a failed attach must not leave the sink globally armed
@@ -82,8 +87,10 @@ end;
 
 class procedure TbpHttpTrace.Detach(aClient: TbpHttpClient);
 begin
-  InternetSetStatusCallbackA(aClient.SessionHandle, nil);
   gvTraceProc := nil;
+  // no session means nothing to detach from; opening one here would raise
+  if aClient.SessionActive then
+    InternetSetStatusCallbackA(aClient.SessionHandle, nil);
 end;
 
 class function TbpHttpTrace.StatusText(aStatus: DWORD; aInfo: Pointer;
@@ -111,6 +118,9 @@ class function TbpHttpTrace.StatusText(aStatus: DWORD; aInfo: Pointer;
       Inc(i);
     SetString(lvAnsi, lvChars, i);
     Result := string(lvAnsi);
+    // say it was cut rather than print a short url as if it were whole
+    if i = lcMaxChars then
+      Result := Result + '...';
   end;
 
   function InfoNumber: DWORD;

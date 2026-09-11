@@ -5,7 +5,7 @@ unit BpHttpTraceTests;
 interface
 
 uses
-  TestFramework, SysUtils, Windows, BpHttpTrace;
+  TestFramework, SysUtils, Windows, BpHttpClient, BpHttpTrace;
 
 type
   // decoder only, no network
@@ -18,6 +18,8 @@ type
     procedure TestUnknownStatus;
     procedure TestRedirectDropsCredentials;
     procedure TestSanitizeUrl;
+    procedure TestLongPayloadIsMarkedAsCut;
+    procedure TestDetachWithoutSession;
   end;
 
 implementation
@@ -80,6 +82,37 @@ begin
 
   // a missing payload must not take the decoder down
   CheckEquals('resolving ', TbpHttpTrace.StatusText(lcResolvingName, nil, 0));
+end;
+
+// a cut url used to be printed as if it were the whole thing
+procedure TBpHttpTraceTests.TestLongPayloadIsMarkedAsCut;
+var
+  lvUrl: AnsiString;
+begin
+  lvUrl := 'http://example.com/';
+  lvUrl := lvUrl + StringOfChar(AnsiChar('a'), 600);
+  CheckEquals('redirect -> ' + string(Copy(lvUrl, 1, 512)) + '...',
+    TbpHttpTrace.StatusText(lcRedirect, PAnsiChar(lvUrl), Length(lvUrl)));
+
+  // one byte short of the cap is complete, so it carries no marker
+  lvUrl := StringOfChar(AnsiChar('b'), 511);
+  CheckEquals('resolving ' + string(lvUrl),
+    TbpHttpTrace.StatusText(lcResolvingName, PAnsiChar(lvUrl), Length(lvUrl)));
+end;
+
+// Detach used to open a session just to tear the callback off it
+procedure TBpHttpTraceTests.TestDetachWithoutSession;
+var
+  lvClient: TbpHttpClient;
+begin
+  lvClient := TbpHttpClient.Create;
+  try
+    CheckFalse(lvClient.SessionActive, 'a fresh client has no session');
+    TbpHttpTrace.Detach(lvClient);
+    CheckFalse(lvClient.SessionActive, 'Detach must not open one');
+  finally
+    lvClient.Free;
+  end;
 end;
 
 procedure TBpHttpTraceTests.TestStatusWithByteCount;
