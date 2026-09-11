@@ -19,6 +19,8 @@ type
     procedure TestCompareWithDifferentCollectionData;
     procedure TestCompareWithEmptyAndPopulatedCollection;
     procedure TestAddedAndRemovedItemFields;
+    procedure TestNilCollectionProperty;
+    procedure TestIncomparableVariantProperties;
     procedure TestCompareCollectionsWithDifferentNames;
 
     procedure TestCompareCollectionsWithDifferentCharProps;
@@ -43,7 +45,7 @@ type
 implementation
 
 uses
-  StrUtils, BpObjectComparerCollectionClasses;
+  SysUtils, StrUtils, BpObjectComparerCollectionClasses;
 
 procedure TestTBpObjectComparer.TestCompareObjectsWithNoDifferences;
 var
@@ -192,6 +194,66 @@ begin
 
     Diffs := TbpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(2, Length(Diffs), 'Should find differences for count and the missing item');
+  finally
+    Obj1.Free;
+    Obj2.Free;
+  end;
+end;
+
+// a nil collection on one side used to be an access violation
+procedure TestTBpObjectComparer.TestNilCollectionProperty;
+var
+  Obj1, Obj2: TTestClassWithCollectionUnique;
+  Diffs: TPropDifferences;
+begin
+  Obj1 := TTestClassWithCollectionUnique.Create;
+  Obj2 := TTestClassWithCollectionUnique.Create;
+  try
+    Obj1.MyCollection.Add.ID := 1;
+    Obj2.MyCollection.Free;
+    Obj2.MyCollection := nil;
+
+    Diffs := TbpObjectComparer.CompareObjects(Obj1, Obj2);
+    CheckEquals(1, Length(Diffs), 'the vanished collection is one difference');
+    CheckEquals('MyCollection', Diffs[0].OldPropPath, 'property path');
+    CheckEquals('Exists in old', VarToStr(Diffs[0].OldValue), 'old value');
+    CheckEquals('Missing in new', VarToStr(Diffs[0].NewValue), 'new value');
+
+    Diffs := TbpObjectComparer.CompareObjects(Obj2, Obj1);
+    CheckEquals(1, Length(Diffs), 'and one the other way round');
+    CheckEquals('Missing in old', VarToStr(Diffs[0].OldValue), 'old value');
+    CheckEquals('Exists in new', VarToStr(Diffs[0].NewValue), 'new value');
+  finally
+    Obj1.Free;
+    Obj2.Free;
+  end;
+end;
+
+// a string against a number used to abort the whole comparison
+procedure TestTBpObjectComparer.TestIncomparableVariantProperties;
+var
+  Obj1, Obj2: TTestClassC;
+  Diffs: TPropDifferences;
+begin
+  Obj1 := TTestClassC.Create;
+  Obj2 := TTestClassC.Create;
+  try
+    Obj1.VariantProp := 'not a number';
+    Obj2.VariantProp := 42;
+    // the premise: this pair really is incomparable, or the test guards nothing
+    try
+      Check(Obj1.VariantProp <> Obj2.VariantProp);
+      Fail('expected EVariantError from the bare comparison');
+    except
+      on E: ETestFailure do
+        raise;
+      on E: EVariantError do
+        Check(True);
+    end;
+
+    Diffs := TbpObjectComparer.CompareObjects(Obj1, Obj2);
+    CheckEquals(1, Length(Diffs), 'the pair is reported, not raised');
+    CheckEquals('VariantProp', Diffs[0].OldPropPath, 'property path');
   finally
     Obj1.Free;
     Obj2.Free;

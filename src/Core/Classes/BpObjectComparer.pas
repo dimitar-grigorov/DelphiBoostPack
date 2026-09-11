@@ -103,6 +103,18 @@ begin
   Result := FIdx;
 end;
 
+// a pair the RTL cannot convert is a difference, not a reason to abort the
+// whole comparison with EVariantTypeCastError
+function VarsDiffer(const aOld, aNew: Variant): Boolean;
+begin
+  try
+    Result := aOld <> aNew;
+  except
+    on EVariantError do
+      Result := True;
+  end;
+end;
+
 class procedure TbpObjectComparer.AppendDifference(var aDiffs: TPropDifferences; const aDiff: IPropDifference);
 begin
   SetLength(aDiffs, Length(aDiffs) + 1);
@@ -125,6 +137,7 @@ var
   lvOldValue, lvNewValue: Variant;
   lvOldPropPath, lvNewPropPath: string;
   lvOldWide, lvNewWide: WideString;
+  lvOldObj, lvNewObj: TObject;
 begin
   SetLength(Result, 0);
   lvPropCount := GetPropList(aOld.ClassInfo, tkProperties, nil);
@@ -165,18 +178,25 @@ begin
           end;
         tkClass:
           begin
-            if GetObjectProp(aOld, lvPropInfo) is TCollection then
-            begin
-              CompareCollectionItems(TCollection(GetObjectProp(aOld, lvPropInfo)),
-                TCollection(GetObjectProp(aNew, lvPropInfo)), lvOldPropPath, lvNewPropPath, Result);
-            end;
-            Continue; // CompareCollectionItems already appended these, not AppendDifference
+            lvOldObj := GetObjectProp(aOld, lvPropInfo);
+            lvNewObj := GetObjectProp(aNew, lvPropInfo);
+            if (lvOldObj is TCollection) and (lvNewObj is TCollection) then
+              CompareCollectionItems(TCollection(lvOldObj), TCollection(lvNewObj),
+                lvOldPropPath, lvNewPropPath, Result)
+            // one side nil is a real difference, not a reason to dereference nil
+            else if (lvOldObj is TCollection) then
+              AppendDifference(Result, TPropDifference.Create(lvOldPropPath,
+                lvNewPropPath, 'Exists in old', 'Missing in new', aIdx))
+            else if (lvNewObj is TCollection) then
+              AppendDifference(Result, TPropDifference.Create(lvOldPropPath,
+                lvNewPropPath, 'Missing in old', 'Exists in new', aIdx));
+            Continue; // handled here, so no value comparison below
           end;
       else
         Continue; // unhandled property kinds are ignored, not diffed
       end;
 
-      if (lvOldValue <> lvNewValue) then
+      if VarsDiffer(lvOldValue, lvNewValue) then
         AppendDifference(Result, TPropDifference.Create(lvOldPropPath, lvNewPropPath, lvOldValue, lvNewValue, aIdx));
     end;
   finally
