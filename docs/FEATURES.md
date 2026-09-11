@@ -177,7 +177,7 @@ FTask := BpRunAsync(DoCrunch, HandleDone);   // HandleDone runs on the main thre
 
 Cancellation is cooperative, so no thread is killed. An exception in the work body is recorded in `ErrorClass` and `ErrorMessage` rather than crossing the thread boundary. `OnError` fires first, then `OnComplete` on every terminal state.
 
-**Lifetime rules.** The caller owns the task and frees it, from any thread. `Free` cancels, joins the worker and cleans up in any state, and from the moment it is entered no further event of that task starts: a completion still queued is dropped, and a handler already running on another thread finishes before `Free` returns. A handler may free its own task; the events still due for it are then skipped. In the default mode the events go through one hidden dispatcher window that the unit creates when it initialises, on the thread that loaded the module, so they run on the main thread whichever thread created the task, and that thread has to pump messages (a VCL application does). `Create(False)` runs the events on the worker right after `Work` returns, for services and console programs. An exception escaping `OnError` or `OnComplete` never crosses a thread: it goes to the hook set with `BpSetTaskExceptionHook`, else on the main thread to `Classes.ApplicationHandleException` (the VCL dialog), else to `SysUtils.ShowException`.
+**Lifetime.** The caller owns the task and frees it from any thread. `Free` cancels, joins and cleans up in any state, and from the moment it is entered no further event starts: a queued completion is dropped, a handler already running elsewhere finishes first, and a handler may free its own task. By default the events go through one hidden dispatcher window the unit creates at initialisation, so they run on the main thread whichever thread created the task, and that thread has to pump messages. `Create(False)` runs them on the worker right after `Work` returns, for services and console programs. An exception escaping a handler goes to `BpSetTaskExceptionHook`, else to `Classes.ApplicationHandleException`, else to `SysUtils.ShowException`.
 
 | Member | Notes |
 |--------|-------|
@@ -251,9 +251,12 @@ if not BpTryISO8601ToDateTime(lvJson.GetStr('created_at'), lvCreated) then ...
 lvText := BpDateTimeToISO8601(lvUtc);        // 2026-07-24T09:34:56.789Z
 lvLocal := BpDateTimeToISO8601Local(lvUtc);  // 2026-07-24T12:34:56.789+03:00
 lvStamp := BpDateTimeToUnix(lvUtc);          // Int64 seconds, also *MS
+lvWall := BpUtcToLocal(lvUtc);               // machine zone, or pass a zone
 ```
 
-Date-only values, `T`-or-space separators, fractional seconds and every zone form (`Z`, `+hh:mm`, `+hhmm`, `+hh`), parsed strictly: malformed input is rejected, not guessed at. Epoch conversion is `Int64` both ways, so pre-1970 and post-2038 round-trip cleanly.
+Date-only values, `T`-or-space separators, fractional seconds and every zone form (`Z`, `+hh:mm`, `+hhmm`, `+hh`), parsed strictly: malformed input is rejected, not guessed at. `:60` is taken only at 23:59 UTC, where a leap second can be, and stored as `23:59:59.999`. Epoch conversion is `Int64` both ways and honours the negative `TDateTime` convention, so 1850 round-trips as cleanly as 2040.
+
+Local time follows the date, not the day the code runs, so a July stamp formatted in January carries `+03:00`; every local call overloads on a `TTimeZoneInformation` for a zone other than the machine's. Where wall clock and UTC are not one-to-one, RFC 5545 3.3.5 decides: a time that occurs twice means the first, one in the skipped hour moves ahead by the gap.
 
 ### [TbpStringList](../src/Core/Classes/BpStringList.pas)
 

@@ -10,10 +10,14 @@ uses
 type
   TBpDateUtilsTests = class(TTestCase)
   private
+    FEet, FUsEast, FIndia: TTimeZoneInformation;
     procedure CallBadInput;
-    function LocalBias: Integer;
     procedure CheckEqualsI64(aExpected, aActual: Int64; const aMsg: string = '');
     procedure CheckSameInstant(const aText, aExpectedIso: string);
+    function Utc(aY, aMo, aD, aH, aMi, aSec: Word): TDateTime;
+    function OffsetSuffix(const aIso: string): string;
+  protected
+    procedure SetUp; override;
   published
     // parse: accepted forms
     procedure TestParseDateOnly;
@@ -24,15 +28,18 @@ type
     procedure TestParseFraction500;
     procedure TestParseFractionTruncate;
     procedure TestParseFractionOneDigit;
+    procedure TestParseLeapSecond;
     // parse: zones map to a single instant
     procedure TestZonesSameInstant;
     procedure TestParseOffsetToUtc;
+    procedure TestParseOffsetBefore1899;
     procedure TestParseNaiveVerbatim;
     // parse: strict rejects
     procedure TestRejectEmpty;
     procedure TestRejectBadMonth;
     procedure TestRejectBadDay;
     procedure TestRejectBadTime;
+    procedure TestRejectLeapSecondElsewhere;
     procedure TestRejectMissingDigits;
     procedure TestRejectTrailingJunk;
     procedure TestRejectGarbage;
@@ -41,11 +48,25 @@ type
     // format
     procedure TestFormatUtc;
     procedure TestFormatRoundTrip;
-    procedure TestLocalOffsetRoundTrip;
+    // local time in a fixed zone rule: same strings on every machine
+    procedure TestLocalOffsetFixedZones;
+    procedure TestLocalSpringForward;
+    procedure TestLocalFallBack;
+    procedure TestAmbiguousLocalIsFirstOccurrence;
+    procedure TestSkippedLocalMovesForward;
+    procedure TestLocalBefore1899;
+    procedure TestLocalBefore1601;
+    procedure TestLocalRoundTripAcrossYear;
+    // local time in the machine zone: only what holds in every zone
+    procedure TestMachineOffsetFollowsDate;
+    procedure TestMachineZoneIsExplicitZone;
+    procedure TestMachineLocalRoundTrip;
+    procedure TestMachineParseLocal;
     // unix epoch
     procedure TestUnixEpochZero;
     procedure TestUnixKnownValue;
     procedure TestUnixPre1970;
+    procedure TestUnixAnchorsBefore1900;
     procedure TestUnixPast2038;
     procedure TestUnixRoundTrip;
     procedure TestUnixMSKnown;
@@ -57,20 +78,35 @@ implementation
 
 const
   cMs = 1.0 / 86400000.0;   // one millisecond as a fraction of a day
+  cHour = 1.0 / 24.0;
 
-// mirrors the unit's private bias so the local-offset test can predict output
-function TBpDateUtilsTests.LocalBias: Integer;
-var
-  lvTZI: TTimeZoneInformation;
-  lvRet: DWORD;
+// a recurring Windows DST rule: month, week of month (5 = last), hour, Sunday
+function TransitionDate(aMonth, aWeek, aHour: Word): TSystemTime;
 begin
-  lvRet := GetTimeZoneInformation(lvTZI);
-  if lvRet = TIME_ZONE_ID_DAYLIGHT then
-    Result := lvTZI.Bias + lvTZI.DaylightBias
-  else if lvRet = DWORD($FFFFFFFF) then
-    Result := 0
-  else
-    Result := lvTZI.Bias + lvTZI.StandardBias;
+  FillChar(Result, SizeOf(Result), 0);
+  Result.wMonth := aMonth;
+  Result.wDay := aWeek;
+  Result.wHour := aHour;
+end;
+
+procedure TBpDateUtilsTests.SetUp;
+begin
+  inherited;
+  // EET: +02:00, +03:00 from March's last Sunday 03:00 to October's last 04:00
+  FillChar(FEet, SizeOf(FEet), 0);
+  FEet.Bias := -120;
+  FEet.DaylightBias := -60;
+  FEet.DaylightDate := TransitionDate(3, 5, 3);
+  FEet.StandardDate := TransitionDate(10, 5, 4);
+  // US Eastern: -05:00, -04:00 from March's second Sunday to November's first, 02:00
+  FillChar(FUsEast, SizeOf(FUsEast), 0);
+  FUsEast.Bias := 300;
+  FUsEast.DaylightBias := -60;
+  FUsEast.DaylightDate := TransitionDate(3, 2, 2);
+  FUsEast.StandardDate := TransitionDate(11, 1, 2);
+  // India: +05:30, no DST, half-hour offset
+  FillChar(FIndia, SizeOf(FIndia), 0);
+  FIndia.Bias := -330;
 end;
 
 procedure TBpDateUtilsTests.CheckEqualsI64(aExpected, aActual: Int64;
@@ -85,6 +121,17 @@ procedure TBpDateUtilsTests.CheckSameInstant(const aText, aExpectedIso: string);
 begin
   CheckEquals(aExpectedIso,
     BpDateTimeToISO8601(BpISO8601ToDateTime(aText, True)), aText);
+end;
+
+function TBpDateUtilsTests.Utc(aY, aMo, aD, aH, aMi, aSec: Word): TDateTime;
+begin
+  Result := EncodeDate(aY, aMo, aD) + EncodeTime(aH, aMi, aSec, 0);
+end;
+
+// the '+hh:mm' tail of a local ISO string
+function TBpDateUtilsTests.OffsetSuffix(const aIso: string): string;
+begin
+  Result := Copy(aIso, Length(aIso) - 5, 6);
 end;
 
 procedure TBpDateUtilsTests.TestParseDateOnly;
@@ -138,6 +185,20 @@ begin
     BpISO8601ToDateTime('2026-07-24T00:00:00.1'), cMs);
 end;
 
+procedure TBpDateUtilsTests.TestParseLeapSecond;
+begin
+  // 23:59:60 UTC is accepted and stays the last millisecond of its day
+  CheckSameInstant('2026-06-30T23:59:60Z', '2026-06-30T23:59:59.999Z');
+  CheckSameInstant('2026-12-31T23:59:60.5Z', '2026-12-31T23:59:59.999Z');
+  // the RFC 3339 example: the leap second seen from Pacific time
+  CheckSameInstant('1990-12-31T15:59:60-08:00', '1990-12-31T23:59:59.999Z');
+  // and from a half-hour zone
+  CheckSameInstant('2026-07-01T05:29:60+05:30', '2026-06-30T23:59:59.999Z');
+  // zone-less: taken as written
+  CheckEquals(EncodeDate(2026, 12, 31) + EncodeTime(23, 59, 59, 999),
+    BpISO8601ToDateTime('2026-12-31T23:59:60'), cMs);
+end;
+
 procedure TBpDateUtilsTests.TestZonesSameInstant;
 begin
   // every accepted zone syntax denotes the same 13:30:45 UTC instant
@@ -156,6 +217,20 @@ begin
   // +02:00 wall clock resolves to two hours earlier in UTC
   CheckEquals(EncodeDate(2026, 7, 24) + EncodeTime(13, 30, 45, 0),
     BpISO8601ToDateTime('2026-07-24T15:30:45+02:00', True), cMs);
+end;
+
+procedure TBpDateUtilsTests.TestParseOffsetBefore1899;
+begin
+  // the offset moves the clock the same way on a negative TDateTime
+  CheckSameInstant('1899-12-29T06:00:00+02:00', '1899-12-29T04:00:00.000Z');
+  CheckSameInstant('1899-12-29T06:00:00-02:00', '1899-12-29T08:00:00.000Z');
+  CheckSameInstant('1850-06-15T18:30:00-01:30', '1850-06-15T20:00:00.000Z');
+  // crossing 1899-12-30 midnight in both directions
+  CheckSameInstant('1899-12-30T01:00:00+02:00', '1899-12-29T23:00:00.000Z');
+  CheckSameInstant('1899-12-29T23:00:00-02:00', '1899-12-30T01:00:00.000Z');
+  // the RTL's own encoding of a negative date with a time of day
+  CheckEquals(EncodeDate(1899, 12, 29) - EncodeTime(4, 0, 0, 0),
+    BpISO8601ToDateTime('1899-12-29T06:00:00+02:00'), cMs);
 end;
 
 procedure TBpDateUtilsTests.TestParseNaiveVerbatim;
@@ -199,7 +274,19 @@ var
 begin
   CheckFalse(BpTryISO8601ToDateTime('2026-07-24T24:00:00', lvDt), 'hour 24');
   CheckFalse(BpTryISO8601ToDateTime('2026-07-24T15:60:00', lvDt), 'minute 60');
-  CheckFalse(BpTryISO8601ToDateTime('2026-07-24T15:30:60', lvDt), 'second 60');
+  CheckFalse(BpTryISO8601ToDateTime('2026-07-24T15:30:61', lvDt), 'second 61');
+end;
+
+procedure TBpDateUtilsTests.TestRejectLeapSecondElsewhere;
+var
+  lvDt: TDateTime;
+begin
+  // second 60 only where a leap second can be: 23:59 UTC
+  CheckFalse(BpTryISO8601ToDateTime('2026-07-24T15:30:60', lvDt), 'mid-day');
+  CheckFalse(BpTryISO8601ToDateTime('2026-06-30T23:59:60+02:00', lvDt),
+    '21:59 UTC');
+  CheckFalse(BpTryISO8601ToDateTime('2026-06-30T23:58:60Z', lvDt), '23:58');
+  CheckFalse(BpTryISO8601ToDateTime('2026-06-30T23:59:61Z', lvDt), 'second 61');
 end;
 
 procedure TBpDateUtilsTests.TestRejectMissingDigits;
@@ -273,41 +360,247 @@ begin
   CheckEquals(lvDt, BpISO8601ToDateTime(lvIso), cMs);
 end;
 
-// the one test that reads the machine zone: the instant must survive a
-// local-offset round-trip, and the emitted offset must match GetTimeZoneInformation
-procedure TBpDateUtilsTests.TestLocalOffsetRoundTrip;
+procedure TBpDateUtilsTests.TestLocalOffsetFixedZones;
+begin
+  // the same 13:00 UTC in January and July: the offset belongs to the date, not to today
+  CheckEquals('2026-01-15T15:00:00.000+02:00',
+    BpDateTimeToISO8601Local(Utc(2026, 1, 15, 13, 0, 0), True, FEet), 'EET jan');
+  CheckEquals('2026-07-24T16:00:00.000+03:00',
+    BpDateTimeToISO8601Local(Utc(2026, 7, 24, 13, 0, 0), True, FEet), 'EET jul');
+  CheckEquals('2026-01-15T08:00:00.000-05:00',
+    BpDateTimeToISO8601Local(Utc(2026, 1, 15, 13, 0, 0), True, FUsEast), 'US jan');
+  CheckEquals('2026-07-24T09:00:00.000-04:00',
+    BpDateTimeToISO8601Local(Utc(2026, 7, 24, 13, 0, 0), True, FUsEast), 'US jul');
+  CheckEquals('2026-07-24T18:30:00.000+05:30',
+    BpDateTimeToISO8601Local(Utc(2026, 7, 24, 13, 0, 0), True, FIndia), 'India');
+  // local input, the other direction of the same rule
+  CheckEquals('2026-01-15T15:00:00.000+02:00',
+    BpDateTimeToISO8601Local(Utc(2026, 1, 15, 15, 0, 0), False, FEet),
+    'EET jan local');
+  CheckEquals('2026-07-24T16:00:00.000+03:00',
+    BpDateTimeToISO8601Local(Utc(2026, 7, 24, 16, 0, 0), False, FEet),
+    'EET jul local');
+  CheckEquals(Utc(2026, 7, 24, 13, 0, 0),
+    BpLocalToUtc(Utc(2026, 7, 24, 16, 0, 0), FEet), cMs);
+  CheckEquals(Utc(2026, 1, 15, 13, 0, 0),
+    BpLocalToUtc(Utc(2026, 1, 15, 15, 0, 0), FEet), cMs);
+end;
+
+procedure TBpDateUtilsTests.TestLocalSpringForward;
+begin
+  // 2026-03-29 01:00 UTC: 03:00 EET becomes 04:00 EEST
+  CheckEquals('2026-03-29T02:59:59.000+02:00',
+    BpDateTimeToISO8601Local(Utc(2026, 3, 29, 0, 59, 59), True, FEet));
+  CheckEquals('2026-03-29T04:00:00.000+03:00',
+    BpDateTimeToISO8601Local(Utc(2026, 3, 29, 1, 0, 0), True, FEet));
+  // 2026-03-08 07:00 UTC: 02:00 EST becomes 03:00 EDT
+  CheckEquals('2026-03-08T01:59:59.000-05:00',
+    BpDateTimeToISO8601Local(Utc(2026, 3, 8, 6, 59, 59), True, FUsEast));
+  CheckEquals('2026-03-08T03:00:00.000-04:00',
+    BpDateTimeToISO8601Local(Utc(2026, 3, 8, 7, 0, 0), True, FUsEast));
+end;
+
+procedure TBpDateUtilsTests.TestLocalFallBack;
+begin
+  // 2026-10-25 01:00 UTC: 04:00 EEST becomes 03:00 EET
+  CheckEquals('2026-10-25T03:59:59.000+03:00',
+    BpDateTimeToISO8601Local(Utc(2026, 10, 25, 0, 59, 59), True, FEet));
+  CheckEquals('2026-10-25T03:00:00.000+02:00',
+    BpDateTimeToISO8601Local(Utc(2026, 10, 25, 1, 0, 0), True, FEet));
+  // 2026-11-01 06:00 UTC: 02:00 EDT becomes 01:00 EST
+  CheckEquals('2026-11-01T01:59:59.000-04:00',
+    BpDateTimeToISO8601Local(Utc(2026, 11, 1, 5, 59, 59), True, FUsEast));
+  CheckEquals('2026-11-01T01:00:00.000-05:00',
+    BpDateTimeToISO8601Local(Utc(2026, 11, 1, 6, 0, 0), True, FUsEast));
+end;
+
+procedure TBpDateUtilsTests.TestAmbiguousLocalIsFirstOccurrence;
+var
+  lvFirst, lvSecond: TDateTime;
+begin
+  // 03:30 on 2026-10-25 happens twice in EET: 00:30Z (EEST) and 01:30Z (EET)
+  lvFirst := Utc(2026, 10, 25, 0, 30, 0);
+  lvSecond := Utc(2026, 10, 25, 1, 30, 0);
+  CheckEquals(Utc(2026, 10, 25, 3, 30, 0), BpUtcToLocal(lvFirst, FEet), cMs,
+    'first shows 03:30');
+  CheckEquals(Utc(2026, 10, 25, 3, 30, 0), BpUtcToLocal(lvSecond, FEet), cMs,
+    'second shows 03:30');
+  // the wall clock alone resolves to the first occurrence
+  CheckEquals(lvFirst, BpLocalToUtc(Utc(2026, 10, 25, 3, 30, 0), FEet), cMs,
+    'first occurrence');
+  CheckEquals('2026-10-25T03:30:00.000+03:00',
+    BpDateTimeToISO8601Local(Utc(2026, 10, 25, 3, 30, 0), False, FEet));
+  CheckEquals('2026-10-25T00:30:00.000Z',
+    BpDateTimeToISO8601(BpLocalToUtc(Utc(2026, 10, 25, 3, 30, 0), FEet)));
+  // so the second occurrence does not survive a trip through the wall clock
+  CheckEquals(lvFirst, BpLocalToUtc(BpUtcToLocal(lvSecond, FEet), FEet), cMs,
+    'second collapses to first');
+  // US: 01:30 on 2026-11-01 is 05:30Z (EDT) first, 06:30Z (EST) second
+  CheckEquals(Utc(2026, 11, 1, 5, 30, 0),
+    BpLocalToUtc(Utc(2026, 11, 1, 1, 30, 0), FUsEast), cMs, 'US first');
+  CheckEquals('2026-11-01T01:30:00.000-04:00',
+    BpDateTimeToISO8601Local(Utc(2026, 11, 1, 1, 30, 0), False, FUsEast));
+end;
+
+procedure TBpDateUtilsTests.TestSkippedLocalMovesForward;
+begin
+  // 03:30 on 2026-03-29 never happens in EET: the offset before the gap gives 01:30Z
+  CheckEquals(Utc(2026, 3, 29, 1, 30, 0),
+    BpLocalToUtc(Utc(2026, 3, 29, 3, 30, 0), FEet), cMs, 'EET gap');
+  CheckEquals('2026-03-29T04:30:00.000+03:00',
+    BpDateTimeToISO8601Local(Utc(2026, 3, 29, 3, 30, 0), False, FEet));
+  CheckEquals('2026-03-29T01:30:00.000Z',
+    BpDateTimeToISO8601(BpLocalToUtc(Utc(2026, 3, 29, 3, 30, 0), FEet)));
+  // US: 02:30 on 2026-03-08 is 07:30Z, shown as 03:30 EDT
+  CheckEquals(Utc(2026, 3, 8, 7, 30, 0),
+    BpLocalToUtc(Utc(2026, 3, 8, 2, 30, 0), FUsEast), cMs, 'US gap');
+  CheckEquals('2026-03-08T03:30:00.000-04:00',
+    BpDateTimeToISO8601Local(Utc(2026, 3, 8, 2, 30, 0), False, FUsEast));
+  // the edges of the gap are ordinary times
+  CheckEquals(Utc(2026, 3, 29, 0, 59, 59),
+    BpLocalToUtc(Utc(2026, 3, 29, 2, 59, 59), FEet), cMs, 'before gap');
+  CheckEquals(Utc(2026, 3, 29, 1, 0, 0),
+    BpLocalToUtc(Utc(2026, 3, 29, 4, 0, 0), FEet), cMs, 'after gap');
+end;
+
+procedure TBpDateUtilsTests.TestLocalBefore1899;
 var
   lvUtc: TDateTime;
-  lvIso, lvSign, lvSuffix: string;
-  lvOffset, lvAbs: Integer;
 begin
-  lvUtc := EncodeDate(2026, 7, 24) + EncodeTime(13, 0, 0, 0);
-  lvIso := BpDateTimeToISO8601Local(lvUtc, True);
+  // negative TDateTime both ways; the zone rule applies to 1850 too, so June is summer
+  lvUtc := BpISO8601ToDateTime('1850-06-15T18:30:00Z');
+  CheckEquals('1850-06-15T21:30:00.000+03:00',
+    BpDateTimeToISO8601Local(lvUtc, True, FEet), 'EET 1850');
+  CheckEquals('1850-06-15T14:30:00.000-04:00',
+    BpDateTimeToISO8601Local(lvUtc, True, FUsEast), 'US 1850');
+  CheckEquals(lvUtc, BpLocalToUtc(BpUtcToLocal(lvUtc, FEet), FEet), cMs,
+    'round trip 1850');
+  // the day 1899-12-29 with a time, and the offset across 1899-12-30 midnight
+  CheckEquals('1899-12-29T08:00:00.000+02:00',
+    BpDateTimeToISO8601Local(BpISO8601ToDateTime('1899-12-29T06:00:00Z'), True,
+    FEet), '1899-12-29');
+  CheckEquals('1899-12-30T01:00:00.000+02:00',
+    BpDateTimeToISO8601Local(BpISO8601ToDateTime('1899-12-29T23:00:00Z'), True,
+    FEet), 'across 1899-12-30');
+  CheckEquals('1899-12-29T23:00:00.000Z',
+    BpDateTimeToISO8601(BpLocalToUtc(EncodeDate(1899, 12, 30) +
+    EncodeTime(1, 0, 0, 0), FEet)), 'back across 1899-12-30');
+end;
 
-  lvOffset := -LocalBias;   // minutes east of UTC
-  if lvOffset < 0 then
+procedure TBpDateUtilsTests.TestLocalBefore1601;
+begin
+  // Windows has no answer before 1601; standard time applies, no DST
+  CheckEquals('1500-06-15T14:00:00.000+02:00',
+    BpDateTimeToISO8601Local(BpISO8601ToDateTime('1500-06-15T12:00:00Z'), True,
+    FEet));
+  CheckEquals('1500-06-15T12:00:00.000Z',
+    BpDateTimeToISO8601(BpLocalToUtc(BpISO8601ToDateTime('1500-06-15T14:00:00'),
+    FEet)));
+end;
+
+procedure TBpDateUtilsTests.TestLocalRoundTripAcrossYear;
+var
+  i: Integer;
+  lvUtc, lvBack: TDateTime;
+  lvSecondOccurrence: Boolean;
+begin
+  // every hour of 2026 in EET survives the wall clock, bar the repeated hour
+  for i := 0 to 365 * 24 - 1 do
   begin
-    lvSign := '-';
-    lvAbs := -lvOffset;
-  end
-  else
-  begin
-    lvSign := '+';
-    lvAbs := lvOffset;
+    // one product per step, so no drift accumulates over the year
+    lvUtc := Utc(2026, 1, 1, 0, 30, 0) + i * cHour;
+    lvBack := BpLocalToUtc(BpUtcToLocal(lvUtc, FEet), FEet);
+    lvSecondOccurrence := Abs(lvUtc - Utc(2026, 10, 25, 1, 30, 0)) < cMs;
+    if lvSecondOccurrence then
+      CheckEquals(lvUtc - cHour, lvBack, cMs, 'second occurrence')
+    else
+      CheckEquals(lvUtc, lvBack, cMs, BpDateTimeToISO8601(lvUtc));
   end;
-  lvSuffix := Format('%s%.2d:%.2d', [lvSign, lvAbs div 60, lvAbs mod 60]);
-  CheckEquals(lvSuffix,
-    Copy(lvIso, Length(lvIso) - Length(lvSuffix) + 1, Length(lvSuffix)),
-    'offset suffix');
+end;
 
-  // parsing the local form back to UTC returns the original instant
-  CheckEquals(lvUtc, BpISO8601ToDateTime(lvIso, True), cMs);
+procedure TBpDateUtilsTests.TestMachineOffsetFollowsDate;
+var
+  lvZone: TTimeZoneInformation;
+  lvJan, lvJul: string;
+  lvObservesDst: Boolean;
+begin
+  // whether the machine zone has a DST rule is a fact, not the code under test
+  lvObservesDst := (GetTimeZoneInformation(lvZone) <> DWORD($FFFFFFFF)) and
+    (lvZone.StandardDate.wMonth <> 0) and
+    (lvZone.DaylightBias <> lvZone.StandardBias);
+  lvJan := BpDateTimeToISO8601Local(Utc(2026, 1, 15, 12, 0, 0), True);
+  lvJul := BpDateTimeToISO8601Local(Utc(2026, 7, 15, 12, 0, 0), True);
+  if lvObservesDst then
+    CheckNotEquals(OffsetSuffix(lvJan), OffsetSuffix(lvJul),
+      'a DST zone gives January and July different offsets')
+  else
+    CheckEquals(OffsetSuffix(lvJan), OffsetSuffix(lvJul),
+      'a fixed zone gives one offset all year');
+  // the wall clock and its offset agree on the instant
+  CheckEquals('2026-01-15T12:00:00.000Z',
+    BpDateTimeToISO8601(BpISO8601ToDateTime(lvJan)), lvJan);
+  CheckEquals('2026-07-15T12:00:00.000Z',
+    BpDateTimeToISO8601(BpISO8601ToDateTime(lvJul)), lvJul);
+end;
+
+procedure TBpDateUtilsTests.TestMachineZoneIsExplicitZone;
+var
+  lvZone: TTimeZoneInformation;
+  lvUtc: TDateTime;
+  i: Integer;
+begin
+  // the machine-zone entry points are the explicit ones fed GetTimeZoneInformation
+  if GetTimeZoneInformation(lvZone) = DWORD($FFFFFFFF) then
+    FillChar(lvZone, SizeOf(lvZone), 0);
+  lvUtc := Utc(2026, 1, 1, 12, 0, 0);
+  for i := 1 to 12 do
+  begin
+    CheckEquals(BpDateTimeToISO8601Local(lvUtc, True, lvZone),
+      BpDateTimeToISO8601Local(lvUtc, True), 'format');
+    CheckEquals(BpUtcToLocal(lvUtc, lvZone), BpUtcToLocal(lvUtc), cMs, 'to local');
+    CheckEquals(BpLocalToUtc(lvUtc, lvZone), BpLocalToUtc(lvUtc), cMs, 'to utc');
+    lvUtc := lvUtc + 30;
+  end;
+end;
+
+procedure TBpDateUtilsTests.TestMachineLocalRoundTrip;
+var
+  i: Integer;
+  lvUtc, lvLocal, lvBack: TDateTime;
+begin
+  // in any zone: the parse back is never later and shows the same wall clock,
+  // and is the instant itself outside the repeated hour
+  for i := 0 to 365 * 24 - 1 do
+  begin
+    lvUtc := Utc(2026, 1, 1, 0, 30, 0) + i * cHour;
+    lvLocal := BpUtcToLocal(lvUtc);
+    lvBack := BpLocalToUtc(lvLocal);
+    CheckTrue(lvBack <= lvUtc + cMs, 'never later: ' + BpDateTimeToISO8601(lvUtc));
+    CheckEquals(lvLocal, BpUtcToLocal(lvBack), cMs, 'same wall clock');
+    // the wall clock with its offset always names the instant itself
+    CheckEquals(BpDateTimeToISO8601(lvUtc),
+      BpDateTimeToISO8601(BpISO8601ToDateTime(BpDateTimeToISO8601Local(lvUtc))),
+      'local text');
+  end;
+end;
+
+procedure TBpDateUtilsTests.TestMachineParseLocal;
+var
+  lvLocal: TDateTime;
+begin
+  // aReturnUTC = False yields the machine wall clock, which formats back to the UTC
+  lvLocal := BpISO8601ToDateTime('2026-01-15T13:00:00Z', False);
+  CheckEquals('2026-01-15T13:00:00.000Z', BpDateTimeToISO8601(lvLocal, False));
+  CheckEquals(BpUtcToLocal(Utc(2026, 1, 15, 13, 0, 0)), lvLocal, cMs);
+  lvLocal := BpISO8601ToDateTime('2026-07-24T15:30:45.250+02:00', False);
+  CheckEquals('2026-07-24T13:30:45.250Z', BpDateTimeToISO8601(lvLocal, False));
 end;
 
 procedure TBpDateUtilsTests.TestUnixEpochZero;
 begin
   CheckEqualsI64(0, BpDateTimeToUnix(EncodeDate(1970, 1, 1)), 'epoch to unix');
   CheckEquals(EncodeDate(1970, 1, 1), BpUnixToDateTime(0), cMs);
+  CheckEquals('1970-01-01T00:00:00.000Z', BpDateTimeToISO8601(BpUnixToDateTime(0)));
 end;
 
 procedure TBpDateUtilsTests.TestUnixKnownValue;
@@ -331,6 +624,43 @@ begin
   CheckEquals(EncodeDate(1960, 1, 1), BpUnixToDateTime(-315619200), cMs);
 end;
 
+procedure TBpDateUtilsTests.TestUnixAnchorsBefore1900;
+begin
+  // fixed instants below 1899-12-30; the numbers come from the calendar, not the code
+  CheckEquals('1900-01-01T00:00:00.000Z',
+    BpDateTimeToISO8601(BpUnixToDateTime(-2208988800)), '1900');
+  CheckEquals('1899-12-30T00:00:00.000Z',
+    BpDateTimeToISO8601(BpUnixToDateTime(-2209161600)), 'TDateTime zero');
+  CheckEquals('1899-12-29T12:00:00.000Z',
+    BpDateTimeToISO8601(BpUnixToDateTime(-2209204800)), 'day before, noon');
+  CheckEquals('1899-12-29T18:00:00.000Z',
+    BpDateTimeToISO8601(BpUnixToDateTime(-2209183200)), 'day before, 18:00');
+  CheckEquals('1850-06-15T18:30:00.000Z',
+    BpDateTimeToISO8601(BpUnixToDateTime(-3772503000)), '1850 with time');
+  CheckEquals('1800-01-01T00:00:00.000Z',
+    BpDateTimeToISO8601(BpUnixToDateTime(-5364662400)), '1800');
+  CheckEqualsI64(-2208988800, BpDateTimeToUnix(EncodeDate(1900, 1, 1)), '1900 back');
+  CheckEqualsI64(-2209161600, BpDateTimeToUnix(0), 'zero back');
+  CheckEqualsI64(-2209204800,
+    BpDateTimeToUnix(BpISO8601ToDateTime('1899-12-29T12:00:00Z')), 'noon back');
+  CheckEqualsI64(-3772503000,
+    BpDateTimeToUnix(BpISO8601ToDateTime('1850-06-15T18:30:00Z')), '1850 back');
+  CheckEqualsI64(-3772503000,
+    BpDateTimeToUnix(EncodeDate(1850, 6, 15) - EncodeTime(18, 30, 0, 0)),
+    '1850 back from the RTL encoding');
+  // milliseconds, same anchors plus a fraction
+  CheckEquals('1850-06-15T18:30:00.250Z',
+    BpDateTimeToISO8601(BpUnixMSToDateTime(-3772502999750)), '1850 ms');
+  CheckEqualsI64(-3772502999750,
+    BpDateTimeToUnixMS(BpISO8601ToDateTime('1850-06-15T18:30:00.250Z')),
+    '1850 ms back');
+  CheckEquals('1899-12-29T23:59:59.999Z',
+    BpDateTimeToISO8601(BpUnixMSToDateTime(-2209161600001)), 'ms before zero');
+  CheckEqualsI64(-2209161600001,
+    BpDateTimeToUnixMS(BpISO8601ToDateTime('1899-12-29T23:59:59.999Z')),
+    'ms before zero back');
+end;
+
 procedure TBpDateUtilsTests.TestUnixPast2038;
 var
   lvUnix: Int64;
@@ -347,12 +677,12 @@ var
   i: Integer;
   lvSecs: Int64;
 begin
-  lvSecs := -2000000000;   // crosses the epoch and 2038
-  for i := 0 to 20 do
+  lvSecs := -6000000000;   // from 1779, past 1899-12-30, the epoch and 2038
+  for i := 0 to 24 do
   begin
     CheckEqualsI64(lvSecs, BpDateTimeToUnix(BpUnixToDateTime(lvSecs)),
       Format('roundtrip %d', [lvSecs]));
-    Inc(lvSecs, 200000000);
+    Inc(lvSecs, 350000001);
   end;
 end;
 
@@ -380,6 +710,10 @@ begin
   begin
     lvDt := EncodeDate(2026, 7, 24) + EncodeTime(12, 34, 56, Word(i));
     CheckEqualsI64(i, BpDateTimeToUnixMS(lvDt) mod 1000, Format('ms %d', [i]));
+    // and below 1899-12-30, where the fraction counts backwards
+    lvDt := EncodeDate(1850, 6, 15) - EncodeTime(12, 34, 56, Word(i));
+    CheckEqualsI64(i, (BpDateTimeToUnixMS(lvDt) mod 1000 + 1000) mod 1000,
+      Format('1850 ms %d', [i]));
   end;
 end;
 
@@ -388,12 +722,12 @@ var
   i: Integer;
   lvMs: Int64;
 begin
-  lvMs := -2000000000000;
-  for i := 0 to 20 do
+  lvMs := -6000000000000;   // from 1779, past 1899-12-30, the epoch and 2038
+  for i := 0 to 24 do
   begin
     CheckEqualsI64(lvMs, BpDateTimeToUnixMS(BpUnixMSToDateTime(lvMs)),
       Format('ms roundtrip %d', [lvMs]));
-    Inc(lvMs, 200000000000);
+    Inc(lvMs, 350000000123);
   end;
 end;
 
