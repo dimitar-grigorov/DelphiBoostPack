@@ -103,8 +103,7 @@ begin
   Result := FIdx;
 end;
 
-// a pair the RTL cannot convert is a difference, not a reason to abort the
-// whole comparison with EVariantTypeCastError
+// a pair the RTL cannot convert is a difference, not EVariantTypeCastError
 function VarsDiffer(const aOld, aNew: Variant): Boolean;
 begin
   try
@@ -190,7 +189,7 @@ begin
             else if (lvNewObj is TCollection) then
               AppendDifference(Result, TPropDifference.Create(lvOldPropPath,
                 lvNewPropPath, 'Missing in old', 'Exists in new', aIdx));
-            Continue; // handled here, so no value comparison below
+            Continue; // any difference here was appended above, not below
           end;
       else
         Continue; // unhandled property kinds are ignored, not diffed

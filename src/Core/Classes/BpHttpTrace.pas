@@ -72,8 +72,7 @@ class function TbpHttpTrace.Attach(aClient: TbpHttpClient;
 var
   lvSession: HINTERNET;
 begin
-  // opening the session can raise, and that must not arm the sink of a client
-  // that is already tracing
+  // opening the session can raise, which must not disturb a live trace
   lvSession := aClient.SessionHandle;
   gvTraceProc := aProc;
   // the sentinel is -1 widened to a pointer, not a callback address

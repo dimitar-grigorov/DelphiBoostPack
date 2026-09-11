@@ -131,7 +131,6 @@ var
 begin
   lvKey := 'secret';
   try
-    // a raise inside the constructor frees the instance, so nothing leaks here
     TbpHMACSHA256.Create(PAnsiChar(lvKey)^, -1).Free;
     Fail('expected ERangeError for a negative key size');
   except

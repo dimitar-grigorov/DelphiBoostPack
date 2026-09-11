@@ -158,11 +158,10 @@ var
   pd: PCardinalTriple;
   pb: PByteArray;
 begin
-  // seed with the byte length: hashword counts words, hashlittle bytes
-  // clamped first, or the two branches below disagree and the unaligned one
-  // reads a byte that was never asked for
+  // clamped first, or the two branches disagree and the unaligned one reads
   if Len < 0 then
     Len := 0;
+  // seed with the byte length: hashword counts words, hashlittle bytes
   a := Cardinal($DEADBEEF) + Cardinal(Len) + Cardinal(InitVal);
   b := a;
   c := a;
