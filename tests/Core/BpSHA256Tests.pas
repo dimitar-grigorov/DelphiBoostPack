@@ -182,7 +182,8 @@ begin
   SetLength(lvData, 200 * 1024);
   for i := 1 to Length(lvData) do
     lvData[i] := AnsiChar(Random(256));
-  lvFileName := GetEnvironmentVariable('TEMP') + '\BpSHA256Test.tmp';
+  lvFileName := Format('%s\BpSHA256Test_%d.tmp',
+    [GetEnvironmentVariable('TEMP'), GetCurrentProcessId]);
   lvStream := TFileStream.Create(lvFileName, fmCreate);
   try
     lvStream.WriteBuffer(PAnsiChar(lvData)^, Length(lvData));
@@ -193,6 +194,26 @@ begin
     CheckEquals(TbpSHA256.HashStrHex(lvData), TbpSHA256.HashFileHex(lvFileName));
   finally
     DeleteFile(lvFileName);
+  end;
+
+  // an empty file must reach Final, not trip the short-read guard
+  lvStream := TFileStream.Create(lvFileName, fmCreate);
+  lvStream.Free;
+  try
+    CheckEquals('e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855', TbpSHA256.HashFileHex(lvFileName), 'empty file');
+  finally
+    DeleteFile(lvFileName);
+  end;
+
+  // a missing file must raise, not hash as if it were empty
+  try
+    TbpSHA256.HashFileHex(lvFileName);
+    Fail('expected an open error for a missing file');
+  except
+    on E: ETestFailure do
+      raise;
+    on E: EFOpenError do
+      Check(True);
   end;
 end;
 

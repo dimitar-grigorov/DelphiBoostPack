@@ -8,7 +8,7 @@ unit BpHashes;
 //   src\Core\Classes\BpMD5.pas
 //   src\Core\Classes\BpHMACSHA256.pas
 //   src\Core\Classes\BpPasswordHash.pas
-// Source commit 7cc36a6, generated 2026-09-12 by tools\Amalgamate.ps1.
+// Source commit c599bbe, generated 2026-09-12 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
 // One bundle per project: two that share a helper declare it twice.
@@ -708,17 +708,27 @@ var
   lvHasher: TbpSHA256;
   lvChunk: TBytes;
   lvRead: Integer;
+  lvTotal, lvSize: Int64;
 begin
   lvStream := TFileStream.Create(aFileName, fmOpenRead or fmShareDenyWrite);
   try
+    lvSize := lvStream.Size;
     lvHasher := TbpSHA256.Create;
     try
       SetLength(lvChunk, gcShaFileChunkSize);
+      lvTotal := 0;
       repeat
         lvRead := lvStream.Read(lvChunk[0], gcShaFileChunkSize);
         if lvRead > 0 then
+        begin
           lvHasher.Update(lvChunk[0], lvRead);
+          Inc(lvTotal, lvRead);
+        end;
       until lvRead <= 0;
+      // a short read is an I/O error, not the end of the file
+      if lvTotal <> lvSize then
+        raise EReadError.CreateFmt('SHA-256: read %d of %d bytes from %s',
+          [lvTotal, lvSize, aFileName]);
       lvHasher.Final(Result);
     finally
       lvHasher.Free;
@@ -966,17 +976,27 @@ var
   lvHasher: TbpMD5;
   lvChunk: TBytes;
   lvRead: Integer;
+  lvTotal, lvSize: Int64;
 begin
   lvStream := TFileStream.Create(aFileName, fmOpenRead or fmShareDenyWrite);
   try
+    lvSize := lvStream.Size;
     lvHasher := TbpMD5.Create;
     try
       SetLength(lvChunk, gcMd5FileChunkSize);
+      lvTotal := 0;
       repeat
         lvRead := lvStream.Read(lvChunk[0], gcMd5FileChunkSize);
         if lvRead > 0 then
+        begin
           lvHasher.Update(lvChunk[0], lvRead);
+          Inc(lvTotal, lvRead);
+        end;
       until lvRead <= 0;
+      // a short read is an I/O error, not the end of the file
+      if lvTotal <> lvSize then
+        raise EReadError.CreateFmt('MD5: read %d of %d bytes from %s',
+          [lvTotal, lvSize, aFileName]);
       lvHasher.Final(Result);
     finally
       lvHasher.Free;
