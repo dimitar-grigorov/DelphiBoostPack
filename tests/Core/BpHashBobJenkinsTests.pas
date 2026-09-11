@@ -24,6 +24,7 @@ type
     procedure TestUpdateBytesWholeArray;
     procedure TestUpdateBytesExplicitZero;
     procedure TestUpdateBytesLengthPastEndRaises;
+    procedure TestNegativeLengthHashesNothing;
     procedure TestChainedUpdate;
     procedure TestTailBytesAffectHash;
   end;
@@ -199,6 +200,28 @@ begin
   CheckEquals(-1323641691,
     TbpHashBobJenkins.GetHashValue(lvBuffer[lvStart], Length(lcSample)),
     'Unaligned hash must match the aligned reference value');
+end;
+
+// the aligned and unaligned branches used to disagree on a negative length,
+// and the unaligned one read a byte it was never given
+procedure TBpHashBobJenkinsTests.TestNegativeLengthHashesNothing;
+var
+  lvBuffer: array[0..31] of Byte;
+  lvStart: Cardinal;
+  lvEmpty: Integer;
+begin
+  FillChar(lvBuffer, SizeOf(lvBuffer), $AB);
+  lvEmpty := TbpHashBobJenkins.GetHashValue(lvBuffer[0], 0);
+  CheckEquals(lvEmpty, TbpHashBobJenkins.GetHashValue(lvBuffer[0], -1),
+    'aligned, negative length');
+  CheckEquals(lvEmpty, TbpHashBobJenkins.GetHashValue(lvBuffer[0], -1000),
+    'aligned, far negative length');
+
+  lvStart := 1;
+  while (Cardinal(@lvBuffer[lvStart]) and 3) = 0 do
+    Inc(lvStart);
+  CheckEquals(lvEmpty, TbpHashBobJenkins.GetHashValue(lvBuffer[lvStart], -1),
+    'unaligned, negative length');
 end;
 
 procedure TBpHashBobJenkinsTests.TestChainedUpdate;

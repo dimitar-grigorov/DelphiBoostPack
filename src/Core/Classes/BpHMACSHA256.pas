@@ -42,6 +42,9 @@ var
   lvKeyBytes: PByte;
   lvKeyLen, i: Integer;
 begin
+  // a negative size would leave the pads at $36/$5C, a MAC with no key in it
+  if aKeySize < 0 then
+    raise ERangeError.CreateFmt('SetKey: aKeySize %d is negative', [aKeySize]);
   lvKeyBytes := @aKey;
   lvKeyLen := aKeySize;
   // a key longer than the block is replaced by its hash (RFC 2104)
