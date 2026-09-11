@@ -28,6 +28,8 @@ type
     procedure TestBuildHeadersOddValues;
     procedure TestVerbsHonourPreCancelledToken;
     procedure TestSameOrigin;
+    procedure TestKeepsCredentials;
+    procedure TestReasonPhrase;
     procedure TestRedirectMethod;
     procedure TestRedirectTarget;
     procedure TestStripCredentials;
@@ -322,6 +324,37 @@ begin
   // an http to https upgrade is still a new origin, as WHATWG fetch has it
   CheckFalse(FClient.SameOrigin('http://a.com/x', 'https://a.com/x'), 'other scheme');
   CheckFalse(FClient.SameOrigin('https://a.com/x', 'not a url'), 'unparsable');
+end;
+
+procedure TBpHttpClientTests.TestKeepsCredentials;
+begin
+  CheckTrue(FClient.KeepsCredentials('https://a.com/x', 'https://a.com/y'),
+    'same origin');
+  // requests makes the same exception, so a plain to secure hop keeps the auth
+  CheckTrue(FClient.KeepsCredentials('http://a.com/x', 'https://a.com/x'),
+    'http to https on the same host');
+  CheckTrue(FClient.KeepsCredentials('http://a.com:80/x', 'https://a.com:443/x'),
+    'the same upgrade spelled out');
+  CheckFalse(FClient.KeepsCredentials('https://a.com/x', 'http://a.com/x'),
+    'a downgrade to http never keeps them');
+  CheckFalse(FClient.KeepsCredentials('http://a.com/x', 'https://b.com/x'),
+    'another host');
+  CheckFalse(FClient.KeepsCredentials('http://a.com:8080/x', 'https://a.com/x'),
+    'a non-default source port is not the upgrade case');
+  CheckFalse(FClient.KeepsCredentials('http://a.com/x', 'not a url'),
+    'unparsable');
+end;
+
+procedure TBpHttpClientTests.TestReasonPhrase;
+begin
+  CheckEquals('Not Found',
+    BpHttpReasonPhrase('HTTP/1.1 404 Not Found'#13#10'Server: x'#13#10), 'plain');
+  CheckEquals('OK', BpHttpReasonPhrase('HTTP/1.0 200 OK'#13#10), 'http 1.0');
+  CheckEquals('Moved Permanently',
+    BpHttpReasonPhrase('HTTP/1.1 301 Moved Permanently'), 'no trailing CRLF');
+  CheckEquals('', BpHttpReasonPhrase('HTTP/1.1 204'#13#10), 'server sent none');
+  CheckEquals('', BpHttpReasonPhrase('Server: x'#13#10), 'no status line');
+  CheckEquals('', BpHttpReasonPhrase(''), 'empty block');
 end;
 
 procedure TBpHttpClientTests.TestRedirectMethod;

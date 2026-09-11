@@ -5,7 +5,7 @@ unit BpHttpClientStandalone;
 //   src\Core\Units\BpCompat.pas
 //   src\Core\Units\BpBase64.pas
 //   src\Core\Classes\BpHttpClient.pas
-// Source commit a5c291d, generated 2026-09-12 by tools\Amalgamate.ps1.
+// Source commit 1a90620, generated 2026-09-12 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
 // One bundle per project: two that share a helper declare it twice.
@@ -70,7 +70,8 @@ function Base64DecodeUtf8(const aBase64: string): WideString;
 
 // HTTP/HTTPS over WinInet for Delphi 7/2007+. TLS comes from Schannel, so no
 // OpenSSL DLLs to ship. Cancellable sync verbs, streaming downloads with
-// progress, and an async download task. See the README for examples.
+// progress, and an async download task. Not from a Windows service: WinInet
+// is unsupported there, that is what WinHTTP is for. README has examples.
 
 type
   TbpHttpMethod = (hmGet, hmPost, hmPut, hmDelete, hmPatch, hmHead, hmOptions);
@@ -228,6 +229,8 @@ type
       aWithCredentials: Boolean = True): string;
     // scheme, host and port all equal, the WHATWG fetch definition
     function SameOrigin(const aUrl, aOther: string): Boolean;
+    // True while a redirect may still carry Authorization, Cookie and the rest
+    function KeepsCredentials(const aFrom, aTo: string): Boolean;
     class function MethodToString(aMethod: TbpHttpMethod): string;
 
     // the WinInet session, opened on demand
@@ -257,8 +260,7 @@ type
   TbpHttpDownloadErrorEvent = procedure(aSender: TObject;
     const aErrorMessage: string) of object;
 
-  // one download on an owned worker thread, C# Task style, one-shot. Events fire
-  // on the creating thread, or on the worker thread with Create(False).
+  // one download on an owned worker thread, C# Task style, one-shot
   TbpHttpDownloadTask = class
   private
     FClient: TbpHttpClient;        // owned; configure via Client before Start
@@ -330,8 +332,7 @@ type
     property OnError: TbpHttpDownloadErrorEvent read FOnError write FOnError;
   end;
 
-// hot tasks: create, wire and start in one call; the caller frees the task
-// two names rather than an overload: old compilers reject nil events there
+// create, wire and start; caller frees. Two names: nil events break an overload
 function BpDownloadAsync(const aUrl, aFileName: string;
   aOnProgress: TbpHttpProgressEvent = nil;
   aOnComplete: TbpHttpDownloadCompleteEvent = nil;
@@ -350,6 +351,8 @@ function BpHttpHeaderValue(const aHeaders, aName: string): string;
 function BpHttpContentLength(const aHeaders: string): Int64;
 // False for the replies that carry no body, whatever Content-Length says
 function BpHttpResponseHasBody(const aMethod: string; aStatus: Integer): Boolean;
+// reason phrase off the status line, '' when the server sent none
+function BpHttpReasonPhrase(const aHeaders: string): string;
 // absolute redirect target, '' when the reply is not a redirect or has no Location
 function BpHttpRedirectTarget(const aBaseUrl, aHeaders: string; aStatus: Integer): string;
 // the method the next hop uses, per the WHATWG fetch redirect rules
@@ -652,7 +655,6 @@ const
   gcWmTaskProgress = WM_APP + 1;
   gcWmTaskDone = WM_APP + 2;
 
-// appends a header line with a CRLF separator between lines
 procedure AppendHeaderLine(var aHeaders: string; const aLine: string);
 begin
   if aLine = '' then
@@ -662,35 +664,89 @@ begin
   aHeaders := aHeaders + aLine;
 end;
 
-// True when a raw CRLF header block carries a line with this name
-function HeaderBlockHasName(const aHeaders, aName: string): Boolean;
+// walks a CRLF header block in place; aPos starts at 1, aName '' on a bad line
+function NextHeaderLine(const aHeaders: string; var aPos: Integer;
+  out aLine, aName: string): Boolean;
 var
-  lvLines: TStringList;
-  lvLine, lvWanted: string;
-  i, lvColon: Integer;
+  lvEnd, lvColon, lvLen: Integer;
 begin
   Result := False;
-  if (aHeaders = '') or (aName = '') then
+  lvLen := Length(aHeaders);
+  while aPos <= lvLen do
+  begin
+    lvEnd := aPos;
+    while (lvEnd <= lvLen) and (aHeaders[lvEnd] <> #13) and
+      (aHeaders[lvEnd] <> #10) do
+      Inc(lvEnd);
+    aLine := Copy(aHeaders, aPos, lvEnd - aPos);
+    if (lvEnd < lvLen) and (aHeaders[lvEnd] = #13) and
+      (aHeaders[lvEnd + 1] = #10) then
+      aPos := lvEnd + 2
+    else
+      aPos := lvEnd + 1;
+    if aLine = '' then
+      Continue;
+    lvColon := Pos(':', aLine);
+    if lvColon > 0 then
+      aName := Trim(Copy(aLine, 1, lvColon - 1))
+    else
+      aName := '';
+    Result := True;
     Exit;
-  lvWanted := LowerCase(aName);
-  lvLines := TStringList.Create;
-  try
-    lvLines.Text := aHeaders;
-    for i := 0 to lvLines.Count - 1 do
-    begin
-      lvLine := lvLines[i];
-      lvColon := Pos(':', lvLine);
-      if lvColon = 0 then
-        Continue;
-      if LowerCase(Trim(Copy(lvLine, 1, lvColon - 1))) = lvWanted then
-      begin
-        Result := True;
-        Exit;
-      end;
-    end;
-  finally
-    lvLines.Free;
   end;
+end;
+
+function HeaderBlockHasName(const aHeaders, aName: string): Boolean;
+var
+  lvPos: Integer;
+  lvLine, lvName: string;
+begin
+  Result := False;
+  if aName = '' then
+    Exit;
+  lvPos := 1;
+  while NextHeaderLine(aHeaders, lvPos, lvLine, lvName) do
+    if SameText(lvName, aName) then
+    begin
+      Result := True;
+      Exit;
+    end;
+end;
+
+// a CR or LF here would start another header line, overriding ours (CWE-113)
+procedure BpCheckHeaderPart(const aText, aWhat: string);
+var
+  i: Integer;
+begin
+  for i := 1 to Length(aText) do
+    if (aText[i] = #13) or (aText[i] = #10) then
+      raise EbpHttpClient.CreateFmt('Header %s must not contain CR or LF', [aWhat]);
+end;
+
+// RFC 7230 tchar; Ord keeps the set legal on Unicode compilers too
+function BpIsHeaderNameChar(aChar: Char): Boolean;
+begin
+  case Ord(aChar) of
+    Ord('0')..Ord('9'), Ord('A')..Ord('Z'), Ord('a')..Ord('z'),
+    Ord('!'), Ord('#')..Ord(''''), Ord('*'), Ord('+'), Ord('-'), Ord('.'),
+    Ord('^')..Ord('`'), Ord('|'), Ord('~'):
+      Result := True;
+  else
+    Result := False;
+  end;
+end;
+
+// one bad name fails every later request on the client, not just this header
+procedure BpCheckHeaderName(const aName: string);
+var
+  i: Integer;
+begin
+  if aName = '' then
+    raise EbpHttpClient.Create('Header name must not be empty');
+  for i := 1 to Length(aName) do
+    if not BpIsHeaderNameChar(aName[i]) then
+      raise EbpHttpClient.CreateFmt(
+        'Header name must be a token, got %s', [aName]);
 end;
 
 // registered with the token so Cancel closes the handle of a blocked call
@@ -843,17 +899,6 @@ begin
   inherited;
 end;
 
-// a CR or LF here starts another header line in the block sent to
-// HttpSendRequest, letting caller data override Authorization (CWE-113)
-procedure BpCheckHeaderPart(const aText, aWhat: string);
-var
-  i: Integer;
-begin
-  for i := 1 to Length(aText) do
-    if (aText[i] = #13) or (aText[i] = #10) then
-      raise EbpHttpClient.CreateFmt('Header %s must not contain CR or LF', [aWhat]);
-end;
-
 // the agent string is baked into the session by InternetOpen
 procedure TbpHttpClient.SetUserAgent(const aValue: string);
 begin
@@ -881,32 +926,6 @@ procedure TbpHttpClient.SetReceiveTimeout(aValue: DWORD);
 begin
   FReceiveTimeout := aValue;
   ApplyTimeoutsToSession;
-end;
-
-// RFC 7230 tchar; Ord keeps the set legal on Unicode compilers too
-function BpIsHeaderNameChar(aChar: Char): Boolean;
-begin
-  case Ord(aChar) of
-    Ord('0')..Ord('9'), Ord('A')..Ord('Z'), Ord('a')..Ord('z'),
-    Ord('!'), Ord('#')..Ord(''''), Ord('*'), Ord('+'), Ord('-'), Ord('.'),
-    Ord('^')..Ord('`'), Ord('|'), Ord('~'):
-      Result := True;
-  else
-    Result := False;
-  end;
-end;
-
-// one bad name fails every later request on the client, not just this header
-procedure BpCheckHeaderName(const aName: string);
-var
-  i: Integer;
-begin
-  if aName = '' then
-    raise EbpHttpClient.Create('Header name must not be empty');
-  for i := 1 to Length(aName) do
-    if not BpIsHeaderNameChar(aName[i]) then
-      raise EbpHttpClient.CreateFmt(
-        'Header name must be a token, got %s', [aName]);
 end;
 
 procedure TbpHttpClient.AddHeader(const aName, aValue: string);
@@ -980,13 +999,19 @@ begin
     Result := Format('WinInet error %d', [aErrorCode]);
 end;
 
+// InternetCrackUrl reports one url component as a pointer and a length
+function CrackedPart(aText: PChar; aLen: DWORD): string;
+begin
+  if (aText = nil) or (aLen = 0) then
+    Result := ''
+  else
+    SetString(Result, aText, aLen);
+end;
+
 function TbpHttpClient.ParseUrl(const aUrl: string; out aServerName,
   aResource: string; out aPort: Integer; out aSecure: Boolean): Boolean;
 var
   lvComponents: TURLComponents;
-  lvHostBuffer: array[0..INTERNET_MAX_HOST_NAME_LENGTH] of Char;
-  lvPathBuffer: array[0..INTERNET_MAX_PATH_LENGTH] of Char;
-  lvExtraBuffer: array[0..INTERNET_MAX_PATH_LENGTH] of Char;
   lvHash, i: Integer;
 begin
   Result := False;
@@ -997,17 +1022,11 @@ begin
       Exit;
 
   ZeroMemory(@lvComponents, SizeOf(lvComponents));
-  ZeroMemory(@lvHostBuffer, SizeOf(lvHostBuffer));
-  ZeroMemory(@lvPathBuffer, SizeOf(lvPathBuffer));
-  ZeroMemory(@lvExtraBuffer, SizeOf(lvExtraBuffer));
-
   lvComponents.dwStructSize := SizeOf(lvComponents);
-  lvComponents.lpszHostName := @lvHostBuffer[0];
-  lvComponents.dwHostNameLength := Length(lvHostBuffer);
-  lvComponents.lpszUrlPath := @lvPathBuffer[0];
-  lvComponents.dwUrlPathLength := Length(lvPathBuffer);
-  lvComponents.lpszExtraInfo := @lvExtraBuffer[0];
-  lvComponents.dwExtraInfoLength := Length(lvExtraBuffer);
+  // a nil buffer with a non-zero length asks for pointers into aUrl itself
+  lvComponents.dwHostNameLength := 1;
+  lvComponents.dwUrlPathLength := 1;
+  lvComponents.dwExtraInfoLength := 1;
 
   if not InternetCrackUrl(PChar(aUrl), Length(aUrl), 0, lvComponents) then
     Exit;
@@ -1016,11 +1035,13 @@ begin
   if not (lvComponents.nScheme in [INTERNET_SCHEME_HTTP, INTERNET_SCHEME_HTTPS]) then
     Exit;
 
-  aServerName := lvComponents.lpszHostName;
+  aServerName := CrackedPart(lvComponents.lpszHostName,
+    lvComponents.dwHostNameLength);
   if aServerName = '' then
     Exit;
-  // keep the query string attached to the resource
-  aResource := string(lvComponents.lpszUrlPath) + string(lvComponents.lpszExtraInfo);
+  // the extra info is the query string, and it stays on the resource
+  aResource := CrackedPart(lvComponents.lpszUrlPath, lvComponents.dwUrlPathLength) +
+    CrackedPart(lvComponents.lpszExtraInfo, lvComponents.dwExtraInfoLength);
   // the fragment is client side only, it never goes into the request line
   lvHash := Pos('#', aResource);
   if lvHash > 0 then
@@ -1052,6 +1073,21 @@ begin
     ParseUrl(aOther, lvOtherHost, lvResource, lvOtherPort, lvOtherSecure) and
     (lvSecure = lvOtherSecure) and (lvPort = lvOtherPort) and
     SameText(lvHost, lvOtherHost);
+end;
+
+// same origin, or the http to https upgrade requests deliberately allows
+function TbpHttpClient.KeepsCredentials(const aFrom, aTo: string): Boolean;
+var
+  lvHost, lvToHost, lvResource: string;
+  lvPort, lvToPort: Integer;
+  lvSecure, lvToSecure: Boolean;
+begin
+  Result := ParseUrl(aFrom, lvHost, lvResource, lvPort, lvSecure) and
+    ParseUrl(aTo, lvToHost, lvResource, lvToPort, lvToSecure) and
+    SameText(lvHost, lvToHost) and
+    (((lvSecure = lvToSecure) and (lvPort = lvToPort)) or
+     (not lvSecure and lvToSecure and (lvPort = INTERNET_DEFAULT_HTTP_PORT) and
+      (lvToPort = INTERNET_DEFAULT_HTTPS_PORT)));
 end;
 
 function TbpHttpClient.BuildHeaders(const aRequestHeaders: string;
@@ -1334,37 +1370,93 @@ end;
 function TbpHttpClient.ReadResponseBody(aRequest: HINTERNET;
   aToken: TbpCancellationToken): AnsiString;
 var
-  lvBuffer: array[0..gcBufferSize - 1] of Byte;
   lvBytesRead, lvErr: DWORD;
-  lvStream: TMemoryStream;
+  lvSize, lvCapacity: Integer;
 begin
-  lvStream := TMemoryStream.Create;
-  try
-    repeat
-      if (aToken <> nil) and aToken.IsCancellationRequested then
-        RaiseOperationCancelled;
+  Result := '';
+  lvSize := 0;
+  lvCapacity := 0;
+  repeat
+    if (aToken <> nil) and aToken.IsCancellationRequested then
+      RaiseOperationCancelled;
 
-      if not InternetReadFile(aRequest, @lvBuffer[0], gcBufferSize, lvBytesRead) then
-      begin
-        lvErr := GetLastError;
-        raise EbpHttpClient.Create(
-          'Failed to read HTTP response: ' + GetWinInetErrorMessage(lvErr),
-          0, lvErr);
-      end;
-
-      if lvBytesRead > 0 then
-        lvStream.WriteBuffer(lvBuffer[0], lvBytesRead);
-    until lvBytesRead = 0;
-
-    SetLength(Result, lvStream.Size);
-    if lvStream.Size > 0 then
+    if lvCapacity - lvSize < gcBufferSize then
     begin
-      lvStream.Position := 0;
-      lvStream.ReadBuffer(Result[1], lvStream.Size);
+      if lvCapacity > MaxInt div 2 then
+        raise EbpHttpClient.Create('Response body is too large to buffer');
+      // doubling keeps the reallocations logarithmic in the body size
+      if lvCapacity = 0 then
+        lvCapacity := gcBufferSize
+      else
+        lvCapacity := lvCapacity * 2;
+      SetLength(Result, lvCapacity);
     end;
-  finally
-    lvStream.Free;
+
+    if not InternetReadFile(aRequest, @Result[lvSize + 1], gcBufferSize,
+      lvBytesRead) then
+    begin
+      lvErr := GetLastError;
+      raise EbpHttpClient.Create(
+        'Failed to read HTTP response: ' + GetWinInetErrorMessage(lvErr),
+        0, lvErr);
+    end;
+
+    Inc(lvSize, lvBytesRead);
+  until lvBytesRead = 0;
+
+  SetLength(Result, lvSize);
+end;
+
+procedure TbpHttpClient.ReadBodyToStream(aRequest: HINTERNET; aDest: TStream;
+  const aTotal: Int64; aProgress: TbpHttpProgressEvent;
+  aToken: TbpCancellationToken);
+var
+  lvBuffer: array[0..gcDownloadBufferSize - 1] of Byte;
+  lvBytesRead, lvErr: DWORD;
+  lvReceived: Int64;
+  lvCancel: Boolean;
+begin
+  lvReceived := 0;
+  if Assigned(aProgress) then
+  begin
+    // headers are in; announce the total before the first byte
+    lvCancel := False;
+    aProgress(Self, 0, aTotal, lvCancel);
+    if lvCancel then
+      RaiseOperationCancelled;
   end;
+
+  repeat
+    if (aToken <> nil) and aToken.IsCancellationRequested then
+      RaiseOperationCancelled;
+
+    if not InternetReadFile(aRequest, @lvBuffer[0], gcDownloadBufferSize,
+      lvBytesRead) then
+    begin
+      lvErr := GetLastError;
+      raise EbpHttpClient.Create(
+        'Failed to read HTTP response: ' + GetWinInetErrorMessage(lvErr),
+        0, lvErr);
+    end;
+
+    if lvBytesRead > 0 then
+    begin
+      aDest.WriteBuffer(lvBuffer[0], lvBytesRead);
+      Inc(lvReceived, lvBytesRead);
+      if Assigned(aProgress) then
+      begin
+        lvCancel := False;
+        aProgress(Self, lvReceived, aTotal, lvCancel);
+        if lvCancel then
+          RaiseOperationCancelled;
+      end;
+    end;
+  until lvBytesRead = 0;
+
+  // a dropped connection reads as a clean end of stream, so count the bytes
+  if (aTotal >= 0) and (lvReceived <> aTotal) then
+    raise EbpHttpClient.CreateFmt(
+      'Incomplete response: received %d of %d bytes', [lvReceived, aTotal]);
 end;
 
 function TbpHttpClient.PerformHop(const aUrl, aMethod, aHeaders: string;
@@ -1417,7 +1509,9 @@ begin
 
         Result.StatusCode := ReadResponseStatus(lvRequest);
         Result.Headers := ReadResponseHeaders(lvRequest);
-        Result.StatusText := Format('HTTP %d', [Result.StatusCode]);
+        Result.StatusText := BpHttpReasonPhrase(Result.Headers);
+        if Result.StatusText = '' then
+          Result.StatusText := Format('HTTP %d', [Result.StatusCode]);
         Result.ContentLength := BpHttpContentLength(Result.Headers);
         Result.FinalUrl := aUrl;
         Result.Body := '';
@@ -1486,7 +1580,7 @@ begin
     end;
     lvUrl := lvNext;
     // once off the origin they were set for, credentials never come back
-    lvCredentials := lvCredentials and SameOrigin(aUrl, lvUrl);
+    lvCredentials := lvCredentials and KeepsCredentials(aUrl, lvUrl);
   end;
   raise EbpHttpClient.CreateFmt('More than %d redirects for %s',
     [FMaxRedirects, aUrl]);
@@ -1512,24 +1606,6 @@ begin
   Result := Execute(aUrl, hmPost, aHeaders, aBody, aToken);
 end;
 
-function TbpHttpClient.Patch(const aUrl: string; const aBody: AnsiString;
-  const aHeaders: string; aToken: TbpCancellationToken): TbpHttpResponse;
-begin
-  Result := Execute(aUrl, hmPatch, aHeaders, aBody, aToken);
-end;
-
-function TbpHttpClient.Head(const aUrl, aHeaders: string;
-  aToken: TbpCancellationToken): TbpHttpResponse;
-begin
-  Result := Execute(aUrl, hmHead, aHeaders, '', aToken);
-end;
-
-function TbpHttpClient.Options(const aUrl, aHeaders: string;
-  aToken: TbpCancellationToken): TbpHttpResponse;
-begin
-  Result := Execute(aUrl, hmOptions, aHeaders, '', aToken);
-end;
-
 function TbpHttpClient.PostJson(const aUrl: string; const aJson: AnsiString;
   aToken: TbpCancellationToken): TbpHttpResponse;
 begin
@@ -1548,6 +1624,24 @@ begin
   Result := Execute(aUrl, hmDelete, aHeaders, '', aToken);
 end;
 
+function TbpHttpClient.Patch(const aUrl: string; const aBody: AnsiString;
+  const aHeaders: string; aToken: TbpCancellationToken): TbpHttpResponse;
+begin
+  Result := Execute(aUrl, hmPatch, aHeaders, aBody, aToken);
+end;
+
+function TbpHttpClient.Head(const aUrl, aHeaders: string;
+  aToken: TbpCancellationToken): TbpHttpResponse;
+begin
+  Result := Execute(aUrl, hmHead, aHeaders, '', aToken);
+end;
+
+function TbpHttpClient.Options(const aUrl, aHeaders: string;
+  aToken: TbpCancellationToken): TbpHttpResponse;
+begin
+  Result := Execute(aUrl, hmOptions, aHeaders, '', aToken);
+end;
+
 class function TbpHttpClient.FetchUrl(const aUrl: string;
   const aHeaders: string): AnsiString;
 var
@@ -1561,59 +1655,6 @@ begin
   finally
     lvClient.Free;
   end;
-end;
-
-procedure TbpHttpClient.ReadBodyToStream(aRequest: HINTERNET; aDest: TStream;
-  const aTotal: Int64; aProgress: TbpHttpProgressEvent;
-  aToken: TbpCancellationToken);
-var
-  lvBuffer: array[0..gcDownloadBufferSize - 1] of Byte;
-  lvBytesRead, lvErr: DWORD;
-  lvReceived: Int64;
-  lvCancel: Boolean;
-begin
-  lvReceived := 0;
-  if Assigned(aProgress) then
-  begin
-    // headers are in; announce the total before the first byte
-    lvCancel := False;
-    aProgress(Self, 0, aTotal, lvCancel);
-    if lvCancel then
-      RaiseOperationCancelled;
-  end;
-
-  repeat
-    if (aToken <> nil) and aToken.IsCancellationRequested then
-      RaiseOperationCancelled;
-
-    if not InternetReadFile(aRequest, @lvBuffer[0], gcDownloadBufferSize,
-      lvBytesRead) then
-    begin
-      lvErr := GetLastError;
-      raise EbpHttpClient.Create(
-        'Failed to read HTTP response: ' + GetWinInetErrorMessage(lvErr),
-        0, lvErr);
-    end;
-
-    if lvBytesRead > 0 then
-    begin
-      aDest.WriteBuffer(lvBuffer[0], lvBytesRead);
-      Inc(lvReceived, lvBytesRead);
-      if Assigned(aProgress) then
-      begin
-        lvCancel := False;
-        aProgress(Self, lvReceived, aTotal, lvCancel);
-        if lvCancel then
-          RaiseOperationCancelled;
-      end;
-    end;
-  until lvBytesRead = 0;
-
-  // a connection dying after the headers looks like a clean end of stream, so
-  // without this a truncated body counts as a successful download
-  if (aTotal >= 0) and (lvReceived <> aTotal) then
-    raise EbpHttpClient.CreateFmt(
-      'Incomplete response: received %d of %d bytes', [lvReceived, aTotal]);
 end;
 
 function TbpHttpClient.Download(const aUrl: string; aDest: TStream;
@@ -1976,30 +2017,19 @@ end;
 
 function BpHttpHeaderValue(const aHeaders, aName: string): string;
 var
-  lvLines: TStringList;
-  lvLine, lvPrefix: string;
-  i, lvColon: Integer;
+  lvPos: Integer;
+  lvLine, lvName: string;
 begin
   Result := '';
-  lvPrefix := LowerCase(aName);
-  lvLines := TStringList.Create;
-  try
-    lvLines.Text := aHeaders;
-    for i := 0 to lvLines.Count - 1 do
+  if aName = '' then
+    Exit;
+  lvPos := 1;
+  while NextHeaderLine(aHeaders, lvPos, lvLine, lvName) do
+    if SameText(lvName, aName) then
     begin
-      lvLine := lvLines[i];
-      lvColon := Pos(':', lvLine);
-      if lvColon = 0 then
-        Continue;
-      if LowerCase(Trim(Copy(lvLine, 1, lvColon - 1))) = lvPrefix then
-      begin
-        Result := Trim(Copy(lvLine, lvColon + 1, MaxInt));
-        Exit;
-      end;
+      Result := Trim(Copy(lvLine, Pos(':', lvLine) + 1, MaxInt));
+      Exit;
     end;
-  finally
-    lvLines.Free;
-  end;
 end;
 
 // RFC 7230 says 1*DIGIT; StrToInt64Def also takes '$40000', '0x40000' and '+42'
@@ -2025,6 +2055,27 @@ begin
     end;
     Result := Result * 10 + lvDigit;
   end;
+end;
+
+function BpHttpReasonPhrase(const aHeaders: string): string;
+var
+  lvPos, lvSpace: Integer;
+  lvLine, lvName: string;
+begin
+  Result := '';
+  lvPos := 1;
+  if not NextHeaderLine(aHeaders, lvPos, lvLine, lvName) then
+    Exit;
+  if Copy(lvLine, 1, 5) <> 'HTTP/' then
+    Exit;
+  // drop the version, then the status code, and the phrase is what is left
+  lvSpace := Pos(' ', lvLine);
+  if lvSpace = 0 then
+    Exit;
+  lvLine := Trim(Copy(lvLine, lvSpace + 1, MaxInt));
+  lvSpace := Pos(' ', lvLine);
+  if lvSpace > 0 then
+    Result := Trim(Copy(lvLine, lvSpace + 1, MaxInt));
 end;
 
 function BpHttpRedirectTarget(const aBaseUrl, aHeaders: string;
@@ -2064,23 +2115,14 @@ type
 function BpHttpFilterHeaders(const aHeaders: string;
   aDrop: TbpHeaderNameTest): string;
 var
-  lvLines: TStringList;
-  i, lvColon: Integer;
+  lvPos: Integer;
+  lvLine, lvName: string;
 begin
   Result := '';
-  lvLines := TStringList.Create;
-  try
-    lvLines.Text := aHeaders;
-    for i := 0 to lvLines.Count - 1 do
-    begin
-      lvColon := Pos(':', lvLines[i]);
-      if (lvColon > 0) and aDrop(Trim(Copy(lvLines[i], 1, lvColon - 1))) then
-        Continue;
-      AppendHeaderLine(Result, lvLines[i]);
-    end;
-  finally
-    lvLines.Free;
-  end;
+  lvPos := 1;
+  while NextHeaderLine(aHeaders, lvPos, lvLine, lvName) do
+    if not aDrop(lvName) then
+      AppendHeaderLine(Result, lvLine);
 end;
 
 // the set every mainstream client strips: see requests, reqwest and fetch
@@ -2139,6 +2181,7 @@ const
   lcErrSecureChannel     = 12157;
   lcErrSecInvalidCert    = 12169;
   lcErrSecCertRevoked    = 12170;
+  lcErrDecodingFailed    = 12175;
 begin
   if aWinInetError <> 0 then
   begin
@@ -2153,6 +2196,8 @@ begin
         Result := 'Cannot connect to server';
       lcErrConnectionReset:
         Result := 'Connection lost';
+      lcErrDecodingFailed:
+        Result := 'Cannot decode the compressed response';
       lcErrCertDateInvalid, lcErrCertCnInvalid, lcErrInvalidCa, lcErrSecCertErrors,
       lcErrSecureChannel, lcErrSecInvalidCert, lcErrSecCertRevoked:
         Result := 'SSL/TLS certificate error';
