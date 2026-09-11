@@ -12,11 +12,13 @@ type
   published
     procedure TestCompareObjectsWithNoDifferences;
     procedure TestCompareObjectsWithDifferences;
+    procedure TestCompareWideCharProperties;
     procedure TestCompareObjectsAsString;
 
     procedure TestCompareWithSameCollectionData;
     procedure TestCompareWithDifferentCollectionData;
     procedure TestCompareWithEmptyAndPopulatedCollection;
+    procedure TestAddedAndRemovedItemFields;
     procedure TestCompareCollectionsWithDifferentNames;
 
     procedure TestCompareCollectionsWithDifferentCharProps;
@@ -88,6 +90,27 @@ begin
     CheckTrue(VarIsFloat(Diffs[1].OldValue) and VarIsFloat(Diffs[1].NewValue), 'Old and New values of FloatProp should be floats');
     CheckEquals(1.1, Diffs[1].OldValue, 0.001, 'Old value of FloatProp should be 1.1');
     CheckEquals(1.2, Diffs[1].NewValue, 0.001, 'New value of FloatProp should be 1.2');
+  finally
+    Obj1.Free;
+    Obj2.Free;
+  end;
+end;
+
+// two WideChars sharing a low byte used to compare equal on a pre-2009 Char
+procedure TestTBpObjectComparer.TestCompareWideCharProperties;
+var
+  Obj1, Obj2: TTestClassB;
+  Diffs: TPropDifferences;
+begin
+  Obj1 := TTestClassB.Create;
+  Obj2 := TTestClassB.Create;
+  try
+    Obj1.WideCharProp := WideChar($0041);
+    Obj2.WideCharProp := WideChar($0141);
+
+    Diffs := TbpObjectComparer.CompareObjects(Obj1, Obj2);
+    CheckEquals(1, Length(Diffs), 'the two wide chars differ');
+    CheckEquals('WideCharProp', Diffs[0].OldPropPath, 'property path');
   finally
     Obj1.Free;
     Obj2.Free;
@@ -169,6 +192,38 @@ begin
 
     Diffs := TbpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(2, Length(Diffs), 'Should find differences for count and the missing item');
+  finally
+    Obj1.Free;
+    Obj2.Free;
+  end;
+end;
+
+// the marker text used to land in NewPropPath and shift every later argument
+procedure TestTBpObjectComparer.TestAddedAndRemovedItemFields;
+var
+  Obj1, Obj2: TTestClassWithCollectionUnique;
+  Diffs: TPropDifferences;
+begin
+  Obj1 := TTestClassWithCollectionUnique.Create;
+  Obj2 := TTestClassWithCollectionUnique.Create;
+  try
+    Obj1.MyCollection.Add.ID := 7;
+
+    Diffs := TbpObjectComparer.CompareObjects(Obj1, Obj2);
+    CheckEquals(2, Length(Diffs), 'count plus the removed item');
+    CheckEquals('MyCollection[0]', Diffs[1].OldPropPath, 'old path');
+    CheckEquals('MyCollection[0]', Diffs[1].NewPropPath, 'new path');
+    CheckEquals('Exists in old', VarToStr(Diffs[1].OldValue), 'old value');
+    CheckEquals('Missing in new', VarToStr(Diffs[1].NewValue), 'new value');
+    CheckEquals('7', Diffs[1].Idx, 'the unique id is the index');
+
+    Diffs := TbpObjectComparer.CompareObjects(Obj2, Obj1);
+    CheckEquals(2, Length(Diffs), 'count plus the added item');
+    CheckEquals('MyCollection[0]', Diffs[1].OldPropPath, 'old path');
+    CheckEquals('MyCollection[0]', Diffs[1].NewPropPath, 'new path');
+    CheckEquals('Missing in old', VarToStr(Diffs[1].OldValue), 'old value');
+    CheckEquals('Exists in new', VarToStr(Diffs[1].NewValue), 'new value');
+    CheckEquals('0', Diffs[1].Idx, 'the item index');
   finally
     Obj1.Free;
     Obj2.Free;
