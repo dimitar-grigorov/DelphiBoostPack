@@ -69,7 +69,7 @@ lvClient.SetBasicAuth('user', 'pass');    // WideString, UTF-8 per RFC 7617
 lvClient.AddHeader('X-Api-Version', '2'); // persistent, sent every request
 ```
 
-`AddHeader` replaces a name already set, removes it on an empty value, and rejects CR, LF or a colon in the name, so a config value cannot append headers of its own. `BearerToken` is checked the same way. Per-request headers merge on top, a name in both sent once with the per-request value.
+`AddHeader` replaces a name already set, removes it on an empty value, and takes only a non-empty RFC 7230 token as the name, so a config value cannot append headers of its own. `BearerToken` and `UserAgent` are checked for CR and LF the same way, and `SetBasicAuth` refuses a colon or a control character in the user-id. Per-request headers merge on top, a name in both sent once with the per-request value.
 
 | Property | Default |
 |----------|---------|
@@ -111,7 +111,7 @@ end;
 lvClient.DownloadToFile(lvUrl, 'C:\temp\big.zip', HandleProgress, FToken);
 ```
 
-The file is kept only on a 2xx, so an error page cannot masquerade as the payload, and a body short of the advertised `Content-Length` counts as an error. Resume is one header away: send `Range: bytes=<n>-` and append on a 206.
+The file is kept only on a 2xx, so an error page cannot masquerade as the payload, and a body short of the advertised `Content-Length` counts as an error, except on the replies that carry no body at all. Resume is one header away: send `Range: bytes=<n>-` and append on a 206.
 
 #### Helpers
 
@@ -120,7 +120,8 @@ The file is kept only on a 2xx, so an error page cannot masquerade as the payloa
 | `BpHttpResponseIsSuccess(aResponse)` | 2xx |
 | `BpHttpResponseBodyAsUtf8(aResponse)` | body decoded as UTF-8 (`WideString`) |
 | `BpHttpHeaderValue(aHeaders, aName)` | one header from a raw block, `''` when absent |
-| `BpHttpContentLength(aHeaders)` | `Int64`, `-1` when absent or invalid |
+| `BpHttpContentLength(aHeaders)` | `Int64`, `-1` when absent or not a plain digit string |
+| `BpHttpResponseHasBody(aMethod, aStatus)` | `False` for HEAD, 1xx, 204 and 304 |
 | `BpHttpProgressPercent(aReceived, aTotal)` | 0..100, `-1` when the total is unknown |
 | `BpClassifyHttpError(aWinInetError, aHttpStatus)` | a user-facing sentence |
 
@@ -448,7 +449,7 @@ if BpVerifyPassword(lvEntered, lvStored) then
   Login;
 ```
 
-The salt comes from the Windows CSPRNG and the default is 600,000 iterations, current OWASP guidance. The record is self-describing, so the iteration count travels with the hash and can be raised later without breaking old rows. `BpVerifyPassword` compares in constant time.
+The salt comes from the Windows CSPRNG and the default is 600,000 iterations, current OWASP guidance. The record is self-describing, so the iteration count travels with the hash and can be raised later without breaking old rows. `BpVerifyPassword` compares in constant time, and refuses a record whose iteration count or hash length falls outside 1..`gcBpPasswordHashMaxIterations` and `gcBpPasswordHashMinKeyLen`..`gcBpPasswordHashMaxKeyLen`, so a truncated row cannot authenticate. `BpHashPassword` raises `EbpPasswordHash` rather than mint a record past that ceiling.
 
 | Function | Use |
 |----------|-----|

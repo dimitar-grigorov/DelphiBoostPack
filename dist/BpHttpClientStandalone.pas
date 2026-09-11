@@ -5,7 +5,7 @@ unit BpHttpClientStandalone;
 //   src\Core\Units\BpCompat.pas
 //   src\Core\Units\BpBase64.pas
 //   src\Core\Classes\BpHttpClient.pas
-// Source commit 7d6a8e7, generated 2026-09-12 by tools\Amalgamate.ps1.
+// Source commit 75432ca, generated 2026-09-12 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
 // One bundle per project: two that share a helper declare it twice.
@@ -212,7 +212,6 @@ type
 
     // the WinInet session, opened on demand
     function SessionHandle: HINTERNET;
-    // True when one is already open, so a caller need not open one to ask
     function SessionActive: Boolean;
 
     // changing it drops the session, so set it before the first request
@@ -325,6 +324,8 @@ function BpHttpResponseBodyAsUtf8(const aResponse: TbpHttpResponse): WideString;
 function BpHttpHeaderValue(const aHeaders, aName: string): string;
 // Content-Length parsed from a raw header block; -1 when absent or invalid
 function BpHttpContentLength(const aHeaders: string): Int64;
+// False for the replies that carry no body, whatever Content-Length says
+function BpHttpResponseHasBody(const aMethod: string; aStatus: Integer): Boolean;
 // whole percent 0..100 for a progress pair; -1 when the total is unknown
 function BpHttpProgressPercent(const aReceived, aTotal: Int64): Integer;
 // user-facing categorization; pass 0 for the dimension that does not apply
@@ -893,8 +894,7 @@ procedure TbpHttpClient.SetBasicAuth(const aUser, aPassword: WideString);
 var
   i: Integer;
 begin
-  // RFC 7617: the colon separates the pair, so a user-id may not contain one,
-  // and a control character would make the server split it differently
+  // RFC 7617: the colon separates the pair, so the user-id may not hold one
   for i := 1 to Length(aUser) do
     if (aUser[i] = ':') or (Ord(aUser[i]) < 32) then
       raise EbpHttpClient.Create(
@@ -951,8 +951,7 @@ var
 begin
   Result := False;
 
-  // InternetCrackUrl drops CR, LF and TAB instead of failing, so the request
-  // would carry a different path than the caller passed
+  // InternetCrackUrl drops CR, LF and TAB instead of failing the parse
   for i := 1 to Length(aUrl) do
     if Ord(aUrl[i]) < 32 then
       Exit;
@@ -1309,6 +1308,7 @@ var
   lvPort: Integer;
   lvSecure, lvOwnsRequest: Boolean;
   lvCleanupId: Integer;
+  lvExpected: Int64;
 begin
   if (aToken <> nil) and aToken.IsCancellationRequested then
     RaiseOperationCancelled;
@@ -1342,8 +1342,14 @@ begin
         Result.Body := '';
 
         if aDest <> nil then
-          ReadBodyToStream(lvRequest, aDest, Result.ContentLength, aProgress,
-            aToken)
+        begin
+          // a bodyless reply must not trip the completeness guard below
+          if BpHttpResponseHasBody(aMethod, Result.StatusCode) then
+            lvExpected := Result.ContentLength
+          else
+            lvExpected := -1;
+          ReadBodyToStream(lvRequest, aDest, lvExpected, aProgress, aToken);
+        end
         else
           Result.Body := ReadResponseBody(lvRequest, aToken);
       except
@@ -1882,6 +1888,13 @@ begin
     end;
     Result := Result * 10 + lvDigit;
   end;
+end;
+
+// RFC 9110: a Content-Length on these describes what a GET would have returned
+function BpHttpResponseHasBody(const aMethod: string; aStatus: Integer): Boolean;
+begin
+  Result := not (SameText(aMethod, 'HEAD') or (aStatus = 204) or
+    (aStatus = 304) or ((aStatus >= 100) and (aStatus < 200)));
 end;
 
 function BpHttpProgressPercent(const aReceived, aTotal: Int64): Integer;

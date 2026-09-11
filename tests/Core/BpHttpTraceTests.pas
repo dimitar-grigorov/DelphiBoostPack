@@ -5,7 +5,7 @@ unit BpHttpTraceTests;
 interface
 
 uses
-  TestFramework, SysUtils, Windows, BpHttpClient, BpHttpTrace;
+  TestFramework, SysUtils, Windows, BpHttpTrace;
 
 type
   // decoder only, no network
@@ -23,6 +23,9 @@ type
   end;
 
 implementation
+
+uses
+  BpHttpClient;
 
 const
   // WinInet status values
