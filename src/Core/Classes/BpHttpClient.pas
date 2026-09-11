@@ -149,6 +149,8 @@ type
 
     // the WinInet session, opened on demand
     function SessionHandle: HINTERNET;
+    // True when one is already open, so a caller need not open one to ask
+    function SessionActive: Boolean;
 
     // changing it drops the session, so set it before the first request
     property UserAgent: string read FUserAgent write SetUserAgent;
@@ -472,9 +474,22 @@ begin
   inherited;
 end;
 
+// a CR or LF here starts another header line in the block sent to
+// HttpSendRequest, letting caller data override Authorization (CWE-113)
+procedure BpCheckHeaderPart(const aText, aWhat: string);
+var
+  i: Integer;
+begin
+  for i := 1 to Length(aText) do
+    if (aText[i] = #13) or (aText[i] = #10) then
+      raise EbpHttpClient.CreateFmt('Header %s must not contain CR or LF', [aWhat]);
+end;
+
 // the agent string is baked into the session by InternetOpen
 procedure TbpHttpClient.SetUserAgent(const aValue: string);
 begin
+  // WinInet turns this into the User-Agent line, so it needs the same guard
+  BpCheckHeaderPart(aValue, 'value');
   if aValue = FUserAgent then
     Exit;
   FUserAgent := aValue;
@@ -497,17 +512,6 @@ procedure TbpHttpClient.SetReceiveTimeout(aValue: DWORD);
 begin
   FReceiveTimeout := aValue;
   ApplyTimeoutsToSession;
-end;
-
-// a CR or LF here starts another header line in the block sent to
-// HttpSendRequest, letting caller data override Authorization (CWE-113)
-procedure BpCheckHeaderPart(const aText, aWhat: string);
-var
-  i: Integer;
-begin
-  for i := 1 to Length(aText) do
-    if (aText[i] = #13) or (aText[i] = #10) then
-      raise EbpHttpClient.CreateFmt('Header %s must not contain CR or LF', [aWhat]);
 end;
 
 // RFC 7230 tchar; Ord keeps the set legal on Unicode compilers too
@@ -555,7 +559,15 @@ begin
 end;
 
 procedure TbpHttpClient.SetBasicAuth(const aUser, aPassword: WideString);
+var
+  i: Integer;
 begin
+  // RFC 7617: the colon separates the pair, so a user-id may not contain one,
+  // and a control character would make the server split it differently
+  for i := 1 to Length(aUser) do
+    if (aUser[i] = ':') or (Ord(aUser[i]) < 32) then
+      raise EbpHttpClient.Create(
+        'Basic auth user must not contain a colon or a control character');
   FBearerToken := '';
   // RFC 7617 says UTF-8, and the ANSI page would differ from machine to machine
   AddHeader('Authorization', 'Basic ' +
@@ -696,6 +708,16 @@ begin
   end;
 
   ApplyTimeouts(Result);
+end;
+
+function TbpHttpClient.SessionActive: Boolean;
+begin
+  EnterCriticalSection(FSessionLock);
+  try
+    Result := FSession <> nil;
+  finally
+    LeaveCriticalSection(FSessionLock);
+  end;
 end;
 
 // lazy, one per client; WinInet pools its keep-alive connections here
