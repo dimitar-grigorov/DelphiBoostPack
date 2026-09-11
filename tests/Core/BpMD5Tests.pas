@@ -188,7 +188,8 @@ begin
   SetLength(lvData, 200 * 1024);
   for i := 1 to Length(lvData) do
     lvData[i] := AnsiChar(Random(256));
-  lvFileName := GetEnvironmentVariable('TEMP') + '\BpMD5Test.tmp';
+  lvFileName := Format('%s\BpMD5Test_%d.tmp',
+    [GetEnvironmentVariable('TEMP'), GetCurrentProcessId]);
   lvStream := TFileStream.Create(lvFileName, fmCreate);
   try
     lvStream.WriteBuffer(PAnsiChar(lvData)^, Length(lvData));
@@ -199,6 +200,26 @@ begin
     CheckEquals(TbpMD5.HashStrHex(lvData), TbpMD5.HashFileHex(lvFileName));
   finally
     DeleteFile(lvFileName);
+  end;
+
+  // an empty file must reach Final, not trip the short-read guard
+  lvStream := TFileStream.Create(lvFileName, fmCreate);
+  lvStream.Free;
+  try
+    CheckEquals('d41d8cd98f00b204e9800998ecf8427e', TbpMD5.HashFileHex(lvFileName), 'empty file');
+  finally
+    DeleteFile(lvFileName);
+  end;
+
+  // a missing file must raise, not hash as if it were empty
+  try
+    TbpMD5.HashFileHex(lvFileName);
+    Fail('expected an open error for a missing file');
+  except
+    on E: ETestFailure do
+      raise;
+    on E: EFOpenError do
+      Check(True);
   end;
 end;
 

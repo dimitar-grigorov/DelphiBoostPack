@@ -257,17 +257,27 @@ var
   lvHasher: TbpSHA256;
   lvChunk: TBytes;
   lvRead: Integer;
+  lvTotal, lvSize: Int64;
 begin
   lvStream := TFileStream.Create(aFileName, fmOpenRead or fmShareDenyWrite);
   try
+    lvSize := lvStream.Size;
     lvHasher := TbpSHA256.Create;
     try
       SetLength(lvChunk, gcShaFileChunkSize);
+      lvTotal := 0;
       repeat
         lvRead := lvStream.Read(lvChunk[0], gcShaFileChunkSize);
         if lvRead > 0 then
+        begin
           lvHasher.Update(lvChunk[0], lvRead);
+          Inc(lvTotal, lvRead);
+        end;
       until lvRead <= 0;
+      // a short read is an I/O error, not the end of the file
+      if lvTotal <> lvSize then
+        raise EReadError.CreateFmt('SHA-256: read %d of %d bytes from %s',
+          [lvTotal, lvSize, aFileName]);
       lvHasher.Final(Result);
     finally
       lvHasher.Free;
