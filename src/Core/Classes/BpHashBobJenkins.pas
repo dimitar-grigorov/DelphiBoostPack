@@ -159,6 +159,10 @@ var
   pb: PByteArray;
 begin
   // seed with the byte length: hashword counts words, hashlittle bytes
+  // clamped first, or the two branches below disagree and the unaligned one
+  // reads a byte that was never asked for
+  if Len < 0 then
+    Len := 0;
   a := Cardinal($DEADBEEF) + Cardinal(Len) + Cardinal(InitVal);
   b := a;
   c := a;

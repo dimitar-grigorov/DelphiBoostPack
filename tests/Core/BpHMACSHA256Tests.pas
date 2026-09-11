@@ -17,6 +17,7 @@ type
   published
     procedure TestRfc4231Vectors;
     procedure TestKeyLengthBoundaries;
+    procedure TestNegativeKeySizeRaises;
     procedure TestByDefinitionRandom;
     procedure TestStreamingMatchesOneShot;
     procedure TestReuseAfterFinal;
@@ -121,6 +122,24 @@ begin
     StringOfChar(AnsiChar('A'), 128), 'msg', 'key of two blocks');
   CheckHmac('896cc53f98fa12ccfd2d424f71ab5eef4fe57292f1293a6c9836e91a7ce734d4',
     StringOfChar(AnsiChar('A'), 129), 'msg', 'key of 129 bytes');
+end;
+
+// a negative size used to build pads with no key in them at all
+procedure TBpHMACSHA256Tests.TestNegativeKeySizeRaises;
+var
+  lvKey: AnsiString;
+begin
+  lvKey := 'secret';
+  try
+    // a raise inside the constructor frees the instance, so nothing leaks here
+    TbpHMACSHA256.Create(PAnsiChar(lvKey)^, -1).Free;
+    Fail('expected ERangeError for a negative key size');
+  except
+    on E: ETestFailure do
+      raise;
+    on E: ERangeError do
+      Check(True);
+  end;
 end;
 
 procedure TBpHMACSHA256Tests.TestByDefinitionRandom;

@@ -8,7 +8,7 @@ unit BpHashes;
 //   src\Core\Classes\BpMD5.pas
 //   src\Core\Classes\BpHMACSHA256.pas
 //   src\Core\Classes\BpPasswordHash.pas
-// Source commit c599bbe, generated 2026-09-12 by tools\Amalgamate.ps1.
+// Source commit c10f658, generated 2026-09-12 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
 // One bundle per project: two that share a helper declare it twice.
@@ -94,6 +94,7 @@ type
     procedure Compress(aData: PByteArray);
   public
     constructor Create;
+    destructor Destroy; override;
     // resets to a fresh hash; Final calls it automatically
     procedure Init;
     procedure Update(const aData; aSize: Integer); overload;
@@ -518,6 +519,16 @@ constructor TbpSHA256.Create;
 begin
   inherited Create;
   Init;
+end;
+
+// the midstate is key material under HMAC, so it does not go back to the heap
+destructor TbpSHA256.Destroy;
+begin
+  FillChar(FHash, SizeOf(FHash), 0);
+  FillChar(FBuffer, SizeOf(FBuffer), 0);
+  FLenBits := 0;
+  FIndex := 0;
+  inherited Destroy;
 end;
 
 procedure TbpSHA256.Init;
@@ -1043,6 +1054,9 @@ var
   lvKeyBytes: PByte;
   lvKeyLen, i: Integer;
 begin
+  // a negative size would leave the pads at $36/$5C, a MAC with no key in it
+  if aKeySize < 0 then
+    raise ERangeError.CreateFmt('SetKey: aKeySize %d is negative', [aKeySize]);
   lvKeyBytes := @aKey;
   lvKeyLen := aKeySize;
   // a key longer than the block is replaced by its hash (RFC 2104)

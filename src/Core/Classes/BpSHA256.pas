@@ -28,6 +28,7 @@ type
     procedure Compress(aData: PByteArray);
   public
     constructor Create;
+    destructor Destroy; override;
     // resets to a fresh hash; Final calls it automatically
     procedure Init;
     procedure Update(const aData; aSize: Integer); overload;
@@ -67,6 +68,16 @@ constructor TbpSHA256.Create;
 begin
   inherited Create;
   Init;
+end;
+
+// the midstate is key material under HMAC, so it does not go back to the heap
+destructor TbpSHA256.Destroy;
+begin
+  FillChar(FHash, SizeOf(FHash), 0);
+  FillChar(FBuffer, SizeOf(FBuffer), 0);
+  FLenBits := 0;
+  FIndex := 0;
+  inherited Destroy;
 end;
 
 procedure TbpSHA256.Init;
