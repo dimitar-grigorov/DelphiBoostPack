@@ -124,6 +124,7 @@ var
   lvPropInfo: PPropInfo;
   lvOldValue, lvNewValue: Variant;
   lvOldPropPath, lvNewPropPath: string;
+  lvOldWide, lvNewWide: WideString;
 begin
   SetLength(Result, 0);
   lvPropCount := GetPropList(aOld.ClassInfo, tkProperties, nil);
@@ -149,10 +150,18 @@ begin
             lvOldValue := GetPropValue(aOld, string(lvPropInfo^.Name));
             lvNewValue := GetPropValue(aNew, string(lvPropInfo^.Name));
           end;
-        tkChar, tkWChar:
+        tkChar:
           begin
             lvOldValue := Char(GetOrdProp(aOld, string(lvPropInfo^.Name)));
             lvNewValue := Char(GetOrdProp(aNew, string(lvPropInfo^.Name)));
+          end;
+        tkWChar:
+          begin
+            // via WideString, or Char drops the high byte before Delphi 2009
+            lvOldWide := WideChar(GetOrdProp(aOld, string(lvPropInfo^.Name)));
+            lvNewWide := WideChar(GetOrdProp(aNew, string(lvPropInfo^.Name)));
+            lvOldValue := lvOldWide;
+            lvNewValue := lvNewWide;
           end;
         tkClass:
           begin
@@ -235,7 +244,7 @@ begin
         else
         begin
           AppendDifference(aDiffs, TPropDifference.Create(_GetPropIdx(aOldPropPath, I),
-            'Exists in old', 'Missing in new', lvUniqueId));
+            _GetPropIdx(aOldPropPath, I), 'Exists in old', 'Missing in new', lvUniqueId));
         end;
       end
       else  // index based comparison
@@ -251,7 +260,7 @@ begin
         else
         begin
           AppendDifference(aDiffs, TPropDifference.Create(_GetPropIdx(aOldPropPath, I),
-            'Exists in old', 'Missing in new', IntToStr(I)));
+            _GetPropIdx(aOldPropPath, I), 'Exists in old', 'Missing in new', IntToStr(I)));
         end;
       end;
     end;
@@ -261,7 +270,7 @@ begin
       if lvProcessedItems.IndexOf(IntToStr(I)) = -1 then
       begin
         AppendDifference(aDiffs, TPropDifference.Create(_GetPropIdx(aNewPropPath, I),
-          'Missing in old', 'Exists in new', IntToStr(I)));
+          _GetPropIdx(aNewPropPath, I), 'Missing in old', 'Exists in new', IntToStr(I)));
       end;
     end;
   finally

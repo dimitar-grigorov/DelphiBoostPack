@@ -21,9 +21,11 @@ type
   private
     FCharProp: Char;
     FFloatProp: Double;
+    FWideCharProp: WideChar;
   published
     property CharProp: Char read FCharProp write FCharProp;
     property FloatProp: Double read FFloatProp write FFloatProp;
+    property WideCharProp: WideChar read FWideCharProp write FWideCharProp;
   end;
 
   TTestClassC = class(TPersistent)
