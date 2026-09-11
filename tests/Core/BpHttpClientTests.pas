@@ -257,6 +257,10 @@ begin
   CheckRejected('X', 'a'#10'Y: b', 'bare LF in the value');
   CheckRejected('X', 'a'#13'Y: b', 'bare CR in the value');
   CheckRejected('X:Y', 'b', 'colon in the name');
+  CheckRejected('', 'b', 'empty name');
+  CheckRejected('X Y', 'b', 'space in the name');
+  CheckRejected('X'#9'Y', 'b', 'tab in the name');
+  CheckRejected('X"Y', 'b', 'quote in the name');
   CheckEquals('', FClient.BuildHeaders(''), 'no rejected header may survive');
 
   try

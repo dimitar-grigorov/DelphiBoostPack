@@ -510,12 +510,37 @@ begin
       raise EbpHttpClient.CreateFmt('Header %s must not contain CR or LF', [aWhat]);
 end;
 
+// RFC 7230 tchar; Ord keeps the set legal on Unicode compilers too
+function BpIsHeaderNameChar(aChar: Char): Boolean;
+begin
+  case Ord(aChar) of
+    Ord('0')..Ord('9'), Ord('A')..Ord('Z'), Ord('a')..Ord('z'),
+    Ord('!'), Ord('#')..Ord(''''), Ord('*'), Ord('+'), Ord('-'), Ord('.'),
+    Ord('^')..Ord('`'), Ord('|'), Ord('~'):
+      Result := True;
+  else
+    Result := False;
+  end;
+end;
+
+// an empty or non-token name emits a line WinInet rejects, and that one bad
+// line fails every later request on the client, not just this header
+procedure BpCheckHeaderName(const aName: string);
+var
+  i: Integer;
+begin
+  if aName = '' then
+    raise EbpHttpClient.Create('Header name must not be empty');
+  for i := 1 to Length(aName) do
+    if not BpIsHeaderNameChar(aName[i]) then
+      raise EbpHttpClient.CreateFmt(
+        'Header name must be a token, got %s', [aName]);
+end;
+
 procedure TbpHttpClient.AddHeader(const aName, aValue: string);
 begin
-  BpCheckHeaderPart(aName, 'name');
+  BpCheckHeaderName(aName);
   BpCheckHeaderPart(aValue, 'value');
-  if Pos(':', aName) > 0 then
-    raise EbpHttpClient.Create('Header name must not contain a colon');
   FHeaders.Values[aName] := aValue;
 end;
 
