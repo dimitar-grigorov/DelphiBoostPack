@@ -5,7 +5,7 @@ unit BpSysUtils;
 
 interface
 
-{$IF CompilerVersion < 20.0}  // Delphi 2009 or lower
+{$IF CompilerVersion < 20.0}  // below Delphi 2009
 
 uses
   SysUtils;

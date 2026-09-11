@@ -40,7 +40,7 @@ function BpConstantTimeEquals(const A, B: AnsiString): Boolean;
 function BpHashPassword(const aPassword: AnsiString): string; overload;
 function BpHashPassword(const aPassword: AnsiString; aIterations: Integer): string; overload;
 // parses the record, re-derives, compares in constant time; malformed input
-// returns False, never raises, and a record past the ceilings below is refused
+// returns False, never raises, and a record outside the bounds below is refused
 function BpVerifyPassword(const aPassword: AnsiString; const aStored: string): Boolean;
 
 implementation
