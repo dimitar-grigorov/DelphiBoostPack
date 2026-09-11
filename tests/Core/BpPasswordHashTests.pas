@@ -22,6 +22,7 @@ type
     procedure TestVerifyTamperedRecord;
     procedure TestVerifyMalformedInput;
     procedure TestVerifyRejectsAbsurdWorkFactor;
+    procedure TestHashRejectsUnverifiableWorkFactor;
     procedure TestRecordFormat;
     procedure TestSaltUniqueness;
     procedure TestConstantTimeEquals;
@@ -182,6 +183,7 @@ var
 begin
   CheckEquals(10000000, gcBpPasswordHashMaxIterations, 'iteration ceiling');
   CheckEquals(64, gcBpPasswordHashMaxKeyLen, 'hash length ceiling');
+  CheckEquals(16, gcBpPasswordHashMinKeyLen, 'hash length floor');
   CheckFalse(BpVerifyPassword('p',
     '$pbkdf2-sha256$2147483647$c2FsdA==$c2FsdA=='), 'MaxInt iterations');
   CheckFalse(BpVerifyPassword('p',
@@ -190,6 +192,34 @@ begin
   lvLongHash := StringOfChar('A', 96);
   CheckFalse(BpVerifyPassword('p',
     '$pbkdf2-sha256$1000$c2FsdA==$' + lvLongHash), 'over-long hash');
+  // a record cut short derives a short key that a wrong password can match
+  CheckFalse(BpVerifyPassword('p',
+    '$pbkdf2-sha256$1000$c2FsdA==$AA=='), 'one-byte hash');
+  // 20 base64 characters decode to 15 bytes, one below the floor
+  CheckFalse(BpVerifyPassword('p',
+    '$pbkdf2-sha256$1000$c2FsdA==$' + StringOfChar('A', 20)), 'one under the floor');
+end;
+
+// minting must not produce a record the verifier refuses on sight
+procedure TBpPasswordHashTests.TestHashRejectsUnverifiableWorkFactor;
+
+  procedure CheckRejected(aIterations: Integer; const aCase: string);
+  begin
+    try
+      BpHashPassword('pw', aIterations);
+      Fail('expected a raise for ' + aCase);
+    except
+      on E: ETestFailure do
+        raise;
+      on E: EbpPasswordHash do
+        Check(True);
+    end;
+  end;
+
+begin
+  CheckRejected(0, 'zero iterations');
+  CheckRejected(-1, 'negative iterations');
+  CheckRejected(gcBpPasswordHashMaxIterations + 1, 'one past the ceiling');
 end;
 
 procedure TBpPasswordHashTests.TestRecordFormat;
