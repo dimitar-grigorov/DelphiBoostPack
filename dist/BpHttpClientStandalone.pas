@@ -5,7 +5,7 @@ unit BpHttpClientStandalone;
 //   src\Core\Units\BpCompat.pas
 //   src\Core\Units\BpBase64.pas
 //   src\Core\Classes\BpHttpClient.pas
-// Source commit 75432ca, generated 2026-09-12 by tools\Amalgamate.ps1.
+// Source commit a5c291d, generated 2026-09-12 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
 // One bundle per project: two that share a helper declare it twice.
@@ -73,7 +73,7 @@ function Base64DecodeUtf8(const aBase64: string): WideString;
 // progress, and an async download task. See the README for examples.
 
 type
-  TbpHttpMethod = (hmGet, hmPost, hmPut, hmDelete);
+  TbpHttpMethod = (hmGet, hmPost, hmPut, hmDelete, hmPatch, hmHead, hmOptions);
 
   EbpHttpClient = class(Exception)
   private
@@ -95,6 +95,7 @@ type
     Headers: string;         // raw response headers, CRLF separated
     Body: AnsiString;        // raw bytes as received; empty for Download
     ContentLength: Int64;    // from the Content-Length header, -1 when absent
+    FinalUrl: string;        // where the redirects ended, = the requested url when none
   end;
 
   TbpCancelCleanupProc = procedure(aData: Pointer);
@@ -133,6 +134,8 @@ type
     FSendTimeout: DWORD;
     FReceiveTimeout: DWORD;
     FFollowRedirects: Boolean;
+    FMaxRedirects: Integer;
+    FAutoDecompress: Boolean;
     FUsername: AnsiString;
     FPassword: AnsiString;
     FBearerToken: string;
@@ -154,6 +157,7 @@ type
       aSecure: Boolean): HINTERNET;
     procedure ApplyTimeouts(aHandle: HINTERNET);
     procedure ApplyAuthentication(aRequest: HINTERNET);
+    procedure ApplyDecoding(aRequest: HINTERNET);
     procedure SendHttpRequest(aRequest: HINTERNET; const aHeaders: string;
       const aBody: AnsiString);
     function ReadResponseStatus(aRequest: HINTERNET): Integer;
@@ -163,6 +167,11 @@ type
     procedure ReadBodyToStream(aRequest: HINTERNET; aDest: TStream;
       const aTotal: Int64; aProgress: TbpHttpProgressEvent;
       aToken: TbpCancellationToken);
+    // one request, no redirect of its own; aRedirectTo names the next hop
+    function PerformHop(const aUrl, aMethod, aHeaders: string;
+      const aBody: AnsiString; aWithCredentials: Boolean; aDest: TStream;
+      aProgress: TbpHttpProgressEvent; aToken: TbpCancellationToken;
+      out aRedirectTo: string): TbpHttpResponse;
     // the one request every verb and download goes through; nil aDest buffers
     function PerformRequest(const aUrl, aMethod, aHeaders: string;
       const aBody: AnsiString; aDest: TStream; aProgress: TbpHttpProgressEvent;
@@ -187,6 +196,13 @@ type
       aToken: TbpCancellationToken = nil): TbpHttpResponse;
     function Delete(const aUrl: string; const aHeaders: string = '';
       aToken: TbpCancellationToken = nil): TbpHttpResponse;
+    function Patch(const aUrl: string; const aBody: AnsiString;
+      const aHeaders: string = '';
+      aToken: TbpCancellationToken = nil): TbpHttpResponse;
+    function Head(const aUrl: string; const aHeaders: string = '';
+      aToken: TbpCancellationToken = nil): TbpHttpResponse;
+    function Options(const aUrl: string; const aHeaders: string = '';
+      aToken: TbpCancellationToken = nil): TbpHttpResponse;
     class function FetchUrl(const aUrl: string; const aHeaders: string = ''): AnsiString;
 
     // streams the body whatever the status; 'Range: bytes=N-' in aHeaders resumes
@@ -207,7 +223,11 @@ type
     // exposed for testing; also useful on their own
     function ParseUrl(const aUrl: string; out aServerName, aResource: string;
       out aPort: Integer; out aSecure: Boolean): Boolean;
-    function BuildHeaders(const aRequestHeaders: string): string;
+    // aWithCredentials False builds the block a foreign redirect origin may see
+    function BuildHeaders(const aRequestHeaders: string;
+      aWithCredentials: Boolean = True): string;
+    // scheme, host and port all equal, the WHATWG fetch definition
+    function SameOrigin(const aUrl, aOther: string): Boolean;
     class function MethodToString(aMethod: TbpHttpMethod): string;
 
     // the WinInet session, opened on demand
@@ -224,6 +244,10 @@ type
     property SendTimeout: DWORD read FSendTimeout write SetSendTimeout;
     property ReceiveTimeout: DWORD read FReceiveTimeout write SetReceiveTimeout;
     property FollowRedirects: Boolean read FFollowRedirects write FFollowRedirects;
+    // hops allowed before EbpHttpClient; 0 has the same effect as FollowRedirects False
+    property MaxRedirects: Integer read FMaxRedirects write FMaxRedirects;
+    // gzip and deflate on the buffered verbs, where no Content-Length is checked
+    property AutoDecompress: Boolean read FAutoDecompress write FAutoDecompress;
   end;
 
   TbpHttpDownloadState = (dtsPending, dtsRunning, dtsSucceeded, dtsFailed,
@@ -326,6 +350,14 @@ function BpHttpHeaderValue(const aHeaders, aName: string): string;
 function BpHttpContentLength(const aHeaders: string): Int64;
 // False for the replies that carry no body, whatever Content-Length says
 function BpHttpResponseHasBody(const aMethod: string; aStatus: Integer): Boolean;
+// absolute redirect target, '' when the reply is not a redirect or has no Location
+function BpHttpRedirectTarget(const aBaseUrl, aHeaders: string; aStatus: Integer): string;
+// the method the next hop uses, per the WHATWG fetch redirect rules
+function BpHttpRedirectMethod(aStatus: Integer; const aMethod: string): string;
+// drops the header lines that must not follow a redirect to another origin
+function BpHttpStripCredentials(const aHeaders: string): string;
+// drops the entity headers that described a body the next hop will not send
+function BpHttpStripContentHeaders(const aHeaders: string): string;
 // whole percent 0..100 for a progress pair; -1 when the total is unknown
 function BpHttpProgressPercent(const aReceived, aTotal: Int64): Integer;
 // user-facing categorization; pass 0 for the dimension that does not apply
@@ -334,6 +366,9 @@ function BpClassifyHttpError(aWinInetError: DWORD; aHttpStatus: Integer): string
 const
   // WinInet ERROR_INTERNET_OPERATION_CANCELLED, missing from D2007's WinInet.pas
   gcErrOperationCancelled = 12017;
+  // INTERNET_OPTION_HTTP_DECODING, Vista and up, missing from D2007's WinInet.pas
+  gcInternetOptionHttpDecoding = 65;
+  gcBpHttpMaxRedirects = 10;
 {$IFDEF BPAMALG_R}{$R+}{$ELSE}{$R-}{$ENDIF}{$IFDEF BPAMALG_Q}{$Q+}{$ELSE}{$Q-}{$ENDIF}
 // ----------------- end BpHttpClient.pas interface -----------------
 
@@ -795,6 +830,8 @@ begin
   FSendTimeout := gcDefaultTimeout;
   FReceiveTimeout := gcDefaultTimeout;
   FFollowRedirects := True;
+  FMaxRedirects := gcBpHttpMaxRedirects;
+  FAutoDecompress := True;
   FHeaders := TStringList.Create;
 end;
 
@@ -912,6 +949,9 @@ begin
     hmPost: Result := 'POST';
     hmPut: Result := 'PUT';
     hmDelete: Result := 'DELETE';
+    hmPatch: Result := 'PATCH';
+    hmHead: Result := 'HEAD';
+    hmOptions: Result := 'OPTIONS';
   else
     Result := 'GET';
   end;
@@ -1002,13 +1042,32 @@ begin
   Result := True;
 end;
 
-function TbpHttpClient.BuildHeaders(const aRequestHeaders: string): string;
+function TbpHttpClient.SameOrigin(const aUrl, aOther: string): Boolean;
+var
+  lvHost, lvOtherHost, lvResource: string;
+  lvPort, lvOtherPort: Integer;
+  lvSecure, lvOtherSecure: Boolean;
+begin
+  Result := ParseUrl(aUrl, lvHost, lvResource, lvPort, lvSecure) and
+    ParseUrl(aOther, lvOtherHost, lvResource, lvOtherPort, lvOtherSecure) and
+    (lvSecure = lvOtherSecure) and (lvPort = lvOtherPort) and
+    SameText(lvHost, lvOtherHost);
+end;
+
+function TbpHttpClient.BuildHeaders(const aRequestHeaders: string;
+  aWithCredentials: Boolean): string;
 var
   i: Integer;
   lvRequest: string;
 begin
   Result := '';
   lvRequest := Trim(aRequestHeaders);
+  // another origin gets no persistent header of ours and no caller credential
+  if not aWithCredentials then
+  begin
+    Result := BpHttpStripCredentials(lvRequest);
+    Exit;
+  end;
   // a per-request line replaces the persistent one, rather than joining it
   for i := 0 to FHeaders.Count - 1 do
     if not HeaderBlockHasName(lvRequest, FHeaders.Names[i]) then
@@ -1128,8 +1187,8 @@ begin
   if aSecure then
     lvFlags := lvFlags or INTERNET_FLAG_SECURE;
 
-  if not FFollowRedirects then
-    lvFlags := lvFlags or INTERNET_FLAG_NO_AUTO_REDIRECT;
+  // always ours to follow: WinInet replays the header block, secrets included
+  lvFlags := lvFlags or INTERNET_FLAG_NO_AUTO_REDIRECT;
 
   Result := HttpOpenRequest(
     aConnection,
@@ -1176,6 +1235,15 @@ begin
   if FPassword <> '' then
     InternetSetOption(aRequest, INTERNET_OPTION_PASSWORD,
       @FPassword[1], Length(FPassword));
+end;
+
+// pre-Vista WinInet rejects the option, and then we simply get the bytes raw
+procedure TbpHttpClient.ApplyDecoding(aRequest: HINTERNET);
+var
+  lvOn: BOOL;
+begin
+  lvOn := True;
+  InternetSetOption(aRequest, gcInternetOptionHttpDecoding, @lvOn, SizeOf(lvOn));
 end;
 
 procedure TbpHttpClient.SendHttpRequest(aRequest: HINTERNET;
@@ -1299,9 +1367,10 @@ begin
   end;
 end;
 
-function TbpHttpClient.PerformRequest(const aUrl, aMethod, aHeaders: string;
-  const aBody: AnsiString; aDest: TStream; aProgress: TbpHttpProgressEvent;
-  aToken: TbpCancellationToken): TbpHttpResponse;
+function TbpHttpClient.PerformHop(const aUrl, aMethod, aHeaders: string;
+  const aBody: AnsiString; aWithCredentials: Boolean; aDest: TStream;
+  aProgress: TbpHttpProgressEvent; aToken: TbpCancellationToken;
+  out aRedirectTo: string): TbpHttpResponse;
 var
   lvConnection, lvRequest: HINTERNET;
   lvServerName, lvResource: string;
@@ -1309,7 +1378,9 @@ var
   lvSecure, lvOwnsRequest: Boolean;
   lvCleanupId: Integer;
   lvExpected: Int64;
+  lvBlock: string;
 begin
+  aRedirectTo := '';
   if (aToken <> nil) and aToken.IsCancellationRequested then
     RaiseOperationCancelled;
   if not ParseUrl(aUrl, lvServerName, lvResource, lvPort, lvSecure) then
@@ -1332,16 +1403,29 @@ begin
       end;
     try
       try
-        ApplyAuthentication(lvRequest);
-        SendHttpRequest(lvRequest, BuildHeaders(aHeaders), aBody);
+        if aWithCredentials then
+          ApplyAuthentication(lvRequest);
+        lvBlock := BuildHeaders(aHeaders, aWithCredentials);
+        // decoded bytes outnumber Content-Length, so not where it is checked
+        if FAutoDecompress and (aDest = nil) then
+        begin
+          ApplyDecoding(lvRequest);
+          if not HeaderBlockHasName(lvBlock, 'Accept-Encoding') then
+            AppendHeaderLine(lvBlock, 'Accept-Encoding: gzip, deflate');
+        end;
+        SendHttpRequest(lvRequest, lvBlock, aBody);
 
         Result.StatusCode := ReadResponseStatus(lvRequest);
         Result.Headers := ReadResponseHeaders(lvRequest);
         Result.StatusText := Format('HTTP %d', [Result.StatusCode]);
         Result.ContentLength := BpHttpContentLength(Result.Headers);
+        Result.FinalUrl := aUrl;
         Result.Body := '';
+        if FFollowRedirects then
+          aRedirectTo := BpHttpRedirectTarget(aUrl, Result.Headers, Result.StatusCode);
 
-        if aDest <> nil then
+        // the else drains a redirect body, which keeps the connection pooled
+        if (aDest <> nil) and (aRedirectTo = '') then
         begin
           // a bodyless reply must not trip the completeness guard below
           if BpHttpResponseHasBody(aMethod, Result.StatusCode) then
@@ -1373,6 +1457,41 @@ begin
   end;
 end;
 
+function TbpHttpClient.PerformRequest(const aUrl, aMethod, aHeaders: string;
+  const aBody: AnsiString; aDest: TStream; aProgress: TbpHttpProgressEvent;
+  aToken: TbpCancellationToken): TbpHttpResponse;
+var
+  lvUrl, lvMethod, lvNext, lvHeaders: string;
+  lvBody: AnsiString;
+  lvCredentials: Boolean;
+  i: Integer;
+begin
+  lvUrl := aUrl;
+  lvMethod := aMethod;
+  lvBody := aBody;
+  lvHeaders := aHeaders;
+  lvCredentials := True;
+  for i := 0 to FMaxRedirects do
+  begin
+    Result := PerformHop(lvUrl, lvMethod, lvHeaders, lvBody, lvCredentials,
+      aDest, aProgress, aToken, lvNext);
+    if lvNext = '' then
+      Exit;
+    lvMethod := BpHttpRedirectMethod(Result.StatusCode, lvMethod);
+    // the body is gone, so the headers that described it must go too
+    if lvMethod <> aMethod then
+    begin
+      lvBody := '';
+      lvHeaders := BpHttpStripContentHeaders(lvHeaders);
+    end;
+    lvUrl := lvNext;
+    // once off the origin they were set for, credentials never come back
+    lvCredentials := lvCredentials and SameOrigin(aUrl, lvUrl);
+  end;
+  raise EbpHttpClient.CreateFmt('More than %d redirects for %s',
+    [FMaxRedirects, aUrl]);
+end;
+
 function TbpHttpClient.Execute(const aUrl: string; aMethod: TbpHttpMethod;
   const aHeaders: string; const aBody: AnsiString;
   aToken: TbpCancellationToken): TbpHttpResponse;
@@ -1391,6 +1510,24 @@ function TbpHttpClient.Post(const aUrl: string; const aBody: AnsiString;
   const aHeaders: string; aToken: TbpCancellationToken): TbpHttpResponse;
 begin
   Result := Execute(aUrl, hmPost, aHeaders, aBody, aToken);
+end;
+
+function TbpHttpClient.Patch(const aUrl: string; const aBody: AnsiString;
+  const aHeaders: string; aToken: TbpCancellationToken): TbpHttpResponse;
+begin
+  Result := Execute(aUrl, hmPatch, aHeaders, aBody, aToken);
+end;
+
+function TbpHttpClient.Head(const aUrl, aHeaders: string;
+  aToken: TbpCancellationToken): TbpHttpResponse;
+begin
+  Result := Execute(aUrl, hmHead, aHeaders, '', aToken);
+end;
+
+function TbpHttpClient.Options(const aUrl, aHeaders: string;
+  aToken: TbpCancellationToken): TbpHttpResponse;
+begin
+  Result := Execute(aUrl, hmOptions, aHeaders, '', aToken);
 end;
 
 function TbpHttpClient.PostJson(const aUrl: string; const aJson: AnsiString;
@@ -1888,6 +2025,85 @@ begin
     end;
     Result := Result * 10 + lvDigit;
   end;
+end;
+
+function BpHttpRedirectTarget(const aBaseUrl, aHeaders: string;
+  aStatus: Integer): string;
+var
+  lvLocation: string;
+  lvBuffer: array[0..INTERNET_MAX_URL_LENGTH] of Char;
+  lvLen: DWORD;
+begin
+  Result := '';
+  case aStatus of
+    301, 302, 303, 307, 308: ;
+  else
+    Exit;
+  end;
+  lvLocation := BpHttpHeaderValue(aHeaders, 'Location');
+  if lvLocation = '' then
+    Exit;
+  lvLen := Length(lvBuffer);
+  // Location may be relative, and this is the RFC 3986 resolver Windows ships
+  if InternetCombineUrl(PChar(aBaseUrl), PChar(lvLocation), lvBuffer, lvLen, 0) then
+    SetString(Result, lvBuffer, lvLen);
+end;
+
+function BpHttpRedirectMethod(aStatus: Integer; const aMethod: string): string;
+begin
+  Result := aMethod;
+  case aStatus of
+    301, 302: if SameText(aMethod, 'POST') then Result := 'GET';
+    303: if not SameText(aMethod, 'HEAD') then Result := 'GET';
+  end;
+end;
+
+type
+  TbpHeaderNameTest = function(const aName: string): Boolean;
+
+function BpHttpFilterHeaders(const aHeaders: string;
+  aDrop: TbpHeaderNameTest): string;
+var
+  lvLines: TStringList;
+  i, lvColon: Integer;
+begin
+  Result := '';
+  lvLines := TStringList.Create;
+  try
+    lvLines.Text := aHeaders;
+    for i := 0 to lvLines.Count - 1 do
+    begin
+      lvColon := Pos(':', lvLines[i]);
+      if (lvColon > 0) and aDrop(Trim(Copy(lvLines[i], 1, lvColon - 1))) then
+        Continue;
+      AppendHeaderLine(Result, lvLines[i]);
+    end;
+  finally
+    lvLines.Free;
+  end;
+end;
+
+// the set every mainstream client strips: see requests, reqwest and fetch
+function BpHttpIsCredentialHeader(const aName: string): Boolean;
+begin
+  Result := SameText(aName, 'Authorization') or SameText(aName, 'Cookie') or
+    SameText(aName, 'Cookie2') or SameText(aName, 'Proxy-Authorization');
+end;
+
+function BpHttpIsContentHeader(const aName: string): Boolean;
+begin
+  Result := SameText(aName, 'Content-Length') or SameText(aName, 'Content-Type') or
+    SameText(aName, 'Transfer-Encoding');
+end;
+
+function BpHttpStripCredentials(const aHeaders: string): string;
+begin
+  Result := BpHttpFilterHeaders(aHeaders, BpHttpIsCredentialHeader);
+end;
+
+function BpHttpStripContentHeaders(const aHeaders: string): string;
+begin
+  Result := BpHttpFilterHeaders(aHeaders, BpHttpIsContentHeader);
 end;
 
 // RFC 9110: a Content-Length on these describes what a GET would have returned
