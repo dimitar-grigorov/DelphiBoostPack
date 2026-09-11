@@ -27,6 +27,10 @@ type
     procedure TestHeaderInjectionRejected;
     procedure TestBuildHeadersOddValues;
     procedure TestVerbsHonourPreCancelledToken;
+    procedure TestSameOrigin;
+    procedure TestRedirectMethod;
+    procedure TestRedirectTarget;
+    procedure TestStripCredentials;
   end;
 
 implementation
@@ -163,6 +167,9 @@ begin
   CheckEquals('POST', TbpHttpClient.MethodToString(hmPost));
   CheckEquals('PUT', TbpHttpClient.MethodToString(hmPut));
   CheckEquals('DELETE', TbpHttpClient.MethodToString(hmDelete));
+  CheckEquals('PATCH', TbpHttpClient.MethodToString(hmPatch));
+  CheckEquals('HEAD', TbpHttpClient.MethodToString(hmHead));
+  CheckEquals('OPTIONS', TbpHttpClient.MethodToString(hmOptions));
 end;
 
 procedure TBpHttpClientTests.TestHeaderValue;
@@ -304,11 +311,85 @@ begin
     'a CRLF-only block adds nothing');
 end;
 
+procedure TBpHttpClientTests.TestSameOrigin;
+begin
+  CheckTrue(FClient.SameOrigin('https://a.com/x', 'https://a.com/y?q=1'), 'path only');
+  CheckTrue(FClient.SameOrigin('https://A.COM/x', 'https://a.com/x'), 'host is case free');
+  CheckTrue(FClient.SameOrigin('https://a.com/x', 'https://a.com:443/x'), 'default port');
+  CheckFalse(FClient.SameOrigin('https://a.com/x', 'https://b.com/x'), 'other host');
+  CheckFalse(FClient.SameOrigin('https://a.com/x', 'https://sub.a.com/x'), 'subdomain');
+  CheckFalse(FClient.SameOrigin('https://a.com/x', 'https://a.com:8443/x'), 'other port');
+  // an http to https upgrade is still a new origin, as WHATWG fetch has it
+  CheckFalse(FClient.SameOrigin('http://a.com/x', 'https://a.com/x'), 'other scheme');
+  CheckFalse(FClient.SameOrigin('https://a.com/x', 'not a url'), 'unparsable');
+end;
+
+procedure TBpHttpClientTests.TestRedirectMethod;
+begin
+  CheckEquals('GET', BpHttpRedirectMethod(301, 'POST'), '301 downgrades a POST');
+  CheckEquals('GET', BpHttpRedirectMethod(302, 'POST'), '302 downgrades a POST');
+  CheckEquals('PUT', BpHttpRedirectMethod(301, 'PUT'), '301 keeps a PUT');
+  CheckEquals('GET', BpHttpRedirectMethod(303, 'PUT'), '303 downgrades anything');
+  CheckEquals('HEAD', BpHttpRedirectMethod(303, 'HEAD'), '303 keeps a HEAD');
+  CheckEquals('POST', BpHttpRedirectMethod(307, 'POST'), '307 keeps the method');
+  CheckEquals('POST', BpHttpRedirectMethod(308, 'POST'), '308 keeps the method');
+  CheckEquals('POST', BpHttpRedirectMethod(200, 'POST'), 'not a redirect');
+end;
+
+procedure TBpHttpClientTests.TestRedirectTarget;
+const
+  lcBase = 'https://a.com/dir/page?q=1';
+
+  function Loc(const aLocation: string; aStatus: Integer = 302): string;
+  begin
+    Result := BpHttpRedirectTarget(lcBase,
+      'HTTP/1.1 302 Found'#13#10'Location: ' + aLocation + #13#10, aStatus);
+  end;
+
+begin
+  CheckEquals('https://b.com/x', Loc('https://b.com/x'), 'absolute');
+  CheckEquals('https://a.com/other', Loc('/other'), 'root relative');
+  CheckEquals('https://a.com/dir/next', Loc('next'), 'path relative');
+  CheckEquals('https://b.com/x', Loc('//b.com/x'), 'protocol relative');
+  CheckEquals('', Loc('/other', 200), 'not a redirect status');
+  CheckEquals('', Loc('/other', 304), '304 is not a redirect');
+  CheckEquals('', BpHttpRedirectTarget(lcBase, 'HTTP/1.1 302 Found'#13#10, 302),
+    'no Location header');
+end;
+
+procedure TBpHttpClientTests.TestStripCredentials;
+const
+  lcBlock = 'Authorization: Bearer secret'#13#10'Accept: text/plain'#13#10 +
+    'cookie: sid=1'#13#10'Proxy-Authorization: Basic x'#13#10'X-Trace: 7';
+begin
+  CheckEquals('Accept: text/plain'#13#10'X-Trace: 7',
+    BpHttpStripCredentials(lcBlock), 'only the safe lines survive');
+  CheckEquals('', BpHttpStripCredentials(''), 'empty block');
+  CheckEquals('Accept: text/plain',
+    BpHttpStripCredentials('Accept: text/plain'), 'nothing to strip');
+
+  // a foreign origin sees none of the client's own headers either
+  FClient.BearerToken := 'secret';
+  FClient.AddHeader('X-Api-Key', 'k');
+  CheckEquals('X-Api-Key: k'#13#10'Authorization: Bearer secret',
+    FClient.BuildHeaders(''), 'the origin it was set for sees everything');
+  CheckEquals('', FClient.BuildHeaders('', False), 'another origin sees nothing');
+  CheckEquals('Accept: text/plain', FClient.BuildHeaders(
+    'Accept: text/plain'#13#10'Authorization: Bearer other', False),
+    'a per-request credential is dropped, the rest travels');
+
+  // a 302 that turns a POST into a GET leaves no body for these to describe
+  CheckEquals('Accept: text/plain', BpHttpStripContentHeaders(
+    'Content-Type: application/json'#13#10'Accept: text/plain'#13#10 +
+    'content-length: 12'#13#10'Transfer-Encoding: chunked'), 'entity headers');
+end;
+
 procedure TBpHttpClientTests.TestVerbsHonourPreCancelledToken;
 const
   lcUrl = 'https://example.com/';
-  lcVerbs: array[0..5] of string =
-    ('Execute', 'Get', 'Post', 'PostJson', 'Put', 'Delete');
+  lcVerbs: array[0..8] of string =
+    ('Execute', 'Get', 'Post', 'PostJson', 'Put', 'Delete', 'Patch', 'Head',
+     'Options');
 var
   lvToken: TbpCancellationToken;
   i: Integer;
@@ -327,6 +408,9 @@ begin
           3: FClient.PostJson(lcUrl, '{}', lvToken);
           4: FClient.Put(lcUrl, 'body', '', lvToken);
           5: FClient.Delete(lcUrl, '', lvToken);
+          6: FClient.Patch(lcUrl, 'body', '', lvToken);
+          7: FClient.Head(lcUrl, '', lvToken);
+          8: FClient.Options(lcUrl, '', lvToken);
         end;
         Fail(lcVerbs[i] + ' must raise EbpHttpClientCancelled');
       except

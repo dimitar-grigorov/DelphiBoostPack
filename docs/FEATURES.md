@@ -1,26 +1,16 @@
 # Feature guide
 
-What each unit does, how to call it, where the sharp edges are. The [README](../README.md) is the tour, this is the manual. Add a unit to `uses` and go: no packages, no DLLs, no base class. For one file instead, see [single-file bundles](#single-file-bundles).
+What each unit gives you and where it bites. The [README](../README.md) is the tour. Add a unit to `uses` and go: no packages, no DLLs, no base class. For one file instead, see [single-file bundles](#single-file-bundles).
 
-## Contents
+**Network and async** · [TbpHttpClient](#tbphttpclient) · [TbpHttpDownloadTask](#tbphttpdownloadtask) · [TbpCancellationToken](#tbpcancellationtoken) · [TbpTask](#tbptask)
 
-**Network and async**
-[TbpHttpClient](#tbphttpclient) · [TbpHttpDownloadTask](#tbphttpdownloadtask) · [TbpCancellationToken](#tbpcancellationtoken) · [TbpTask](#tbptask)
+**Data** · [TbpJsonValue](#tbpjsonvalue) · [BpDateUtils](#bpdateutils) · [TbpStringList](#tbpstringlist) · [TbpStrDictionary](#tbpstrdictionary) · [TbpIntDictionary](#tbpintdictionary) · [TbpIntList](#tbpintlist) · [TbpInt64List](#tbpint64list)
 
-**Data**
-[TbpJsonValue](#tbpjsonvalue) · [BpDateUtils](#bpdateutils) · [TbpStringList](#tbpstringlist) · [TbpStrDictionary](#tbpstrdictionary) · [TbpIntDictionary](#tbpintdictionary) · [TbpIntList](#tbpintlist) · [TbpInt64List](#tbpint64list)
+**Strings** · [TbpStringBuilder](#tbpstringbuilder) · [BpStrUtils](#bpstrutils)
 
-**Strings**
-[TbpStringBuilder](#tbpstringbuilder) · [BpStrUtils](#bpstrutils)
+**Hashing** · [BpSHA256](#bpsha256) · [BpMD5](#bpmd5) · [BpHMACSHA256](#bphmacsha256) · [BpPasswordHash](#bppasswordhash) · [BpBase64](#bpbase64) · [BpHashBobJenkins](#bphashbobjenkins)
 
-**Hashing and encoding**
-[BpSHA256](#bpsha256) · [BpMD5](#bpmd5) · [BpHMACSHA256](#bphmacsha256) · [BpPasswordHash](#bppasswordhash) · [BpBase64](#bpbase64) · [BpHashBobJenkins](#bphashbobjenkins)
-
-**Windows and odds and ends**
-[TbpCredentials](#tbpcredentials) · [TbpObjectComparer](#tbpobjectcomparer) · [BpKeyFold](#bpkeyfold) · [BpVariantUtils](#bpvariantutils) · [BpSysUtils](#bpsysutils) · [StopWatch](#stopwatch)
-
-**Packaging**
-[Single-file bundles](#single-file-bundles)
+**Windows and odds** · [TbpCredentials](#tbpcredentials) · [TbpObjectComparer](#tbpobjectcomparer) · [BpKeyFold](#bpkeyfold) · [BpVariantUtils](#bpvariantutils) · [BpSysUtils](#bpsysutils) · [StopWatch](#stopwatch)
 
 ---
 
@@ -35,19 +25,14 @@ uses BpHttpClient;
 
 lvBody := TbpHttpClient.FetchUrl('https://api.example.com/v1/status');
 
-lvResp := lvClient.Get('https://api.example.com/v1/items');
+lvClient.BearerToken := TbpCredentials.GetPassword('MyApp', 'api');
+lvClient.AddHeader('X-Api-Version', '2');          // persistent
+lvResp := lvClient.Get('https://api.example.com/v1/items', '', lvToken);
 if BpHttpResponseIsSuccess(lvResp) then
   lvText := BpHttpResponseBodyAsUtf8(lvResp);
 ```
 
-| Call | Notes |
-|------|-------|
-| `Get(aUrl, aHeaders, aToken)` | everything after the URL is optional |
-| `Post(aUrl, aBody, aHeaders, aToken)` | raw body, you set the content type |
-| `PostJson(aUrl, aJson, aToken)` | sets `Content-Type: application/json` |
-| `Put` / `Delete` | same shape |
-| `Execute(aUrl, aMethod, aHeaders, aBody, aToken)` | the one they all call |
-| `FetchUrl(aUrl, aHeaders)` | class function, body only |
+`Get`, `Post`, `PostJson`, `Put`, `Delete`, `Patch`, `Head`, `Options`, `Execute` and the `FetchUrl` class function. Every verb takes an optional header block and a [TbpCancellationToken](#tbpcancellationtoken) last.
 
 ```pascal
 TbpHttpResponse = record
@@ -56,49 +41,21 @@ TbpHttpResponse = record
   Headers: string;         // raw, CRLF separated
   Body: AnsiString;        // raw bytes as received
   ContentLength: Int64;    // -1 when the header was absent
+  FinalUrl: string;        // where the redirects ended
 end;
 ```
 
 A 404 is a response, not an exception. Only transport failures raise `EbpHttpClient`, which carries `StatusCode` and `WinInetError`.
 
-#### Auth and headers
+**Properties.** `UserAgent` (`DelphiBoostPack/1.0`), `ConnectTimeout` / `SendTimeout` / `ReceiveTimeout` (8000 ms), `FollowRedirects` (`True`), `MaxRedirects` (10), `AutoDecompress` (`True`), `Username` / `Password` for WinInet challenge auth. Proxy settings come from Internet Options and WPAD with no code. One client owns one WinInet session, so keep the instance: every later request to the same host skips the TCP and TLS handshake. Setting `UserAgent` drops the session.
 
-```pascal
-lvClient.BearerToken := TbpCredentials.GetPassword('MyApp', 'api');
-lvClient.SetBasicAuth('user', 'pass');    // WideString, UTF-8 per RFC 7617
-lvClient.AddHeader('X-Api-Version', '2'); // persistent, sent every request
-```
+**Compression.** The buffered verbs send `Accept-Encoding: gzip, deflate` and let WinInet decode the reply, from Vista on. Downloads do not, because the decoded bytes would no longer match `Content-Length` and that is the check a truncated file is caught by.
 
-`AddHeader` replaces a name already set, removes it on an empty value, and takes only a non-empty RFC 7230 token as the name, so a config value cannot append headers of its own. `BearerToken` and `UserAgent` are checked for CR and LF the same way, and `SetBasicAuth` refuses a colon or a control character in the user-id. Per-request headers merge on top, a name in both sent once with the per-request value.
+**Headers.** `AddHeader` replaces a name already set and removes it on an empty value. A name must be a non-empty RFC 7230 token; `BearerToken` and `UserAgent` reject CR and LF; `SetBasicAuth` rejects a colon in the user-id. Per-request headers merge on top.
 
-| Property | Default |
-|----------|---------|
-| `UserAgent` | `DelphiBoostPack/1.0` |
-| `ConnectTimeout` / `SendTimeout` / `ReceiveTimeout` | 8000 ms each |
-| `FollowRedirects` | `True` |
-| `Username` / `Password` | empty (WinInet challenge-response auth) |
+**Redirects.** Followed by the client, not by WinInet, which replays the header block on every hop with no way to edit it. A hop to another origin, so any change of scheme, host or port, loses the persistent headers plus `Authorization`, `Cookie` and `Proxy-Authorization`, and never gets them back. Method per [WHATWG fetch](https://fetch.spec.whatwg.org/#http-redirect-fetch): 303 to GET unless HEAD, 301 and 302 only a POST, 307 and 308 unchanged; a downgraded method drops the body and its `Content-*` headers. `FollowRedirects := False` returns the 3xx instead.
 
-Proxy settings come from WinInet, so Internet Options and WPAD are honoured with no code.
-
-#### Connection reuse
-
-One client owns one WinInet session, so every request after the first to the same host skips the TCP and TLS handshake. Hold the instance for the life of the form or service. Setting `UserAgent` drops the session.
-
-#### Errors
-
-`BpClassifyHttpError(aWinInetError, aHttpStatus)` turns a WinInet code or an HTTP status into a sentence for a user; pass 0 for the dimension that does not apply. Use it on `lvResp.StatusCode` after a non-2xx, and on `E.WinInetError` and `E.StatusCode` when `EbpHttpClient` is raised.
-
-#### Cancelling
-
-Every verb takes a [TbpCancellationToken](#tbpcancellationtoken) last. `Cancel` closes the WinInet handle from the other thread, so a request blocked in connect, send or receive aborts at once with `EbpHttpClientCancelled` instead of waiting out the timeout. That is what makes a worker joinable at shutdown.
-
-#### Wire trace
-
-An in-process `ssh -v` in an optional companion unit, [BpHttpTrace.pas](../src/Core/Classes/BpHttpTrace.pas), that nothing else references. `TbpHttpTrace.Attach(aClient, aSink)` from any thread, `Detach` when done; the sink is a bare `procedure(aHandle: Pointer; const aLine: string)`. It installs a WinInet status callback, so an untraced build pays nothing. The sink runs on the I/O thread, so keep it quick and thread-safe. Headers never pass through it, so no `Authorization` value reaches a log.
-
-#### Streaming downloads
-
-`Download` streams to any `TStream`, `DownloadToFile` to a file, both in constant memory with `Int64` progress and a token. They block, so use a worker thread or [TbpHttpDownloadTask](#tbphttpdownloadtask).
+**Downloads.** `Download` streams to any `TStream`, `DownloadToFile` to a file, both in constant memory with `Int64` progress and a token. They block, so use a worker thread or [TbpHttpDownloadTask](#tbphttpdownloadtask).
 
 ```pascal
 procedure TMainForm.HandleProgress(aSender: TObject; const aReceived, aTotal: Int64;
@@ -111,50 +68,22 @@ end;
 lvClient.DownloadToFile(lvUrl, 'C:\temp\big.zip', HandleProgress, FToken);
 ```
 
-The file is kept only on a 2xx, so an error page cannot masquerade as the payload, and a body short of the advertised `Content-Length` counts as an error, except on the replies that carry no body at all. Resume is one header away: send `Range: bytes=<n>-` and append on a 206.
+The file is kept only on a 2xx, and a body short of the advertised `Content-Length` is an error. Resume with `Range: bytes=<n>-` and append on a 206.
 
-#### Helpers
+**Wire trace.** [BpHttpTrace.pas](../src/Core/Classes/BpHttpTrace.pas) is an optional in-process `ssh -v`: `TbpHttpTrace.Attach(aClient, aSink)`, `Detach` when done. It installs a WinInet status callback, so an untraced build pays nothing. The sink runs on the I/O thread. Headers never pass through it.
 
-| Function | Returns |
-|----------|---------|
-| `BpHttpResponseIsSuccess(aResponse)` | 2xx |
-| `BpHttpResponseBodyAsUtf8(aResponse)` | body decoded as UTF-8 (`WideString`) |
-| `BpHttpHeaderValue(aHeaders, aName)` | one header from a raw block, `''` when absent |
-| `BpHttpContentLength(aHeaders)` | `Int64`, `-1` when absent or not a plain digit string |
-| `BpHttpResponseHasBody(aMethod, aStatus)` | `False` for HEAD, 1xx, 204 and 304 |
-| `BpHttpProgressPercent(aReceived, aTotal)` | 0..100, `-1` when the total is unknown |
-| `BpClassifyHttpError(aWinInetError, aHttpStatus)` | a user-facing sentence |
-
-`ParseUrl` and `BuildHeaders` are public too, and unit-tested.
+**Helpers.** `BpHttpResponseIsSuccess`, `BpHttpResponseBodyAsUtf8`, `BpHttpHeaderValue`, `BpHttpContentLength`, `BpHttpResponseHasBody`, `BpHttpRedirectTarget`, `BpHttpRedirectMethod`, `BpHttpStripCredentials`, `BpHttpStripContentHeaders`, `BpHttpProgressPercent` and `BpClassifyHttpError`, which turns a WinInet code or an HTTP status into a sentence for a user. `ParseUrl`, `BuildHeaders` and `SameOrigin` are public too.
 
 ### [TbpHttpDownloadTask](../src/Core/Classes/BpHttpClient.pas)
 
-The non-blocking download, shaped like a C# `Task`. `Start` returns at once and the events arrive on the thread that created the task, marshalled through a hidden window, with no `ProcessMessages` anywhere.
+The non-blocking download, shaped like a C# `Task`. `Start` returns at once and the events arrive on the thread that created the task, marshalled through a hidden window, with no `ProcessMessages`.
 
 ```pascal
 FTask := BpDownloadAsync(lvUrl, 'C:\temp\big.zip', HandleProgress, HandleComplete);
-
-procedure TMainForm.HandleComplete(aSender: TObject);
-begin
-  case FTask.State of
-    dtsSucceeded: ShowMessage('Done');
-    dtsCancelled: ShowMessage('Cancelled');
-    dtsFailed:    ShowMessage(FTask.ErrorMessage);
-  end;
-end;
+// FTask.State: dtsPending / dtsRunning / dtsSucceeded / dtsFailed / dtsCancelled
 ```
 
-`Cancel` aborts even in a blocked read, and `Free` cancels, joins and releases in any state, so closing a form mid-download is safe. For auth or a stream destination build it yourself: `Create`, then `Client`, `Url`, `DestFileName` or `DestStream`, the events, `Start`.
-
-| Member | Notes |
-|--------|-------|
-| `State` | `dtsPending` / `dtsRunning` / `dtsSucceeded` / `dtsFailed` / `dtsCancelled` |
-| `Received` / `Total` | live counters, `Total` is `-1` while unknown |
-| `Response` / `HttpStatus` / `ErrorMessage` / `ErrorCode` | authoritative once `IsFinished` |
-| `WaitFor(aTimeoutMs)` | blocks; for console apps and tests |
-| `OnError` | fires before `OnComplete` on `dtsFailed` |
-
-Result properties are lock-guarded, so any thread may read them. `Create(False)` puts the events on the worker thread, for console apps with no message loop. A task is one-shot.
+`Cancel` aborts even in a blocked read, and `Free` cancels, joins and releases in any state, so closing a form mid-download is safe. `Received` / `Total` are live counters, `Response` / `HttpStatus` / `ErrorMessage` / `ErrorCode` are authoritative once `IsFinished`, and all of them are lock-guarded for any thread. `OnError` fires before `OnComplete`. `Create(False)` puts the events on the worker thread, for console apps. A task is one-shot.
 
 ### [TbpCancellationToken](../src/Core/Classes/BpHttpClient.pas)
 
@@ -162,7 +91,7 @@ The C# `CancellationToken` for Delphi 7: one side calls `Cancel`, the working si
 
 ### [TbpTask](../src/Core/Classes/BpTasks.pas)
 
-Run any method on a worker thread and get the result back on the main thread. Self-contained (`Classes, SysUtils, Windows, Messages`), one thread per task, no pool.
+Run any method on a worker thread and get the result back on the main thread. Self-contained, one thread per task, no pool.
 
 ```pascal
 uses BpTasks;
@@ -176,21 +105,11 @@ end;
 FTask := BpRunAsync(DoCrunch, HandleDone);   // HandleDone runs on the main thread
 ```
 
-Cancellation is cooperative, so no thread is killed. An exception in the work body is recorded in `ErrorClass` and `ErrorMessage` rather than crossing the thread boundary. `OnError` fires first, then `OnComplete` on every terminal state.
+Cancellation is cooperative, so no thread is killed. An exception in the work body lands in `ErrorClass` and `ErrorMessage` instead of crossing the thread boundary; `OnError` fires first, then `OnComplete` on every terminal state.
 
-**Lifetime.** The caller owns the task and frees it from any thread. `Free` cancels, joins and cleans up in any state, and from the moment it is entered no further event starts: a queued completion is dropped, a handler already running elsewhere finishes first, and a handler may free its own task. By default the events go through one hidden dispatcher window the unit creates at initialisation, so they run on the main thread whichever thread created the task, and that thread has to pump messages. `Create(False)` runs them on the worker right after `Work` returns, for services and console programs. An exception escaping a handler goes to `BpSetTaskExceptionHook`, else to `Classes.ApplicationHandleException`, else to `SysUtils.ShowException`.
+The caller owns the task and frees it from any thread. `Free` cancels, joins and cleans up in any state, and from the moment it is entered no further event starts: a queued completion is dropped, a running handler finishes first, and a handler may free its own task. Events go through one hidden dispatcher window, so they run on the main thread whichever thread created the task, and that thread has to pump messages. `Create(False)` runs them on the worker instead. An exception escaping a handler goes to `BpSetTaskExceptionHook`, else to `Classes.ApplicationHandleException`.
 
-| Member | Notes |
-|--------|-------|
-| `Work` | `procedure(aSender: TObject; aToken: TbpTaskToken) of object` |
-| `Token` | owned; the same instance the work receives |
-| `State` | `tskPending` / `tskRunning` / `tskSucceeded` / `tskFailed` / `tskCancelled`; a `Start` that cannot create the thread raises and leaves the task pending |
-| `IsFinished` / `WaitFor(aTimeoutMs)` | terminal state reached; blocking wait for the work, not for the events |
-| `WorkerThreadId` | 0 before `Start`, already set when `Work` begins |
-| `Create(False)` | no marshalling - events fire on the worker thread |
-| `BpSetTaskExceptionHook` | one per process; receives an exception that escaped a handler |
-
-**Two tokens, on purpose.** `TbpTaskToken` is a bare interlocked flag for polling work; [TbpCancellationToken](#tbpcancellationtoken) adds cleanups that run inside `Cancel`, for when something must be torn down to make the cancel prompt.
+`TbpTaskToken` is a bare interlocked flag for polling work; [TbpCancellationToken](#tbpcancellationtoken) adds cleanups that run inside `Cancel`, for when something must be torn down to make the cancel prompt.
 
 ---
 
@@ -208,36 +127,22 @@ try
   lvName := lvJson.GetStr('name');                         // raises on wrong kind
   lvAge := lvJson.GetIntDef('age', 0);                     // default on missing
   lvFirst := lvJson.PathStrDef('data.items[0].name', '');  // dotted path, no nil checks
-
   lvItems := lvJson.FindPath('data.items');                // nil when missing
-  for lvIdx := 0 to lvItems.Count - 1 do
-    Log(lvItems.Items[lvIdx].GetStrDef('name', '(unnamed)'));
 finally
-  lvJson.Free;
+  lvJson.Free;                                             // a container owns its children
 end;
 ```
 
-`Parse` raises `EbpJson` with line and column, `TryParse` returns `False`. The parser is strict: leading zeros, raw control characters, trailing commas, `NaN`, single quotes, junk after the value and numbers out of `Double` range all fail.
-
-| Access | Missing | Wrong kind |
-|--------|---------|------------|
-| `GetStr(aName)` / `AsStr` | raises `EbpJson` | raises `EbpJson` |
-| `GetStrDef(aName, aDefault)` | `aDefault` | `aDefault` |
-| `TryGetStr(aName, aValue)` | `False` | `False` |
-| `PathStrDef(aPath, aDefault)` | `aDefault` | `aDefault` |
-| `Find(aName)` / `FindPath(aPath)` | `nil` | `nil` |
-
-Same four shapes for `Bool`, `Int` (`Int64`) and `Float`; `AsFloat` accepts an int, nothing else converts.
+Four shapes per type: `GetX` raises, `GetXDef` returns the default, `TryGetX` returns `False`, `Find` / `FindPath` return `nil`. Same for `Str`, `Bool`, `Int` (`Int64`) and `Float`. `Parse` raises `EbpJson` with line and column, `TryParse` returns `False`, and the parser is strict about leading zeros, control characters, trailing commas, `NaN`, single quotes, junk after the value and out-of-range numbers.
 
 ```pascal
 lvRoot := TbpJsonValue.CreateObject;
 lvRoot.SetStr('name', 'first');              // create-or-replace; AddX appends
 lvRoot.SetArray('tags').AddStr('new');       // container setters chain
-Memo1.Text := lvRoot.ToJsonPretty;           // 2-space indent by default
-lvRoot.Free;                                 // a container owns its children
+Memo1.Text := lvRoot.ToJsonPretty;
 ```
 
-`ToJson(True)` escapes everything above #127 as `\uXXXX` for a transport that is not UTF-8 clean. Below Delphi 2009 a string holds UTF-8 bytes in and out, so a `\uXXXX` escape and the raw character give the same result.
+`ToJson(True)` escapes everything above #127 as `\uXXXX`. Below Delphi 2009 a string holds UTF-8 bytes in and out.
 
 ### [BpDateUtils](../src/Core/Units/BpDateUtils.pas)
 
@@ -247,112 +152,60 @@ The ISO 8601 and RFC 3339 handling the RTL skipped until XE6. Delphi 2007 has no
 uses BpDateUtils;
 
 lvUtc := BpISO8601ToDateTime('2026-07-24T12:34:56.789+03:00');  // UTC TDateTime
-if not BpTryISO8601ToDateTime(lvJson.GetStr('created_at'), lvCreated) then ...
-
 lvText := BpDateTimeToISO8601(lvUtc);        // 2026-07-24T09:34:56.789Z
 lvLocal := BpDateTimeToISO8601Local(lvUtc);  // 2026-07-24T12:34:56.789+03:00
 lvStamp := BpDateTimeToUnix(lvUtc);          // Int64 seconds, also *MS
 lvWall := BpUtcToLocal(lvUtc);               // machine zone, or pass a zone
 ```
 
-Date-only values, `T`-or-space separators, fractional seconds and every zone form (`Z`, `+hh:mm`, `+hhmm`, `+hh`), parsed strictly: malformed input is rejected, not guessed at. `:60` is taken only at 23:59 UTC, where a leap second can be, and stored as `23:59:59.999`. Epoch conversion is `Int64` both ways and honours the negative `TDateTime` convention, so 1850 round-trips as cleanly as 2040.
-
-Local time follows the date, not the day the code runs, so a July stamp formatted in January carries `+03:00`; every local call overloads on a `TTimeZoneInformation` for a zone other than the machine's. Where wall clock and UTC are not one-to-one, RFC 5545 3.3.5 decides: a time that occurs twice means the first, one in the skipped hour moves ahead by the gap.
+Date-only values, `T`-or-space separators, fractional seconds and every zone form, parsed strictly: malformed input is rejected, not guessed at. Epoch conversion is `Int64` both ways, so 1850 round-trips as cleanly as 2040. Local time follows the date, not the day the code runs, so a July stamp formatted in January still carries `+03:00`; every local call overloads on a `TTimeZoneInformation`. Where wall clock and UTC are not one-to-one, RFC 5545 decides: a time that occurs twice means the first, one in the skipped hour moves ahead by the gap.
 
 ### [TbpStringList](../src/Core/Classes/BpStringList.pas)
 
-A `TStrings`, so it goes wherever one is taken, keeping the whole API (`Text`, `CommaText`, `DelimitedText`, `Values`, `Names`, `Objects`, `LoadFromFile`, `Assign`) plus `Sorted`, `Duplicates`, `CaseSensitive`, `Find`, `Sort`, `CustomSort`, `OnChange` and `OnChanging` from `TStringList`. Three things differ underneath:
-
-- **`IndexOf` and `IndexOfName` are O(1).** The index is built on the first lookup and then follows every mutation, where `IniFiles.THashedStringList` throws its hash away on each write and goes quadratic. Rows live in stable slots and the order is a separate array of slot ids, so `Insert`, `Delete`, `Move`, `Exchange` and `Sort` permute 4-byte ints and never touch a chain.
-- **One relation.** Hashing, equality and order read the same case-folded characters through [BpKeyFold](#bpkeyfold): ordinal, the way Git and .NET `Ordinal` compare, not the Windows collation `TStringList` asks. So a hash hit and a binary search cannot disagree, no `CompareString` runs per comparison, and a lookup allocates nothing on any compiler. The cost: `Sort` puts `_` after `Z`, and when `CaseSensitive` every capital before every small letter. `CustomSort` is there for a linguistic order.
-- **`Sort` is stable.** A merge sort over the order array, so sorting by a second key after a first gives a two-key sort, and equal keys in a sorted `dupAccept` list stay in insertion order.
+A `TStrings` with the whole `TStringList` API, so it goes wherever one is taken. Three things differ: `IndexOf` and `IndexOfName` are O(1) through an index built on first lookup that survives every mutation, `Sort` is a stable merge sort, and hashing, equality and order all read the same case-folded characters through [BpKeyFold](#bpkeyfold).
 
 ```pascal
-uses BpStringList;
-
-lvList := TbpStringList.Create;
-lvList.Values['host'] := 'localhost';           // IndexOfName behind Values is O(1)
-if lvList.IndexOf('HOST=localhost') >= 0 then ...
-lvList.Sorted := True;                          // Find is a binary search on the same relation
-if lvList.Find('host=localhost', lvIdx) then ...
-lvList.CustomSort(CompareByValue);              // TbpStringListSortCompare, pre-sort positions
+lvList.Values['host'] := 'localhost';   // IndexOfName behind Values is O(1)
+lvList.Sorted := True;                  // Find is a binary search on the same relation
 ```
 
-Where it says no and `TStringList` says yes: `Insert`, `Put`, `Exchange`, `Move` and `CustomSort` on a `Sorted` list raise `EStringListError`. `Find` and `IndexOf` always answer the first equal row. `Assign` from a `TStringList` copies `Sorted`, `Duplicates` and `CaseSensitive` and re-sorts under this relation, and flipping `CaseSensitive` on a sorted list re-sorts it, which `TStringList` forgets. `Duplicates` is consulted by `Add` on a `Sorted` list only, as before. A variable typed `TStringList` has to be retyped, and a `CustomSort` callback takes `TbpStringListSortCompare`.
-
-Refused, so the coming collections stay separate types: object ownership, typed values, secondary indexes, prefix and range search, caller supplied comparers, thread safety.
-
-Delphi 2007, Release build of the test runner, [the benchmark](../tests/Benchmarks/BpStringListBenchmark.pas):
-
-| operation | RTL | TbpStringList |
-|-----------|-----|---------------|
-| `Add` 50,000 | `TStringList` 2.2 ms | 3.1 ms before the first lookup, 9.3 ms with the index live |
-| `IndexOf` 50,000 | `THashedStringList` 76 ms | 13 ms |
-| `Add` and `IndexOf` interleaved, 10,000 | `THashedStringList` 10,563 ms | 2.7 ms |
-| `IndexOfName` | `TStringList` 31,964 ms for 2,000 probes of 50,000 | 36 ms for all 50,000 |
-| `Sorted` `Add`, 50,000 shuffled | `TStringList` 2,498 ms | 1,052 ms |
-| `Sort` 50,000 shuffled | `TStringList` 435 ms | 55 ms, stable |
-| `Delete` from the middle until empty, 20,000 | `TStringList` 362 ms | 178 ms with the index live |
-| `Insert` in the middle 20,000, an `IndexOf` every 100 | `TStringList` 920 ms | 193 ms |
-
-The sorted and sorting rows are where the ordinal relation pays: `TStringList` makes a `CompareString` call per comparison.
+That one relation is ordinal, the way Git and .NET `Ordinal` compare, not the Windows collation. So a hash hit and a binary search cannot disagree and a lookup allocates nothing, at the price of `_` sorting after `Z`; use `CustomSort` for a linguistic order. `Insert`, `Put`, `Exchange`, `Move` and `CustomSort` raise on a `Sorted` list. A variable typed `TStringList` has to be retyped. Numbers in [the benchmark](../tests/Benchmarks/BpStringListBenchmark.pas); the short version is that `THashedStringList` throws its hash away on every write and goes quadratic where this does not.
 
 ### [TbpStrDictionary](../src/Core/Classes/BpStrDictionary.pas)
 
 A string-keyed hash map with a `TDictionary`-style API, for compilers with no generics.
 
 ```pascal
-uses BpStrDictionary;
-
 lvDict := TbpStrDictionary.Create(True);        // case-insensitive keys
 lvDict.SetInt('port', 8080);
 lvDict['debug'] := True;                        // default property, AddOrSet
 lvHost := lvDict.GetStrDef('HOST', '127.0.0.1');
-if lvDict.TryGetInt('port', lvPort) then ...
 ```
 
-| Call | Notes |
-|------|-------|
-| `Create(aCaseInsensitive, aInitialCapacity)` | both optional; presize when you know the count |
-| `Add` | raises `EbpStrDictionary` on a duplicate key |
-| `AddOrSet` | overwrite, same as writing `Items[]` |
-| `TryGetValue` / `ContainsKey` / `Remove` | `Remove` returns `False` when the key was absent |
-| `Count` / `Capacity` / `CaseInsensitive` | read-only |
-| `Items[aKey]` | default property; reading a missing key raises |
-| `ForEach(aCallback)` / `GetKeys(aStrings)` | iterate, or snapshot to sort |
+`Add` raises on a duplicate, `AddOrSet` overwrites, plus `TryGetValue`, `ContainsKey`, `Remove`, `Count`, `Capacity`, `ForEach` and `GetKeys`. Values are `Variant` and nothing is coerced: `'8080'` stored as a string will not answer `GetInt`. Each type has `GetX` raising, `GetXDef` defaulting and `TryGetX`, over `Int`, `Int64`, `Str`, `Bool`, `Float` and `IntArray`; the rules are [BpVariantUtils](#bpvariantutils).
 
-Values are `Variant` and nothing is coerced: `'8080'` stored as a string will not answer `GetInt`. Each type gets three accessors, `GetInt` raising, `GetIntDef` returning the default and `TryGetInt` returning `False`, for both a missing key and the wrong type. The set is `Int`, `Int64`, `Str`, `Bool`, `Float` and `IntArray`, each with a matching `SetX`; the rules live in [BpVariantUtils](#bpvariantutils).
-
-Open addressing with linear probing, power-of-two capacity, 0.75 load factor and backward-shift deletion, so no tombstones slow down later lookups. Hash and equality are the one ordinal relation from [BpKeyFold](#bpkeyfold), the same relation `TbpStringList` uses, so a case-insensitive key folds as it is hashed rather than through a copy. 10,000 lookups take 0.97 ms where `THashedStringList` takes 3.21 ms and `TStringList.IndexOf` takes 8.0 seconds.
-
-`ForEach` may read but not write: `Add`, `AddOrSet`, `Remove`, `Clear` and `SetCapacity` raise while a callback is running, because a rehash under the scan would skip or revisit entries. A grow moves each entry as raw bits instead of copying it field by field, so it pays no string refcount pair per item and does not deep-copy a stored variant array.
+Open addressing, power-of-two capacity, 0.75 load, backward-shift deletion so no tombstones accumulate, and the ordinal relation from [BpKeyFold](#bpkeyfold). `ForEach` may read but not write: a mutation during a callback raises, because a rehash under the scan would skip entries.
 
 ### [TbpIntDictionary](../src/Core/Classes/BpIntDictionary.pas)
 
-The same map with `Int64` keys, the same `ForEach` guard and the same raw-bits grow. No case option, and `GetKeys` returns a `TbpInt64DynArray` instead of filling a `TStrings`. Keys go through the Thomas Wang 64-to-32 bit mix, exposed as `BpHashInt64`.
+The same map with `Int64` keys and no case option. `GetKeys` returns a `TbpInt64DynArray`. Keys go through the Thomas Wang 64-to-32 mix, exposed as `BpHashInt64`.
 
 ### [TbpIntList](../src/Core/Classes/BpIntList.pas)
 
-A list of integers that behaves like the `TStringList` you know, with an `IndexOf` that does not scan: `Add`, `Delete`, `Insert`, `IndexOf`, `Find`, `Sorted`, `Duplicates`, `Capacity`, `CommaText`, `DelimitedText`, load and save.
+A list of integers shaped like `TStringList`, with an `IndexOf` that does not scan: `Add`, `Delete`, `Insert`, `IndexOf`, `Find`, `Sorted`, `Duplicates`, `Capacity`, `CommaText`, `DelimitedText`, load and save.
 
 ```pascal
-uses BpIntList;
-
 lvIds.CommaText := '5,3,9,1';
 lvIds.Sorted := True;                         // 1,3,5,9, and stays ordered
 if lvIds.Find(5, lvIndex) then
   lvIds.Delete(lvIndex);
 ```
 
-`Find` answers either way: it bisects while `Sorted` and goes through the hash index otherwise, and on a miss it reports the insertion point. `IndexOf` returns the lowest position among equal values. 2,000 lookups over 20,000 values take 0.19 ms, where a `TList` scan takes 22.2 ms and a sorted `TStringList` of `IntToStr` keys takes 2.85 ms.
-
-The values stay dense in one `array of Integer`, so `Items[]` is a single memory access and a sort is in place. The hash index is built on the first `IndexOf`, survives an append and is dropped by any mutation that moves a position, so a list that is only appended to keeps it and one that is rebuilt pays a rescan, never more than the linear search it replaces. Nothing is hashed until the first lookup, and a `Sorted` list builds no index at all.
-
-While `Sorted` is on, `Items[]`, `Insert` and `Exchange` raise `EListError`, because an unchecked write would leave the binary search on unordered data, and `Add` reads `Duplicates` the way `TStringList` does: `dupIgnore` by default, `dupError` to raise, `dupAccept` to keep the run. `Capacity` presizes a list of known size and refuses to shrink below `Count` rather than dropping values. `DelimitedText` also treats spaces, tabs and line breaks as separators, so a whitespace-separated file loads; `LoadFromStream` skips a UTF-8 BOM and reports a NUL byte instead of quietly ending the parse on a UTF-16 file. Sorting is an in-place introsort, recursing into the smaller partition only and dropping to heapsort when the pivot keeps splitting badly: 400,000 organ-pipe values sort in 61 ms in the Debug test build (range and overflow checking on, optimisation off) where a middle-pivot quicksort recurses 200,000 deep and dies.
+`Find` bisects while `Sorted` and uses the hash index otherwise, reporting the insertion point on a miss. Values stay dense in one `array of Integer`, so `Items[]` is a single memory access. The index is built on first lookup, survives an append and is dropped by any move, so an append-only list keeps it. While `Sorted`, `Items[]`, `Insert` and `Exchange` raise. Sorting is an in-place introsort that drops to heapsort on bad pivots.
 
 ### [TbpInt64List](../src/Core/Classes/BpInt64List.pas)
 
-The same list over `array of Int64`, for database keys, file sizes or millisecond timestamps. Same API line for line; the key goes through the Thomas Wang 64-to-32 bit mix instead of the 32-bit finaliser, and parsing goes through `TryStrToInt64`, so text outside the range raises `EConvertError` instead of quietly wrapping.
+The same list over `array of Int64`, for database keys, file sizes or millisecond timestamps. Same API line for line; parsing goes through `TryStrToInt64`, so text out of range raises instead of wrapping.
 
 ---
 
@@ -360,52 +213,36 @@ The same list over `array of Int64`, for database keys, file sizes or millisecon
 
 ### [TbpStringBuilder](../src/Core/Classes/BpStringBuilder.pas)
 
-The XE6 `TStringBuilder` API on the compilers that never got it. Appends write through a cached pointer into a geometrically grown buffer instead of resizing the string every call.
+The XE6 `TStringBuilder` API on compilers that never got it. Appends write through a cached pointer into a geometrically grown buffer instead of resizing the string every call.
 
 ```pascal
-uses BpStringBuilder;
-
 lvSb := TbpStringBuilder.Create(1024);  // presize when you can
 lvSb.Append('SELECT * FROM ').Append(lvTable);
 lvSb.Append(lvIds[lvIdx]);              // Integer overload, no IntToStr
-lvSb.AppendFormat(') LIMIT %d', [lvLimit]);
 lvSql := lvSb.ToString;
 ```
 
-`Append` is overloaded for `string`, `Char`, `Char` plus a repeat count, `Integer`, `Int64`, `Double` and `Boolean`, each returning `Self`. `AppendLine`, `AppendFormat`, `Insert`, `Clear` and `ToString` behave as in the RTL. `Chars[]` is the default property and `Length` is writable: shrinking truncates, extending pads with `#0`. [The benchmark](../tests/Benchmarks/BpStringBuilderBenchmark.pas) measures it against `s := s + x`.
+`Append` is overloaded for `string`, `Char`, `Char` plus a count, `Integer`, `Int64`, `Double` and `Boolean`, each returning `Self`. `Chars[]` is the default property and `Length` is writable.
 
 ### [BpStrUtils](../src/Core/Units/BpStrUtils.pas)
 
-The string helpers the old RTL never had.
-
-```pascal
-uses BpStrUtils;
-
-lvParts := Split('a::b::c', '::');                     // TbpStringArray
-lvLine := Join(lvParts, ' | ');
-if StartsWith(lvUrl, 'https://') and EndsWithText(lvName, '.PAS') then ...
-
-lvClean := FastStringReplace(lvHugeText, #13#10, ' ', [rfReplaceAll]);
-```
-
-`StartsWith` and `EndsWith` are case-sensitive, the `*Text` variants are not. `FastStringReplace` is why this unit exists: `SysUtils.StringReplace` recopies the tail on every hit and goes quadratic, while this one scans for every match first and builds the result in one allocation. Same `TReplaceFlags`, so it is a drop-in swap.
+`Split`, `Join`, `StartsWith` / `EndsWith` and their case-insensitive `*Text` variants, plus `FastStringReplace`, which is why the unit exists: `SysUtils.StringReplace` recopies the tail on every hit and goes quadratic, while this scans for all matches first and builds the result in one allocation. Same `TReplaceFlags`, so it is a drop-in swap.
 
 ---
 
 ## Hashing and encoding
 
-Checked against the published standard vectors (FIPS, RFC), the Windows CryptoAPI and the XE6 RTL. All pure Pascal, no DLLs.
+Checked against the published standard vectors (FIPS, RFC) and the Windows CryptoAPI. All pure Pascal, no DLLs.
+
+The `AnsiString` entry points hash the raw bytes they are given, so on Delphi 2009+ a `string` argument is narrowed through the active ANSI code page first and the digest differs from the Delphi 2007 one. Pass `AnsiString(UTF8Encode(lvText))` when the bytes matter. This holds for all four units below.
 
 ### [BpSHA256](../src/Core/Classes/BpSHA256.pas)
 
 SHA-256 (FIPS 180-4), one-shot or streaming.
 
 ```pascal
-uses BpSHA256;
-
 lvHex := TbpSHA256.HashStrHex('hello');
 lvHex := TbpSHA256.HashFileHex('setup.exe');            // streams the file
-lvB64 := TbpSHA256.DigestToBase64(TbpSHA256.HashStr(lvText));
 
 lvHasher := TbpSHA256.Create;                           // streaming
 lvHasher.Update(lvBuf, lvRead);                         // or TBytes, or AnsiString
@@ -416,81 +253,49 @@ lvHasher.Final(lvDigest);                               // Final resets for reus
 
 ### [BpMD5](../src/Core/Classes/BpMD5.pas)
 
-MD5 (RFC 1321), the same shape as [BpSHA256](#bpsha256). Broken for anything security-related: keep it to legacy checksums, ETags and old protocols that demand it.
-
-The `AnsiString` entry points hash the raw bytes they are given, so on Delphi 2009+ a `string` argument is converted through the active ANSI code page first and the digest differs from the Delphi 2007 one. Pass `AnsiString(UTF8Encode(lvText))` when the bytes matter. The same holds for [BpSHA256](#bpsha256), [BpHMACSHA256](#bphmacsha256) and [BpPasswordHash](#bppasswordhash).
+MD5 (RFC 1321), the same shape. Broken for anything security-related: keep it to legacy checksums, ETags and old protocols that demand it.
 
 ### [BpHMACSHA256](../src/Core/Classes/BpHMACSHA256.pas)
 
 HMAC-SHA256 (RFC 2104), for signing API requests and verifying webhooks.
 
 ```pascal
-uses BpHMACSHA256;
-
 lvSig := TbpHMACSHA256.ComputeHex(lvSecret, lvPayload);
 if not BpConstantTimeEquals(lvSig, lvHeaderSig) then     // from BpPasswordHash
   raise Exception.Create('bad signature');
 ```
 
-`Compute`, `ComputeHex` and `ComputeBase64` for one shot; `Create(aKey)` / `Update` / `Final` when the message is a stream. Keys of any length are handled per the RFC: shorter than the 64-byte block they are zero-padded, longer ones are hashed down first.
-
-Key and payload are raw bytes, not text. The peer signs the UTF-8 body, so sign the same bytes: `TbpHMACSHA256.ComputeHex(lvSecret, AnsiString(UTF8Encode(lvPayload)))`, or hand it the `Body: AnsiString` that [TbpHttpClient](#tbphttpclient) already returns.
+`Compute`, `ComputeHex` and `ComputeBase64` for one shot; `Create(aKey)` / `Update` / `Final` when the message is a stream. Keys of any length are handled per the RFC. The peer signs the UTF-8 body, so sign the same bytes, or hand it the `Body: AnsiString` that [TbpHttpClient](#tbphttpclient) already returns.
 
 ### [BpPasswordHash](../src/Core/Classes/BpPasswordHash.pas)
 
-PBKDF2-HMAC-SHA256 (RFC 2898 / NIST SP 800-132). Never store a bare SHA-256 of a password.
+PBKDF2-HMAC-SHA256 (RFC 2898). Never store a bare SHA-256 of a password.
 
 ```pascal
-uses BpPasswordHash;
-
 lvStored := BpHashPassword('correct horse battery staple');
 // $pbkdf2-sha256$600000$Bx1n...$9f3c...   put this in your users table
 if BpVerifyPassword(lvEntered, lvStored) then
   Login;
 ```
 
-The salt comes from the Windows CSPRNG and the default is 600,000 iterations, current OWASP guidance. The record is self-describing, so the iteration count travels with the hash and can be raised later without breaking old rows. `BpVerifyPassword` compares in constant time, and refuses a record whose iteration count or hash length falls outside 1..`gcBpPasswordHashMaxIterations` and `gcBpPasswordHashMinKeyLen`..`gcBpPasswordHashMaxKeyLen`, so a truncated row cannot authenticate. `BpHashPassword` raises `EbpPasswordHash` rather than mint a record past that ceiling.
-
-| Function | Use |
-|----------|-----|
-| `BpHashPassword(aPassword)` / `(aPassword, aIterations)` | store this |
-| `BpVerifyPassword(aPassword, aStored)` | check a login |
-| `BpPBKDF2SHA256(aPassword, aSalt, aIterations, aKeyLen)` | raw KDF, e.g. an encryption key |
-| `BpPBKDF2SHA256Hex(...)` | the same, hex out |
-| `BpGenerateSalt(aLen)` | CryptGenRandom bytes; raises rather than falling back |
-| `BpConstantTimeEquals(A, B)` | no early exit, so timing leaks nothing |
+Salt from the Windows CSPRNG, 600,000 iterations per current OWASP guidance. The record is self-describing, so the work factor travels with the hash and can be raised without breaking old rows. `BpVerifyPassword` compares in constant time and refuses a record whose iteration count or hash length is out of bounds, so a truncated row cannot authenticate; `BpHashPassword` raises `EbpPasswordHash` rather than mint one. Also `BpPBKDF2SHA256` and `BpPBKDF2SHA256Hex` as a raw KDF, `BpGenerateSalt` and `BpConstantTimeEquals`.
 
 ### [BpBase64](../src/Core/Units/BpBase64.pas)
 
 Base64 and Base64url (RFC 4648).
 
 ```pascal
-uses BpBase64;
-
 lvText := Base64Encode(lvBytes);            // or a buffer, or an AnsiString
 lvJwtPart := Base64UrlEncode(lvHeaderJson); // -_ alphabet, no padding
 lvBytes := Base64Decode(lvText);
-lvRaw := Base64DecodeStr(lvText);           // AnsiString flavour
-
 lvHeader := Base64EncodeUtf8(lvUser + ':' + lvPassword);
-lvBack := Base64DecodeUtf8(lvHeader);       // WideString
 ```
 
-Encoding is a single allocation. The decoder eats either alphabet, forgives missing padding and skips whitespace, so MIME-wrapped input just works; anything else raises `EbpBase64`.
-
-The `Utf8` trio takes and returns `WideString` and always puts UTF-8 on the wire, so the same text gives the same Base64 on Delphi 7 and on Delphi 12, surrogate pairs included; the pre-2009 `UTF8Encode` gets those wrong. The `AnsiString` overloads encode the bytes handed to them and transcode nothing, so on Delphi 2009+ a `string` is narrowed through the machine code page first. Base64 that is not valid UTF-8 makes `Base64DecodeUtf8` raise rather than return U+FFFD.
-
-The `=` policy is pinned by tests: a pad is tolerated wherever it cannot be mistaken for data, and data after a pad raises, so `Zg==Zg` is rejected rather than half-read. Whitespace means exactly tab, LF, CR and space.
+Encoding is a single allocation. The decoder eats either alphabet, forgives missing padding and skips whitespace, so MIME-wrapped input just works; anything else raises `EbpBase64`, including data after a pad. The `Utf8` trio takes and returns `WideString` and always puts UTF-8 on the wire, so the same text gives the same Base64 on Delphi 7 and on Delphi 12, surrogate pairs included.
 
 ### [BpHashBobJenkins](../src/Core/Classes/BpHashBobJenkins.pas)
 
-Bob Jenkins lookup3 (public domain), producing the same values as the RTL's `BobJenkinsHash` and the reference C, anchored on the published self-test vector `hashlittle('Four score and seven years ago', 30, 0) = $17770551`.
-
-```pascal
-lvBucket := TbpHashBobJenkins.GetHashValue(lvKey) and (lcBucketCount - 1);
-```
-
-Fast, well distributed and non-cryptographic: a bucket index, not a fingerprint. It powers [TbpStrDictionary](#tbpstrdictionary). `Reset`, `Update` and `HashAsInteger` hash data arriving in pieces, but `Update` chains by re-seeding with the previous hash, as the RTL does, so the result depends on where the chunks are split and is not the one-shot hash of the concatenation. Use `GetHashValue` over a contiguous buffer when you need that value.
+Bob Jenkins lookup3, producing the same values as the RTL's `BobJenkinsHash` and the reference C. Fast, well distributed and non-cryptographic: a bucket index, not a fingerprint. `Update` chains by re-seeding with the previous hash, as the RTL does, so a chunked result is not the one-shot hash of the concatenation; use `GetHashValue` over a contiguous buffer when you need that value.
 
 ---
 
@@ -498,56 +303,32 @@ Fast, well distributed and non-cryptographic: a bucket index, not a fingerprint.
 
 ### [TbpCredentials](../src/Core/Classes/BpCredentials.pas)
 
-A secret store on the Windows Credential Manager, keyed by service and username like Python's keyring. No more config files with plaintext passwords.
+A secret store on the Windows Credential Manager, keyed by service and username like Python's keyring.
 
 ```pascal
-uses BpCredentials;
-
 TbpCredentials.SetPassword('MyApp', 'api', 'secret-token');          // once, at setup
 lvClient.BearerToken := TbpCredentials.GetPassword('MyApp', 'api');  // raises if missing
 if TbpCredentials.TryGetPassword('MyApp', 'api', lvToken) then ...   // soft version
 ```
 
-Entries land under `'<service>/<username>'` in the vault the Control Panel shows, as UTF-16LE so .NET reads them too. `DeletePassword`, `FindUserNames` and `DeleteAll` cover uninstall and account switching.
-
-The vault is per-user: other accounts cannot read it, but any process running as you can. The `*Protected` variants add a `CryptProtectData` layer keyed by an entropy value your app supplies, so a casual same-user reader gets ciphertext. That is friction, not a boundary.
+Entries land under `'<service>/<username>'` in the vault the Control Panel shows, as UTF-16LE so .NET reads them too. Plus `DeletePassword`, `FindUserNames` and `DeleteAll`. The vault is per-user: other accounts cannot read it, but any process running as you can. The `*Protected` variants add a `CryptProtectData` layer keyed by your own entropy, which is friction, not a boundary.
 
 ### [TbpObjectComparer](../src/Core/Classes/BpObjectComparer.pas)
 
-Diffs two `TPersistent` objects by RTTI and tells you which published properties changed, walking nested objects and `TCollection` items.
+Diffs two `TPersistent` objects by RTTI and reports which published properties changed, `TCollection` items included.
 
 ```pascal
-uses BpObjectComparer;
-
 lvDiffs := TbpObjectComparer.CompareObjects(lvBefore, lvAfter);   // IPropDifference
 Memo1.Text := TbpObjectComparer.CompareObjectsAsString(lvBefore, lvAfter);
 ```
 
-Each difference carries the property path and the old and new values, ready for an audit log. Collection items match by identity rather than position when they implement `IUniqueID` (`UniqueIdIntf.pas`), which is why old and new paths are separate fields: a moved item is reported as changed, not as two unrelated edits.
+Each difference carries the property path and the old and new values, ready for an audit log. Collection items match by identity rather than position when they implement `IUniqueID`, which is why old and new paths are separate fields: a moved item is reported as changed, not as two unrelated edits.
 
 ### [BpKeyFold](../src/Core/Units/BpKeyFold.pas)
 
-One ordinal relation for string keys: hash, equality and order read the same folded characters, so a hash table and a binary search cannot disagree. The fold is upper casing through a table built once, over the active code page on Delphi 7 and 2007 and over the BMP on a Unicode compiler, in place of `AnsiUpperCase`, which allocates on every call.
+One ordinal relation for string keys, so a hash table and a binary search cannot disagree: `BpKeyHash`, `BpKeyEquals` and `BpKeyCompare` all read the same folded characters, with `*Buf` variants for a slice with no `Copy`. The fold is upper casing through a table built once, in place of `AnsiUpperCase`, which allocates on every call.
 
-```pascal
-uses BpKeyFold;
-
-lvBucket := BpKeyHash(lvKey, True) and lcMask;          // folded; False for exact
-if BpKeyEquals(lvKey, lvOther, True) then ...           // the equality the hash agrees with
-lvOrder := BpKeyCompare(lvA, lvB, True);                // ordinal on the folded characters
-lvNameHash := BpKeyHashBuf(PChar(lvRow), lvSepPos - 1, True);   // a slice, no Copy
-```
-
-| Function | Returns |
-|----------|---------|
-| `BpKeyHash(aKey, aFold)` / `BpKeyHashBuf(aBuf, aLen, aFold)` | 32-bit hash, FNV-1a with a murmur3 finaliser |
-| `BpKeyEquals(aA, aB, aFold)` / `BpKeyEqualsBuf(aKey, aBuf, aLen, aFold)` | equality under the relation |
-| `BpKeyCompare(aA, aB, aFold)` | ordinal order, negative, zero or positive |
-| `BpFoldedSame(aA, aB)` | `BpKeyEquals(aA, aB, True)` |
-| `BpFoldChar(aCh)` / `BpFoldInto(aKey, aBuf, aBufChars)` | one character, or a key folded into a buffer |
-| `BpKeyFoldUsable` | False only on a DBCS code page before Unicode; there the hash, equality and compare functions take the RTL path, `BpFoldChar` returns its argument and `BpFoldInto` declines |
-
-The folded relation equals `AnsiSameText` on every single-byte pair of the active code page, which the suite checks exhaustively. It is not the collation: `AnsiCompareText` gives some bytes zero weight and orders words linguistically, while this unit hashes and orders bytes. `SysUtils.SameText` is ASCII only before 2009 and misses Cyrillic case pairs entirely.
+It equals `AnsiSameText` on every single-byte pair of the active code page, which the suite checks exhaustively. It is not the collation: `AnsiCompareText` orders words linguistically, this orders bytes. `BpKeyFoldUsable` is False only on a DBCS code page before Unicode, where everything falls back to the RTL.
 
 ### [BpVariantUtils](../src/Core/Units/BpVariantUtils.pas)
 
@@ -557,11 +338,7 @@ Strict Variant-to-native conversions: each succeeds only when the Variant alread
 if BpTryVarToInt(lvField, lvCount) then ...      // False for '42', True for 42
 ```
 
-`BpTryVarToInt`, `BpTryVarToInt64`, `BpTryVarToStr`, `BpTryVarToBool`, `BpTryVarToFloat`, `BpTryVarToDate` and `BpTryVarToIntArray` are the shared rule set behind the dictionaries' typed accessors, so `GetIntDef` and `BpTryVarToInt` agree by construction. Three details:
-
-- A `varDate` is a kind of its own, not a float, so `BpTryVarToFloat` rejects it and `BpTryVarToDate` reads it: a timestamp never arrives silently as 46264.52.
-- Below Delphi 2009 a `varOleStr` converts only when the code page carries every character; when it does not, the call fails instead of handing you a `'?'`.
-- `varUInt64` is read from the payload, not through a `Double`, so nothing is rounded. Past `High(Int64)` `BpTryVarToInt64` returns False; `BpTryVarToFloat` still takes it, unsigned.
+`BpTryVarToInt`, `*Int64`, `*Str`, `*Bool`, `*Float`, `*Date` and `*IntArray` are the shared rule set behind the dictionaries' typed accessors. A `varDate` is its own kind, so a timestamp never arrives as 46264.52, and `varUInt64` is read from the payload rather than through a `Double`.
 
 ### [BpSysUtils](../src/Core/Units/BpSysUtils.pas)
 
@@ -569,7 +346,7 @@ if BpTryVarToInt(lvField, lvCount) then ...      // False for '42', True for 42
 
 ### [StopWatch](../src/Core/Units/StopWatch.pas)
 
-A `QueryPerformanceCounter` stopwatch with the `TStopwatch` shape, for Delphi 7 to 2007 (also `{$IF CompilerVersion < 20.0}`, so the RTL class wins later).
+A `QueryPerformanceCounter` stopwatch with the `TStopwatch` shape, for Delphi 7 to 2007 (also version-guarded, so the RTL class wins later).
 
 ```pascal
 lvSw := TStopWatch.StartNew;   // IStopWatch, nothing to free
@@ -577,8 +354,6 @@ DoTheWork;
 lvSw.Stop;
 Log(Format('%.2f ms', [lvSw.ElapsedMilliseconds]));
 ```
-
-`Reset`, `Start`, `ResetAndStart`, `Stop`, `ElapsedMilliseconds`, `ElapsedTicks`, `IsRunning`, plus `Instance` for a shared one.
 
 ---
 
@@ -588,13 +363,11 @@ To avoid adding ten units to a project, take one self-contained file from [dist/
 
 | Bundle | Contains |
 |--------|----------|
-| [BpDictionaries.pas](../dist/BpDictionaries.pas) | both dictionaries, the key fold and the Variant helpers baked in |
+| [BpDictionaries.pas](../dist/BpDictionaries.pas) | both dictionaries, the key fold and the Variant helpers |
 | [BpHashes.pas](../dist/BpHashes.pas) | SHA-256, MD5, HMAC-SHA256, PBKDF2, Base64 |
 | [BpHttpClientStandalone.pas](../dist/BpHttpClientStandalone.pas) | HTTP client, downloads, async task, cancellation token, Base64 |
-| [BpJsonStandalone.pas](../dist/BpJsonStandalone.pas) | JSON reader/writer with the string builder baked in |
+| [BpJsonStandalone.pas](../dist/BpJsonStandalone.pas) | JSON reader/writer with the string builder |
 
-They are generated from the modular units, SQLite amalgamation style, by [tools/Amalgamate.ps1](../tools/Amalgamate.ps1) from a manifest per bundle in [tools/bundles/](../tools/bundles/). Treat them as build artifacts: fix the real unit and regenerate with `pwsh -NoProfile -File tools\Amalgamate.ps1`. A unit that turns range or overflow checking off is bracketed, so your own `{$R+}` survives.
+Generated from the modular units, SQLite amalgamation style, by [tools/Amalgamate.ps1](../tools/Amalgamate.ps1). Treat them as build artifacts: fix the real unit and regenerate.
 
 One catch: two bundles that embed the same helper declare its identifiers twice, and which one you get depends on `uses` order, so an `EbpBase64` raised inside one is not the `EbpBase64` the other catches. Today that is `BpHashes` and `BpHttpClientStandalone`. Use one or the other, and do not mix a bundle with the modular units it contains.
-
-[tools/VerifyBundles.cmd](../tools/VerifyBundles.cmd) compiles each bundle on its own and runs a smoke test against known-answer vectors.
