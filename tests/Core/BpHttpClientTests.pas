@@ -269,6 +269,8 @@ begin
   CheckRejected('X Y', 'b', 'space in the name');
   CheckRejected('X'#9'Y', 'b', 'tab in the name');
   CheckRejected('X"Y', 'b', 'quote in the name');
+  // '=' would also split wrong in the TStrings the headers live in
+  CheckRejected('X=Y', 'b', 'equals in the name');
   CheckEquals('', FClient.BuildHeaders(''), 'no rejected header may survive');
 
   try

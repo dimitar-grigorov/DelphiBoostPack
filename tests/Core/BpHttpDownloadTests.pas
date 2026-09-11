@@ -18,6 +18,7 @@ type
   published
     procedure TestProgressPercent;
     procedure TestContentLengthParsing;
+    procedure TestResponseHasBody;
     procedure TestClassifyCancelledError;
     procedure TestDownloadRejectsNilStream;
     procedure TestDownloadHonoursPreCancelledToken;
@@ -347,6 +348,19 @@ begin
   Check(BpHttpContentLength(lcPlus) = -1, 'leading plus yields -1');
   Check(BpHttpContentLength(lcTrailing) = -1, 'trailing text yields -1');
   Check(BpHttpContentLength(lcOverflow) = -1, 'past Int64 yields -1');
+end;
+
+// the completeness guard must not fire on a reply that carries no body
+procedure TBpHttpDownloadTests.TestResponseHasBody;
+begin
+  CheckTrue(BpHttpResponseHasBody('GET', 200), 'GET 200');
+  CheckTrue(BpHttpResponseHasBody('POST', 201), 'POST 201');
+  CheckTrue(BpHttpResponseHasBody('GET', 404), 'an error body is still a body');
+  CheckFalse(BpHttpResponseHasBody('HEAD', 200), 'HEAD');
+  CheckFalse(BpHttpResponseHasBody('head', 200), 'the verb match is case free');
+  CheckFalse(BpHttpResponseHasBody('GET', 204), 'no content');
+  CheckFalse(BpHttpResponseHasBody('GET', 304), 'not modified');
+  CheckFalse(BpHttpResponseHasBody('GET', 100), 'continue');
 end;
 
 procedure TBpHttpDownloadTests.TestClassifyCancelledError;
