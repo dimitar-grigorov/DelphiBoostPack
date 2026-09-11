@@ -328,6 +328,11 @@ const
   lcChunked = 'HTTP/1.1 200 OK'#13#10'Transfer-Encoding: chunked'#13#10;
   lcJunk = 'HTTP/1.1 200 OK'#13#10'Content-Length: banana'#13#10;
   lcNegative = 'HTTP/1.1 200 OK'#13#10'Content-Length: -5'#13#10;
+  lcHex = 'HTTP/1.1 200 OK'#13#10'Content-Length: $40000'#13#10;
+  lcCHex = 'HTTP/1.1 200 OK'#13#10'Content-Length: 0x40000'#13#10;
+  lcPlus = 'HTTP/1.1 200 OK'#13#10'Content-Length: +42'#13#10;
+  lcTrailing = 'HTTP/1.1 200 OK'#13#10'Content-Length: 42 bytes'#13#10;
+  lcOverflow = 'HTTP/1.1 200 OK'#13#10'Content-Length: 99999999999999999999'#13#10;
 begin
   Check(BpHttpContentLength(lcHeaders) = 262144, 'plain value');
   // > 4 GB stays exact in Int64
@@ -336,6 +341,12 @@ begin
   Check(BpHttpContentLength(lcJunk) = -1, 'garbage yields -1');
   Check(BpHttpContentLength(lcNegative) = -1, 'negative yields -1');
   Check(BpHttpContentLength('') = -1, 'empty block yields -1');
+  // RFC 7230 allows digits only; each of these means another length
+  Check(BpHttpContentLength(lcHex) = -1, 'Pascal hex yields -1');
+  Check(BpHttpContentLength(lcCHex) = -1, 'C hex yields -1');
+  Check(BpHttpContentLength(lcPlus) = -1, 'leading plus yields -1');
+  Check(BpHttpContentLength(lcTrailing) = -1, 'trailing text yields -1');
+  Check(BpHttpContentLength(lcOverflow) = -1, 'past Int64 yields -1');
 end;
 
 procedure TBpHttpDownloadTests.TestClassifyCancelledError;

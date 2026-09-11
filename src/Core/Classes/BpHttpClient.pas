@@ -523,8 +523,7 @@ begin
   end;
 end;
 
-// an empty or non-token name emits a line WinInet rejects, and that one bad
-// line fails every later request on the client, not just this header
+// one bad name fails every later request on the client, not just this header
 procedure BpCheckHeaderName(const aName: string);
 var
   i: Integer;
@@ -605,9 +604,15 @@ var
   lvHostBuffer: array[0..INTERNET_MAX_HOST_NAME_LENGTH] of Char;
   lvPathBuffer: array[0..INTERNET_MAX_PATH_LENGTH] of Char;
   lvExtraBuffer: array[0..INTERNET_MAX_PATH_LENGTH] of Char;
-  lvHash: Integer;
+  lvHash, i: Integer;
 begin
   Result := False;
+
+  // InternetCrackUrl drops CR, LF and TAB instead of failing, so the request
+  // would carry a different path than the caller passed
+  for i := 1 to Length(aUrl) do
+    if Ord(aUrl[i]) < 32 then
+      Exit;
 
   ZeroMemory(@lvComponents, SizeOf(lvComponents));
   ZeroMemory(@lvHostBuffer, SizeOf(lvHostBuffer));
@@ -1501,17 +1506,29 @@ begin
   end;
 end;
 
+// RFC 7230 says 1*DIGIT; StrToInt64Def also takes '$40000', '0x40000' and '+42'
 function BpHttpContentLength(const aHeaders: string): Int64;
 var
   lvValue: string;
+  i, lvDigit: Integer;
 begin
   Result := -1;
   lvValue := BpHttpHeaderValue(aHeaders, 'Content-Length');
   if lvValue = '' then
     Exit;
-  Result := StrToInt64Def(lvValue, -1);
-  if Result < 0 then
-    Result := -1;
+  Result := 0;
+  for i := 1 to Length(lvValue) do
+  begin
+    lvDigit := Ord(lvValue[i]) - Ord('0');
+    // the overflow test comes first, or {$Q+} raises on the multiply
+    if (lvDigit < 0) or (lvDigit > 9) or
+      (Result > (High(Int64) - lvDigit) div 10) then
+    begin
+      Result := -1;
+      Exit;
+    end;
+    Result := Result * 10 + lvDigit;
+  end;
 end;
 
 function BpHttpProgressPercent(const aReceived, aTotal: Int64): Integer;

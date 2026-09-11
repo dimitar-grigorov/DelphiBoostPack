@@ -96,6 +96,14 @@ begin
     lvPort, lvSecure), 'file should not parse');
   CheckFalse(FClient.ParseUrl('mailto:a@b.com', lvServer, lvResource,
     lvPort, lvSecure), 'mailto should not parse');
+
+  // WinInet would strip these and send a different query than was passed
+  CheckFalse(FClient.ParseUrl('http://example.com/a'#13'b', lvServer,
+    lvResource, lvPort, lvSecure), 'CR should not parse');
+  CheckFalse(FClient.ParseUrl('http://example.com/a'#10'b', lvServer,
+    lvResource, lvPort, lvSecure), 'LF should not parse');
+  CheckFalse(FClient.ParseUrl('http://example.com/a?q=1'#9'2', lvServer,
+    lvResource, lvPort, lvSecure), 'TAB should not parse');
 end;
 
 procedure TBpHttpClientTests.TestBuildHeaders;

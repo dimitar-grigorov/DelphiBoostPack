@@ -5,7 +5,7 @@ unit BpHttpClientStandalone;
 //   src\Core\Units\BpCompat.pas
 //   src\Core\Units\BpBase64.pas
 //   src\Core\Classes\BpHttpClient.pas
-// Source commit e876c99, generated 2026-09-12 by tools\Amalgamate.ps1.
+// Source commit 6d6f93b, generated 2026-09-12 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
 // One bundle per project: two that share a helper declare it twice.
@@ -16,6 +16,11 @@ interface
 
 uses
   SysUtils, Windows, Classes, Messages, WinInet;
+
+// Range and overflow checking as the consumer set it: a unit that turns
+// either off is bracketed, so its setting ends where the unit does.
+{$IFOPT R+}{$DEFINE BPAMALG_R}{$ELSE}{$UNDEF BPAMALG_R}{$ENDIF}
+{$IFOPT Q+}{$DEFINE BPAMALG_Q}{$ELSE}{$UNDEF BPAMALG_Q}{$ENDIF}
 
 // ------------------ begin BpCompat.pas interface ------------------
 
@@ -326,6 +331,7 @@ function BpClassifyHttpError(aWinInetError: DWORD; aHttpStatus: Integer): string
 const
   // WinInet ERROR_INTERNET_OPERATION_CANCELLED, missing from D2007's WinInet.pas
   gcErrOperationCancelled = 12017;
+{$IFDEF BPAMALG_R}{$R+}{$ELSE}{$R-}{$ENDIF}{$IFDEF BPAMALG_Q}{$Q+}{$ELSE}{$Q-}{$ENDIF}
 // ----------------- end BpHttpClient.pas interface -----------------
 
 implementation
@@ -848,8 +854,7 @@ begin
   end;
 end;
 
-// an empty or non-token name emits a line WinInet rejects, and that one bad
-// line fails every later request on the client, not just this header
+// one bad name fails every later request on the client, not just this header
 procedure BpCheckHeaderName(const aName: string);
 var
   i: Integer;
@@ -930,9 +935,15 @@ var
   lvHostBuffer: array[0..INTERNET_MAX_HOST_NAME_LENGTH] of Char;
   lvPathBuffer: array[0..INTERNET_MAX_PATH_LENGTH] of Char;
   lvExtraBuffer: array[0..INTERNET_MAX_PATH_LENGTH] of Char;
-  lvHash: Integer;
+  lvHash, i: Integer;
 begin
   Result := False;
+
+  // InternetCrackUrl drops CR, LF and TAB instead of failing, so the request
+  // would carry a different path than the caller passed
+  for i := 1 to Length(aUrl) do
+    if Ord(aUrl[i]) < 32 then
+      Exit;
 
   ZeroMemory(@lvComponents, SizeOf(lvComponents));
   ZeroMemory(@lvHostBuffer, SizeOf(lvHostBuffer));
@@ -1826,17 +1837,29 @@ begin
   end;
 end;
 
+// RFC 7230 says 1*DIGIT; StrToInt64Def also takes '$40000', '0x40000' and '+42'
 function BpHttpContentLength(const aHeaders: string): Int64;
 var
   lvValue: string;
+  i, lvDigit: Integer;
 begin
   Result := -1;
   lvValue := BpHttpHeaderValue(aHeaders, 'Content-Length');
   if lvValue = '' then
     Exit;
-  Result := StrToInt64Def(lvValue, -1);
-  if Result < 0 then
-    Result := -1;
+  Result := 0;
+  for i := 1 to Length(lvValue) do
+  begin
+    lvDigit := Ord(lvValue[i]) - Ord('0');
+    // the overflow test comes first, or {$Q+} raises on the multiply
+    if (lvDigit < 0) or (lvDigit > 9) or
+      (Result > (High(Int64) - lvDigit) div 10) then
+    begin
+      Result := -1;
+      Exit;
+    end;
+    Result := Result * 10 + lvDigit;
+  end;
 end;
 
 function BpHttpProgressPercent(const aReceived, aTotal: Int64): Integer;
@@ -1902,6 +1925,7 @@ begin
       Result := 'Unknown error';
   end;
 end;
+{$IFDEF BPAMALG_R}{$R+}{$ELSE}{$R-}{$ENDIF}{$IFDEF BPAMALG_Q}{$Q+}{$ELSE}{$Q-}{$ENDIF}
 // -------------- end BpHttpClient.pas implementation ---------------
 
 initialization
