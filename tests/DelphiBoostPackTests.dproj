@@ -13,6 +13,7 @@
     <DCC_DebugInformation>False</DCC_DebugInformation>
     <DCC_LocalDebugSymbols>False</DCC_LocalDebugSymbols>
     <DCC_SymbolReferenceInfo>0</DCC_SymbolReferenceInfo>
+    <DCC_Optimize>True</DCC_Optimize>
     <DCC_Define>RELEASE</DCC_Define>
     <DCC_UnitSearchPath>;$(BDS)\Source\DUnit\src</DCC_UnitSearchPath>
     <DCC_ResourcePath>;$(BDS)\Source\DUnit\src</DCC_ResourcePath>
