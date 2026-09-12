@@ -470,6 +470,9 @@ begin
   Result := '';
   if Length(aBytes) = 0 then
     Exit;
+  // BpEncoding decodes the same, inline here so the bundle needs no extra unit
+  //   SetString(lvRaw, PAnsiChar(@aBytes[0]), Length(aBytes));
+  //   Result := BpUtf8ToWide(lvRaw);
   // gcNoBadChars: bad UTF-8 fails instead of turning into U+FFFD
   lvLen := MultiByteToWideChar(CP_UTF8, gcNoBadChars, PAnsiChar(@aBytes[0]),
     Length(aBytes), nil, 0);

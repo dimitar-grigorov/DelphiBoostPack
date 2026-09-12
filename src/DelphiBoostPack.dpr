@@ -30,6 +30,7 @@ uses
   StopWatch in 'Core\Units\StopWatch.pas',
   BpKeyFold in 'Core\Units\BpKeyFold.pas',
   BpPathUtils in 'Core\Units\BpPathUtils.pas',
+  BpEncoding in 'Core\Units\BpEncoding.pas',
   BpStringList in 'Core\Classes\BpStringList.pas',
   BpCompat in 'Core\Units\BpCompat.pas',
   BpHttpTrace in 'Core\Classes\BpHttpTrace.pas';
