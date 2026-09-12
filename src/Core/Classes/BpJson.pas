@@ -95,8 +95,7 @@ type
     procedure Delete(aIndex: Integer);
     procedure Clear;
 
-    // Add and SetValue take the value over, but only when the call succeeds;
-    // a refused one leaves it with the caller. Extract hands ownership back.
+    // Add and SetValue take the value over only on success; Extract hands it back
     procedure Add(aValue: TbpJsonValue);
     procedure SetValue(const aName: string; aValue: TbpJsonValue);
     function Extract(aIndex: Integer): TbpJsonValue;
@@ -200,8 +199,7 @@ type
     Cur: PChar;
     Limit: PChar;   // one past the last character, so an embedded #0 is data
     Depth: Integer;
-    // containers still being filled, indexed by Depth - 1; the single catch in
-    // Parse frees them, so no nesting level pays for a re-raise of its own
+    // still being filled; Parse frees these, so no nesting level re-raises
     Pending: array of TbpJsonValue;
   end;
 
@@ -286,8 +284,7 @@ begin
 end;
 
 {$IF CompilerVersion < 20.0}
-// UTF-8 bytes for one code point. Below Delphi 2009 a string holds bytes, so a
-// \u escape has to produce the same UTF-8 a raw literal already passes through.
+// UTF-8 for one code point, so a \u escape matches the raw literal below D2009
 function BpJsonUtf8Bytes(aCode: Integer): AnsiString;
 begin
   if aCode < $80 then
@@ -317,8 +314,7 @@ begin
     Result[4] := AnsiChar($80 or (aCode and $3F));
   end;
 end;
-// The reverse, for the writer. False when the bytes are not valid UTF-8, which
-// leaves the caller free to fall back to the ANSI reading.
+// the reverse, for the writer; False lets the caller fall back to ANSI
 function BpJsonWideFromUtf8(const aValue: AnsiString;
   out aWide: WideString): Boolean;
 var
@@ -403,8 +399,7 @@ var
     end;
   end;
 
-  // one code point in whatever a string holds here: UTF-16 on Delphi 2009+,
-  // UTF-8 bytes below it
+  // one code point in whatever a string holds: UTF-16 on D2009+, UTF-8 below
   procedure AppendCodePoint(aCode: Integer);
   begin
 {$IF CompilerVersion >= 20.0}
@@ -663,8 +658,7 @@ begin
     jnOutOfRange:
       BpJsonFail(aReader, 'Number out of range');
   end;
-  // Val stores through Extended into the Double, so anything past Double range
-  // raises EOverflow, which is not EbpJson and would escape Parse and TryParse
+  // Val goes through Extended, so past Double range it raises EOverflow, not EbpJson
   lvFloat := 0;
   try
     Val(lvToken, lvFloat, lvErr);
@@ -855,8 +849,7 @@ begin
         AppendEscape(Ord(lvC));
     end;
 {$ELSE}
-    // the parser hands out UTF-8 here, so decode it as such; input that is not
-    // valid UTF-8 is taken as ANSI, the best guess left
+    // the parser hands out UTF-8 here; bytes that are not take the ANSI reading
     if not BpJsonWideFromUtf8(aValue, lvWide) then
       lvWide := WideString(aValue);
     for lvIdx := 1 to Length(lvWide) do

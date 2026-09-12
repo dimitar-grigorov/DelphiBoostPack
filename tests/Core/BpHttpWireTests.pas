@@ -164,8 +164,7 @@ begin
   gvTraceLog := gvTraceLog + aLine + #13#10;
 end;
 
-// the mock server hands out http://127.0.0.1:port/path, and a test needs the
-// userinfo between the scheme and the host
+// the userinfo goes between the scheme and the host the mock server hands out
 function WithUserInfo(const aUrl, aUserInfo: string): string;
 const
   lcScheme = 'http://';

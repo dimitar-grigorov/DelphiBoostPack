@@ -26,14 +26,12 @@ const DIST_DIR = path.join(ROOT, 'dist');
 const BUNDLE_DIR = path.join(TOOLS, 'bundles');
 const RULE_WIDTH = 66;
 
-// latin1 is the one codec that round-trips every byte, so a unit in any
-// single-byte codepage comes out of the bundle exactly as it went in
+// latin1 is the one codec that round-trips every byte of any single-byte page
 const CODEC = 'latin1';
 
 const trimNewlines = (s) => s.replace(/^\n+/, '').replace(/\n+$/, '');
 
-// Blanks comments, strings and directives, keeping offsets, so a match on the
-// result indexes the original. Directives get 'x': spaces would let a \s* eat them.
+// Blanks comments, strings and directives in place, so a match indexes the original
 function maskText(text) {
   const c = text.split('');
   const n = c.length;
@@ -47,6 +45,7 @@ function maskText(text) {
     } else if (c[i] === '{') {
       blankTo = text.indexOf('}', i);
       blankTo = blankTo < 0 ? n : blankTo + 1;
+      // a directive gets 'x', because spaces would let a \s* eat it
       if (i + 1 < n && c[i + 1] === '$') fill = 'x';
     } else if (c[i] === '(' && i + 1 < n && c[i + 1] === '*') {
       blankTo = text.indexOf('*)', i + 2);

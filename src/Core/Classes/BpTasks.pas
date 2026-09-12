@@ -123,8 +123,7 @@ type
   // aTask is nil when the handler freed it
   TbpTaskExceptionProc = procedure(aTask: TbpTask; aException: Exception);
 
-// create, wire and start; the caller frees
-// (no overloads: old compilers reject nil events on overloads)
+// create, wire and start; the caller frees. One name: nil breaks an overload
 function BpRunAsync(aWork: TbpTaskWorkEvent;
   aOnComplete: TbpTaskCompleteEvent = nil;
   aMarshalToMainThread: Boolean = True): TbpTask;

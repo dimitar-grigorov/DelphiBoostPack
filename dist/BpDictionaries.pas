@@ -490,8 +490,7 @@ const
 const
   gcNoBestFit = $00000400; // WC_NO_BEST_FIT_CHARS, missing in D7's Windows.pas
 
-// True when every character survives the ANSI code page, so a code point it
-// cannot carry fails instead of arriving as '?'.
+// True when every character survives the ANSI page, rather than arriving as '?'
 function TryWideToAnsi(const aValue: WideString; out aResult: AnsiString): Boolean;
 var
   lvLen: Integer;
@@ -531,8 +530,7 @@ begin
     end;
     gcVarWord64:
     begin
-      // raw payload: a variant assignment goes through Double on D2007 and
-      // loses bits. Negative means bit 63 set, so it is past High(Int64).
+      // raw payload: a variant assignment goes through Double on D2007 and loses bits
       aResult := TVarData(aValue).VInt64;
       Result := aResult >= 0;
       if not Result then
@@ -742,8 +740,7 @@ begin
     FItems[i].HashCode := gcStrEmptyHash;
   // grow at 75% load; guarantees at least one always-empty slot
   FGrowThreshold := aNewCapacity shr 1 + aNewCapacity shr 2;
-  // reinsert on the cached hash codes, moving each entry as raw bits: a field
-  // copy would pay a refcount pair per string and deep-copy every variant array
+  // moved as raw bits: a field copy would pay a refcount pair per string
   for i := 0 to Length(lvOldItems) - 1 do
     if lvOldItems[i].HashCode <> gcStrEmptyHash then
     begin
@@ -1229,8 +1226,7 @@ begin
     FItems[i].HashCode := gcIntEmptyHash;
   // grow at 75% load; guarantees at least one always-empty slot
   FGrowThreshold := aNewCapacity shr 1 + aNewCapacity shr 2;
-  // reinsert on the cached hash codes, moving each entry as raw bits: a field
-  // copy would pay a VarCopy per item and deep-copy every variant array
+  // moved as raw bits: a field copy would pay a VarCopy per item
   for i := 0 to Length(lvOldItems) - 1 do
     if lvOldItems[i].HashCode <> gcIntEmptyHash then
     begin

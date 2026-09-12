@@ -59,8 +59,7 @@ const
   lcMaxOffsetHours = 14;         // largest real UTC offset is +14:00
   lcTimeZoneIdInvalid = DWORD($FFFFFFFF);
 
-// TDateTime moves its fraction away from zero, so 1899-12-29 06:00 is -1.25.
-// Every offset and epoch computation here goes through this pair to avoid it.
+// TDateTime moves its fraction away from zero, so 1899-12-29 06:00 is -1.25
 function DaysSinceEpoch(aDateTime: TDateTime): Double;
 begin
   if aDateTime < 0 then
@@ -112,8 +111,7 @@ begin
     aZone)) = BpDateTimeToUnixMS(aWallClock);
 end;
 
-// Delphi 7 has no TzSpecificLocalTimeToSystemTime and Windows does not document
-// its choice in the two DST hours, so try both offsets and see which one holds.
+// D7 has no TzSpecificLocalTimeToSystemTime, so try both offsets and see
 function ZoneLocalToUtc(aLocal: TDateTime;
   const aZone: TTimeZoneInformation): TDateTime;
 var

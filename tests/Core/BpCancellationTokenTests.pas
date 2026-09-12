@@ -28,8 +28,7 @@ type
 implementation
 
 const
-  // typed constants so a real pointer is passed (PChar('A') on a
-  // single-char literal would smuggle the ordinal in as the address)
+  // typed constants, or PChar('A') would smuggle the ordinal in as the address
   gcTagA: PChar = 'A';
   gcTag1: PChar = '1';
   gcTag2: PChar = '2';

@@ -8,10 +8,7 @@ uses
   TestFramework, SysUtils, BpBaseBenchmarkTestCase, BpStrUtils;
 
 type
-  // FastStringReplace vs SysUtils.StringReplace. The RTL copies the whole
-  // remaining string on every match, so its cost grows quadratically with
-  // the match count; FastStringReplace collects positions and builds the
-  // result with a single allocation.
+  // FastStringReplace vs SysUtils.StringReplace, which recopies the tail per match
   TBpStrUtilsBenchmark = class(TBpBaseBenchmarkTestCase)
   private
     function BuildText(const aChunk: string; aCount: Integer): string;

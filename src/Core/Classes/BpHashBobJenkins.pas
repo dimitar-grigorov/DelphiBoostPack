@@ -150,8 +150,7 @@ begin
   Move(FHash, Result[0], 4);
 end;
 
-// lookup3 mix and final. The last 12-byte block is folded by Final rather
-// than in the loop, Len = 0 exits early, and the tail never reads past Data.
+// lookup3: Final folds the last 12-byte block, so the tail never reads past Data
 class function TbpHashBobJenkins.HashLittle(const Data; Len, InitVal: Integer): Integer;
 var
   a, b, c: Cardinal;

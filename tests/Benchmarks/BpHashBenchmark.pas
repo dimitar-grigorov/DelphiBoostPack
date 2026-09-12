@@ -9,8 +9,7 @@ uses
   BpPasswordHash;
 
 type
-  // pure Pascal BpSHA256/BpMD5 vs the Windows CryptoAPI implementations,
-  // throughput in MB/s on one large buffer
+  // pure Pascal BpSHA256/BpMD5 vs the Windows CryptoAPI, in MB/s on one buffer
   TBpHashBenchmark = class(TBpBaseBenchmarkTestCase)
   private
     function BuildPayload(aSize: Integer): AnsiString;

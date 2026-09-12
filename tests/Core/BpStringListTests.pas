@@ -115,8 +115,7 @@ begin
   inherited;
 end;
 
-// three case variants of one shape: folding is exercised everywhere, and the folded
-// ordinal order still matches the locale, so TStringList stays a valid oracle for Text
+// three case variants, where the folded order still matches the locale
 function TBpStringListTests.MakeKey(aIndex: Integer): string;
 begin
   case aIndex mod 3 of
@@ -228,8 +227,7 @@ begin
     CheckEquals(FRef.IndexOf(LowerCase(MakeKey(i))), FList.IndexOf(LowerCase(MakeKey(i))), 'lower cased probe');
 end;
 
-// keys differ only in digits, where the collation and the ordinal order agree,
-// so even the sorts can be compared
+// keys differ only in digits, where collation and ordinal order agree
 procedure TBpStringListTests.TestRandomOperationsMatchStringList;
 var
   lvOp, i, lvIdx, lvNew: Integer;
@@ -332,8 +330,7 @@ begin
   CheckSameAnswers('after Assign', False);
 end;
 
-// a sorted TStringList is ordered by the collation; the copy must be ordered
-// by this class's relation or Find on it would lie
+// the copy must be ordered by this class's relation, or Find on it would lie
 procedure TBpStringListTests.TestAssignCopiesTheFlagsAndResorts;
 var
   lvOther: TbpStringList;
@@ -836,8 +833,7 @@ begin
   CheckEquals(0, FList.IndexOf('only'), 'the index survived the rejected add');
 end;
 
-// as in TStringList, and unlike a set: the default Duplicates is dupIgnore,
-// which must not start dropping rows from an ordinary list
+// as in TStringList and unlike a set: the default Duplicates is dupIgnore
 procedure TBpStringListTests.TestDuplicatesOnlyMatterWhenSorted;
 begin
   CheckTrue(FList.Duplicates = dupIgnore, 'the TStringList default');

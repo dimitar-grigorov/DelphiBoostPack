@@ -10,8 +10,7 @@ interface
 
 implementation
 
-// Deliberately no uses clause: a unit named here would finalize before this one
-// and everything it still held would be counted as a leak.
+// no uses clause on purpose: a unit named here finalizes first and reads as a leak
 
 var
   vBlocks: Integer;

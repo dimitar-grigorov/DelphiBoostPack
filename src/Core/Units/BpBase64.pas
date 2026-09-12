@@ -243,8 +243,7 @@ begin
   Move(lvBytes[0], Pointer(Result)^, Length(lvBytes));
 end;
 
-// Not UTF8Encode: before Delphi 2009 it stops at three bytes and breaks
-// surrogate pairs.
+// not UTF8Encode: before Delphi 2009 it breaks surrogate pairs
 function WideToUtf8(const aText: WideString): AnsiString;
 var
   lvLen: Integer;

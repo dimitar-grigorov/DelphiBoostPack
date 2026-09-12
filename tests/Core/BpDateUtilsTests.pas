@@ -568,8 +568,7 @@ var
   i: Integer;
   lvUtc, lvLocal, lvBack: TDateTime;
 begin
-  // in any zone: the parse back is never later and shows the same wall clock,
-  // and is the instant itself outside the repeated hour
+  // in any zone the parse back is never later and shows the same wall clock
   for i := 0 to 365 * 24 - 1 do
   begin
     lvUtc := Utc(2026, 1, 1, 0, 30, 0) + i * cHour;

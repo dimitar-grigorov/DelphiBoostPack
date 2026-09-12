@@ -9,8 +9,7 @@ uses
   BpStrDictionary;
 
 type
-  // TbpStrDictionary vs the classic D2007 options: unsorted TStringList.IndexOf,
-  // sorted TStringList.Find and IniFiles.THashedStringList.IndexOf
+  // TbpStrDictionary vs TStringList.IndexOf, sorted Find and THashedStringList
   TBpStrDictionaryBenchmark = class(TBpBaseBenchmarkTestCase)
   private
     FKeys: TStringList;

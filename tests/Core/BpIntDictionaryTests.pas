@@ -132,8 +132,7 @@ var
   i, lvRound: Integer;
   lvKey: Int64;
 begin
-  // deterministic insert/remove storm: every alive key findable, every dead one
-  // gone. Exercises cluster shifts and wraparound far better than fixed cases.
+  // an insert/remove storm: cluster shifts and wraparound, which fixed cases miss
   RandSeed := 20260708;
   SetLength(lvKeys, 400);
   SetLength(lvAlive, 400);
