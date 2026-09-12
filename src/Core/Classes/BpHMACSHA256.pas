@@ -10,7 +10,7 @@ unit BpHMACSHA256;
 interface
 
 uses
-  SysUtils, BpSHA256;
+  SysUtils, BpSHA256, BpCompat;  // TBytes on Delphi 7
 
 type
   TbpHMACSHA256 = class

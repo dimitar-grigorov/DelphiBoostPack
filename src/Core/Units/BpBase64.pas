@@ -10,7 +10,7 @@ unit BpBase64;
 interface
 
 uses
-  SysUtils;
+  SysUtils, BpCompat;  // TBytes on Delphi 7
 
 type
   EbpBase64 = class(Exception);

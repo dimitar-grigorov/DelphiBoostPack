@@ -11,7 +11,7 @@ unit BpPasswordHash;
 interface
 
 uses
-  SysUtils, BpSHA256, BpHMACSHA256;
+  SysUtils, BpSHA256, BpHMACSHA256, BpCompat;  // TBytes on Delphi 7
 
 const
   // OWASP recommendation for PBKDF2-HMAC-SHA256 as of 2023+

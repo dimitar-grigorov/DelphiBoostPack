@@ -13,7 +13,7 @@ unit BpMD5;
 interface
 
 uses
-  SysUtils;
+  SysUtils, BpCompat;  // TBytes on Delphi 7
 
 type
   TbpMD5Digest = array[0..15] of Byte;

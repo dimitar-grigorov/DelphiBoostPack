@@ -50,6 +50,8 @@ type
 // The AnsiString overloads encode bytes, they do not transcode: for text use
 // the Utf8 functions, which encode UTF-8 on every compiler.
 
+  // TBytes on Delphi 7
+
 type
   EbpBase64 = class(Exception);
 
@@ -80,6 +82,8 @@ function Base64DecodeUtf8(const aBase64: string): WideString;
 // hash arithmetic relies on Cardinal wraparound mod 2^32
 {$Q-}
 {$R-}
+
+  // TBytes on Delphi 7
 
 type
   TbpSHA256Digest = array[0..31] of Byte;
@@ -126,6 +130,8 @@ type
 {$Q-}
 {$R-}
 
+  // TBytes on Delphi 7
+
 type
   TbpMD5Digest = array[0..15] of Byte;
 
@@ -165,6 +171,8 @@ type
 // Key and text are raw bytes: UTF8Encode first, or a Unicode compiler signs
 // the ANSI conversion instead of the bytes the peer signed.
 
+  // TBytes on Delphi 7
+
 type
   TbpHMACSHA256 = class
   private
@@ -197,6 +205,8 @@ type
 //   if BpVerifyPassword('hunter2', lvStored) then ...
 // Takes bytes, not text: on Delphi 2009+ pass AnsiString(UTF8Encode(lvPassword)),
 // or the ANSI conversion makes the hash lossy and locale-dependent.
+
+  // TBytes on Delphi 7
 
 const
   // OWASP recommendation for PBKDF2-HMAC-SHA256 as of 2023+

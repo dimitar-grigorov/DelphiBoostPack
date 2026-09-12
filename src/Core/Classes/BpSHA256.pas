@@ -14,7 +14,7 @@ unit BpSHA256;
 interface
 
 uses
-  SysUtils;
+  SysUtils, BpCompat;  // TBytes on Delphi 7
 
 type
   TbpSHA256Digest = array[0..31] of Byte;
