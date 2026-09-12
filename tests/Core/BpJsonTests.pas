@@ -67,6 +67,7 @@ type
     procedure TestLookupOnANonObject;
     procedure TestFindPathOversizedIndex;
     procedure TestExponentPastDoubleRange;
+    procedure TestBomDoesNotShiftTheReportedColumn;
     // a wide object crosses the member count where a hash index takes over
     procedure TestWideObjectFindsEveryMember;
     procedure TestWideObjectKeepsInsertionOrder;
@@ -426,6 +427,35 @@ begin
   finally
     lvObj.Free;
   end;
+end;
+
+const
+{$IF CompilerVersion >= 20.0}
+  gcJsonBom = #$FEFF;
+{$ELSE}
+  gcJsonBom = #$EF#$BB#$BF;
+{$IFEND}
+
+function ParseErrorMessage(const aJson: string): string;
+begin
+  Result := '';
+  try
+    TbpJsonValue.Parse(aJson).Free;
+  except
+    on E: EbpJson do
+      Result := E.Message;
+  end;
+end;
+
+procedure TBpJsonTests.TestBomDoesNotShiftTheReportedColumn;
+var
+  lvPlain, lvWithBom: string;
+begin
+  // the '}' closes an object with no value for "a", at character six
+  lvPlain := ParseErrorMessage('{"a":}');
+  Check(Pos('position 6', lvPlain) > 0, lvPlain);
+  lvWithBom := ParseErrorMessage(gcJsonBom + '{"a":}');
+  CheckEquals(lvPlain, lvWithBom, 'a BOM must not move the reported position');
 end;
 
 procedure TBpJsonTests.TestExponentPastDoubleRange;

@@ -4,7 +4,7 @@ unit BpJsonStandalone;
 // Single-file bundle amalgamated from the DelphiBoostPack modular units:
 //   src\Core\Classes\BpStringBuilder.pas
 //   src\Core\Classes\BpJson.pas
-// Source commit 23e7956, generated 2026-09-12 by tools\Amalgamate.ps1.
+// Source commit 1bb0418, generated 2026-09-12 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
 // One bundle per project: two that share a helper declare it twice.
@@ -1237,6 +1237,8 @@ begin
     (lvReader.Cur[2] = #$BF) then
     Inc(lvReader.Cur, 3);
 {$IFEND}
+  // columns are counted from here, or a BOM would shift every one on line 1
+  lvReader.Start := lvReader.Cur;
   Result := BpJsonParseValue(lvReader);
   try
     BpJsonSkipWhite(lvReader);

@@ -925,6 +925,8 @@ begin
     (lvReader.Cur[2] = #$BF) then
     Inc(lvReader.Cur, 3);
 {$IFEND}
+  // columns are counted from here, or a BOM would shift every one on line 1
+  lvReader.Start := lvReader.Cur;
   Result := BpJsonParseValue(lvReader);
   try
     BpJsonSkipWhite(lvReader);
