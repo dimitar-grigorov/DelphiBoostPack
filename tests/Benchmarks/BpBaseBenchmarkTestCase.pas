@@ -12,11 +12,15 @@ type
     FStartTime: Int64;
     FStopTime: Int64;
     FFirstMessage: Integer;   // where this test's own messages start
+    FSamples: array of Double;
   protected
     procedure InitializeBenchmark;
     procedure StartBenchmark;
     procedure StopBenchmark;
     function GetElapsedTime: Double;
+    // one run varies by half on a boosting CPU, so a claim needs several
+    function MedianTime: Double;
+    function SampleCount: Integer;
     procedure LogStatus(const Msg: string);
     procedure LogStatusFmt(const Msg: string; const Args: array of const);
   public
@@ -40,6 +44,7 @@ begin
   inherited;
   InitializeBenchmark;
   FFirstMessage := gvSuiteBenchmarkMessages.Count;
+  SetLength(FSamples, 0);
 end;
 
 // only this test's own lines, otherwise every TearDown reprints the whole run
@@ -60,6 +65,47 @@ end;
 procedure TBpBaseBenchmarkTestCase.StopBenchmark;
 begin
   QueryPerformanceCounter(FStopTime);
+  SetLength(FSamples, Length(FSamples) + 1);
+  FSamples[High(FSamples)] := GetElapsedTime;
+end;
+
+function TBpBaseBenchmarkTestCase.SampleCount: Integer;
+begin
+  Result := Length(FSamples);
+end;
+
+// the middle of the samples, which no single slow run can move
+function TBpBaseBenchmarkTestCase.MedianTime: Double;
+var
+  lvSorted: array of Double;
+  i, j: Integer;
+  lvSwap: Double;
+begin
+  if Length(FSamples) = 0 then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  // two anonymous dynamic array types never assign, so copy element wise
+  SetLength(lvSorted, Length(FSamples));
+  for i := 0 to High(FSamples) do
+    lvSorted[i] := FSamples[i];
+  for i := 1 to High(lvSorted) do
+  begin
+    lvSwap := lvSorted[i];
+    j := i - 1;
+    while (j >= 0) and (lvSorted[j] > lvSwap) do
+    begin
+      lvSorted[j + 1] := lvSorted[j];
+      Dec(j);
+    end;
+    lvSorted[j + 1] := lvSwap;
+  end;
+  i := Length(lvSorted);
+  if Odd(i) then
+    Result := lvSorted[i div 2]
+  else
+    Result := (lvSorted[i div 2 - 1] + lvSorted[i div 2]) / 2;
 end;
 
 function TBpBaseBenchmarkTestCase.GetElapsedTime: Double;

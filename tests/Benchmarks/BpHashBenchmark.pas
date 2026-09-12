@@ -31,6 +31,7 @@ uses
 const
   PAYLOAD_SIZE = 10 * 1024 * 1024; // 10 MB
   PBKDF2_ITERATIONS = 100000;      // a sixth of the password hashing default
+  PBKDF2_RUNS = 5;
 
 function TBpHashBenchmark.BuildPayload(aSize: Integer): AnsiString;
 var
@@ -51,15 +52,19 @@ end;
 procedure TBpHashBenchmark.TestPBKDF2SHA256;
 var
   lvKey: AnsiString;
+  i: Integer;
 begin
-  StartBenchmark;
-  lvKey := BpPBKDF2SHA256('correct horse battery staple', 'a-salt-16-bytes',
-    PBKDF2_ITERATIONS, 32);
-  StopBenchmark;
+  for i := 1 to PBKDF2_RUNS do
+  begin
+    StartBenchmark;
+    lvKey := BpPBKDF2SHA256('correct horse battery staple', 'a-salt-16-bytes',
+      PBKDF2_ITERATIONS, 32);
+    StopBenchmark;
+  end;
   CheckEquals(32, Length(lvKey));
-  LogStatusFmt('PBKDF2-HMAC-SHA256 %d iterations: %.1f ms, %.0f iterations/s',
-    [PBKDF2_ITERATIONS, GetElapsedTime,
-     PBKDF2_ITERATIONS / (GetElapsedTime / 1000)]);
+  LogStatusFmt('PBKDF2-HMAC-SHA256 %d iterations: %.1f ms median of %d, %.0f iterations/s',
+    [PBKDF2_ITERATIONS, MedianTime, SampleCount,
+     PBKDF2_ITERATIONS / (MedianTime / 1000)]);
 end;
 
 procedure TBpHashBenchmark.TestSHA256BpSHA256;
