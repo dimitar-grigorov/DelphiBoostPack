@@ -25,6 +25,7 @@ uses
   BpHashBenchmark in 'Benchmarks\BpHashBenchmark.pas',
   BpTypesOperationsBenchmark in 'Benchmarks\BpTypesOperationsBenchmark.pas',
   BpStringListBenchmark in 'Benchmarks\BpStringListBenchmark.pas',
+  BpJsonBenchmark in 'Benchmarks\BpJsonBenchmark.pas',
 {$ENDIF}
   BpIntListTests in 'Core\BpIntListTests.pas',
   BpIntList in '..\src\Core\Classes\BpIntList.pas',
