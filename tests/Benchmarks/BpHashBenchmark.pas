@@ -5,7 +5,8 @@ unit BpHashBenchmark;
 interface
 
 uses
-  TestFramework, SysUtils, BpBaseBenchmarkTestCase, BpSHA256, BpMD5;
+  TestFramework, SysUtils, BpBaseBenchmarkTestCase, BpSHA256, BpMD5,
+  BpPasswordHash;
 
 type
   // pure Pascal BpSHA256/BpMD5 vs the Windows CryptoAPI implementations,
@@ -19,6 +20,7 @@ type
     procedure TestSHA256CryptoApi;
     procedure TestMD5BpMD5;
     procedure TestMD5CryptoApi;
+    procedure TestPBKDF2SHA256;
   end;
 
 implementation
@@ -28,6 +30,7 @@ uses
 
 const
   PAYLOAD_SIZE = 10 * 1024 * 1024; // 10 MB
+  PBKDF2_ITERATIONS = 100000;      // a sixth of the password hashing default
 
 function TBpHashBenchmark.BuildPayload(aSize: Integer): AnsiString;
 var
@@ -42,6 +45,21 @@ procedure TBpHashBenchmark.LogThroughput(const aName: string; aSize: Integer);
 begin
   LogStatusFmt('%s: %.1f ms, %.0f MB/s',
     [aName, GetElapsedTime, (aSize / (1024 * 1024)) / (GetElapsedTime / 1000)]);
+end;
+
+// the only hot loop in the unit: this is what a login costs the user
+procedure TBpHashBenchmark.TestPBKDF2SHA256;
+var
+  lvKey: AnsiString;
+begin
+  StartBenchmark;
+  lvKey := BpPBKDF2SHA256('correct horse battery staple', 'a-salt-16-bytes',
+    PBKDF2_ITERATIONS, 32);
+  StopBenchmark;
+  CheckEquals(32, Length(lvKey));
+  LogStatusFmt('PBKDF2-HMAC-SHA256 %d iterations: %.1f ms, %.0f iterations/s',
+    [PBKDF2_ITERATIONS, GetElapsedTime,
+     PBKDF2_ITERATIONS / (GetElapsedTime / 1000)]);
 end;
 
 procedure TBpHashBenchmark.TestSHA256BpSHA256;
