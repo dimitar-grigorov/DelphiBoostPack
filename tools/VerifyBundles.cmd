@@ -1,10 +1,11 @@
 @echo off
 setlocal
 
-rem VerifyBundles.cmd [/ci] [/d7]  -  compiles each dist bundle standalone and
-rem runs its smoke test. The smoke programs see ONLY the dist folder, so a
-rem bundle that still needs a modular unit fails to compile here. /d7 runs the
-rem same check with Delphi 7, the compatibility floor the README claims.
+rem VerifyBundles.cmd [/ci] [/d7]  -  checks each dist bundle against the src
+rem units it was generated from, then compiles it standalone and runs its smoke
+rem test. The smoke programs see ONLY the dist folder, so a bundle that still
+rem needs a modular unit fails to compile here. /d7 runs the same check with
+rem Delphi 7, the compatibility floor the README claims.
 
 set "HERE=%~dp0"
 set "CI="
@@ -15,6 +16,10 @@ for %%A in (%*) do if /I "%%A"=="/d7" set "D7=/d7"
 set "SCRATCH=%TEMP%\BpVerifyBundles"
 if exist "%SCRATCH%" rd /s /q "%SCRATCH%"
 md "%SCRATCH%"
+
+rem compiling proves nothing about being current, so the drift check comes first
+node "%HERE%Amalgamate.js" --check
+if errorlevel 1 goto :fail
 
 set "FAILED="
 for %%B in (BpDictionaries BpHashes BpHttpClientStandalone BpJsonStandalone) do call :Verify %%B

@@ -368,6 +368,6 @@ To avoid adding ten units to a project, take one self-contained file from [dist/
 | [BpHttpClientStandalone.pas](../dist/BpHttpClientStandalone.pas) | HTTP client, downloads, async task, cancellation token, Base64 |
 | [BpJsonStandalone.pas](../dist/BpJsonStandalone.pas) | JSON reader/writer with the string builder |
 
-Generated from the modular units, SQLite amalgamation style, by [tools/Amalgamate.ps1](../tools/Amalgamate.ps1). Treat them as build artifacts: fix the real unit and regenerate.
+Generated from the modular units, SQLite amalgamation style, by [tools/Amalgamate.js](../tools/Amalgamate.js), which `tools\VerifyBundles.cmd` re-runs in `--check` mode so a bundle cannot lag its source. Treat them as build artifacts: fix the real unit and regenerate.
 
 One catch: two bundles that embed the same helper declare its identifiers twice, and which one you get depends on `uses` order, so an `EbpBase64` raised inside one is not the `EbpBase64` the other catches. Today that is `BpHashes` and `BpHttpClientStandalone`. Use one or the other, and do not mix a bundle with the modular units it contains.

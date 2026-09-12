@@ -5,9 +5,8 @@ unit BpHttpClientStandalone;
 //   src\Core\Units\BpCompat.pas
 //   src\Core\Units\BpBase64.pas
 //   src\Core\Classes\BpHttpClient.pas
-// Source commit 72f9df3, generated 2026-09-12 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
-//   pwsh -NoProfile -File tools\Amalgamate.ps1
+//   node tools\Amalgamate.js
 // One bundle per project: two that share a helper declare it twice.
 
 {$DEFINE BPAMALGAMATION}
