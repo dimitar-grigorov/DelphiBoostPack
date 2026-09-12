@@ -56,6 +56,7 @@ uses
   BpHttpClientTests in 'Core\BpHttpClientTests.pas',
   BpHttpClient in '..\src\Core\Classes\BpHttpClient.pas',
   BpHttpDownloadTests in 'Core\BpHttpDownloadTests.pas',
+  BpTestSupport in 'Core\BpTestSupport.pas',
   BpMockHttpServer in 'Core\BpMockHttpServer.pas',
   BpHttpWireTests in 'Core\BpHttpWireTests.pas',
   BpHttpTraceTests in 'Core\BpHttpTraceTests.pas',

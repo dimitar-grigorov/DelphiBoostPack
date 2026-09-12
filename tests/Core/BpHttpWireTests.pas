@@ -10,7 +10,7 @@ interface
 
 uses
   TestFramework, SysUtils, Classes, Windows, BpHttpClient, BpHttpTrace,
-  BpMockHttpServer;
+  BpMockHttpServer, BpTestSupport;
 
 type
   // no published method here: RTTI would hand it to every descendant suite
@@ -169,14 +169,6 @@ begin
   gvTraceLog := gvTraceLog + aLine + #13#10;
 end;
 
-function TempFilePath(const aName: string): string;
-var
-  lvBuffer: array[0..MAX_PATH] of Char;
-begin
-  GetTempPath(MAX_PATH, lvBuffer);
-  Result := IncludeTrailingPathDelimiter(lvBuffer) + aName;
-end;
-
 function BytesToAnsi(const aBytes: array of Byte): AnsiString;
 var
   i: Integer;
@@ -184,76 +176,6 @@ begin
   SetLength(Result, Length(aBytes));
   for i := 0 to High(aBytes) do
     Result[i + 1] := AnsiChar(aBytes[i]);
-end;
-
-function Repeated(aByte: Byte; aCount: Integer): AnsiString;
-begin
-  SetLength(Result, aCount);
-  FillChar(Result[1], aCount, aByte);
-end;
-
-function ReadWholeFile(const aFileName: string): AnsiString;
-var
-  lvStream: TFileStream;
-begin
-  lvStream := TFileStream.Create(aFileName, fmOpenRead or fmShareDenyNone);
-  try
-    SetLength(Result, lvStream.Size);
-    if Result <> '' then
-      lvStream.ReadBuffer(Result[1], Length(Result));
-  finally
-    lvStream.Free;
-  end;
-end;
-
-procedure WriteWholeFile(const aFileName: string; const aBody: AnsiString);
-var
-  lvStream: TFileStream;
-begin
-  lvStream := TFileStream.Create(aFileName, fmCreate);
-  try
-    if aBody <> '' then
-      lvStream.WriteBuffer(aBody[1], Length(aBody));
-  finally
-    lvStream.Free;
-  end;
-end;
-
-// a scratch directory of its own turns "no temp file left behind" into a count
-function CountFiles(const aDir: string): Integer;
-var
-  lvSearch: TSearchRec;
-begin
-  Result := 0;
-  if FindFirst(IncludeTrailingPathDelimiter(aDir) + '*', faAnyFile,
-    lvSearch) <> 0 then
-    Exit;
-  try
-    repeat
-      if (lvSearch.Attr and faDirectory) = 0 then
-        Inc(Result);
-    until FindNext(lvSearch) <> 0;
-  finally
-    SysUtils.FindClose(lvSearch);
-  end;
-end;
-
-procedure DeleteTree(const aDir: string);
-var
-  lvSearch: TSearchRec;
-  lvPath: string;
-begin
-  lvPath := IncludeTrailingPathDelimiter(aDir);
-  if FindFirst(lvPath + '*', faAnyFile, lvSearch) = 0 then
-  try
-    repeat
-      if (lvSearch.Attr and faDirectory) = 0 then
-        SysUtils.DeleteFile(lvPath + lvSearch.Name);
-    until FindNext(lvSearch) <> 0;
-  finally
-    SysUtils.FindClose(lvSearch);
-  end;
-  RemoveDir(aDir);
 end;
 
 // how many header lines the value could have produced, counted on raw bytes
@@ -610,7 +532,7 @@ var
   lvReply: TbpMockResponse;
   lvStream: TMemoryStream;
 begin
-  lvReply := BpMockOk(Repeated($41, 500));
+  lvReply := BpMockOk(BpRepeated($41, 500));
   lvReply.ClaimedLength := 1000;   // announces twice what it sends
   lvReply.Effect := mseCloseAtEnd;
   FServer.Enqueue(lvReply);
@@ -635,12 +557,12 @@ var
   lvReply: TbpMockResponse;
   lvFileName: string;
 begin
-  lvReply := BpMockOk(Repeated($41, 500));
+  lvReply := BpMockOk(BpRepeated($41, 500));
   lvReply.ClaimedLength := 1000;
   lvReply.Effect := mseCloseAtEnd;
   FServer.Enqueue(lvReply);
 
-  lvFileName := TempFilePath('BpWireShortBody.tmp');
+  lvFileName := BpTempFilePath('BpWireShortBody.tmp');
   SysUtils.DeleteFile(lvFileName);
   try
     try
@@ -735,32 +657,31 @@ end;
 procedure TBpHttpDownloadToFileTests.SetUp;
 begin
   inherited;
-  FDir := TempFilePath(Format('bp_wire_%d_%d', [GetCurrentProcessId, GetTickCount]));
-  ForceDirectories(FDir);
+  FDir := BpMakeTempDir('bp_wire');
   FDest := IncludeTrailingPathDelimiter(FDir) + 'payload.bin';
-  WriteWholeFile(FDest, 'ORIGINAL');
+  BpWriteWholeFile(FDest, 'ORIGINAL');
 end;
 
 procedure TBpHttpDownloadToFileTests.TearDown;
 begin
-  DeleteTree(FDir);
+  BpDeleteTree(FDir);
   inherited;
 end;
 
 procedure TBpHttpDownloadToFileTests.CheckSurvived(const aWhat: string);
 begin
   CheckTrue(FileExists(FDest), aWhat + ': the file was removed');
-  CheckEquals('ORIGINAL', string(ReadWholeFile(FDest)),
+  CheckEquals('ORIGINAL', string(BpReadWholeFile(FDest)),
     aWhat + ': the file was rewritten');
-  CheckEquals(1, CountFiles(FDir), aWhat + ': a temp file was left behind');
+  CheckEquals(1, BpCountFiles(FDir), aWhat + ': a temp file was left behind');
 end;
 
 procedure TBpHttpDownloadToFileTests.TestSuccessReplacesTheFile;
 begin
   FServer.Enqueue(BpMockOk('REPLACED'));
   CheckEquals(200, FClient.DownloadToFile(Url('/f.bin'), FDest).StatusCode);
-  CheckEquals('REPLACED', string(ReadWholeFile(FDest)));
-  CheckEquals(1, CountFiles(FDir), 'no temp file may survive a success');
+  CheckEquals('REPLACED', string(BpReadWholeFile(FDest)));
+  CheckEquals(1, BpCountFiles(FDir), 'no temp file may survive a success');
 end;
 
 procedure TBpHttpDownloadToFileTests.TestSuccessCreatesAMissingFile;
@@ -768,8 +689,8 @@ begin
   SysUtils.DeleteFile(FDest);
   FServer.Enqueue(BpMockOk('BRAND NEW'));
   CheckEquals(200, FClient.DownloadToFile(Url('/f.bin'), FDest).StatusCode);
-  CheckEquals('BRAND NEW', string(ReadWholeFile(FDest)));
-  CheckEquals(1, CountFiles(FDir));
+  CheckEquals('BRAND NEW', string(BpReadWholeFile(FDest)));
+  CheckEquals(1, BpCountFiles(FDir));
 end;
 
 procedure TBpHttpDownloadToFileTests.TestNotFoundLeavesTheFileAlone;
@@ -783,7 +704,7 @@ procedure TBpHttpDownloadToFileTests.TestTruncatedBodyLeavesTheFileAlone;
 var
   lvReply: TbpMockResponse;
 begin
-  lvReply := BpMockOk(Repeated($41, 500));
+  lvReply := BpMockOk(BpRepeated($41, 500));
   lvReply.ClaimedLength := 1000;
   lvReply.Effect := mseCloseAtEnd;
   FServer.Enqueue(lvReply);
@@ -803,7 +724,7 @@ var
   lvToken: TbpCancellationToken;
   lvCanceller: TDelayedCancelThread;
 begin
-  lvReply := BpMockOk(Repeated($42, 65536));
+  lvReply := BpMockOk(BpRepeated($42, 65536));
   lvReply.ClaimedLength := 10485760;
   lvReply.Effect := mseStall;
   FServer.Enqueue(lvReply);
@@ -1162,7 +1083,7 @@ procedure TBpHttpCancelWireTests.EnqueueSlowReply;
 var
   lvReply: TbpMockResponse;
 begin
-  lvReply := BpMockOk(Repeated($42, gcSlowBurst));
+  lvReply := BpMockOk(BpRepeated($42, gcSlowBurst));
   lvReply.Headers.Add('Content-Type: application/octet-stream');
   lvReply.ClaimedLength := gcSlowClaimed;
   lvReply.Effect := mseStall;
@@ -1249,7 +1170,7 @@ var
   lvDeadline: Cardinal;
 begin
   EnqueueSlowReply;
-  lvFileName := TempFilePath('bp_wire_async_cancel.bin');
+  lvFileName := BpTempFilePath('bp_wire_async_cancel.bin');
   lvTask := TbpHttpDownloadTask.Create(False);  // events on the worker thread
   try
     lvTask.Client.ReceiveTimeout := 25000;

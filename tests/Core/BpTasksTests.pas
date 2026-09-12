@@ -5,7 +5,7 @@ unit BpTasksTests;
 interface
 
 uses
-  TestFramework, SysUtils, Classes, Windows, BpTasks;
+  TestFramework, SysUtils, Classes, Windows, BpTasks, BpTestSupport;
 
 type
   // all offline; marshalled tests pump the queue themselves
@@ -35,11 +35,6 @@ type
     procedure HandleCompleteSlow(aSender: TObject);
     procedure HandleCompleteRaise(aSender: TObject);
     function WaitForFlag(var aFlag: Boolean; aTimeoutMs: Cardinal): Boolean;
-    procedure PumpMessages;
-    function PumpUntilFlag(var aFlag: Boolean; aTimeoutMs: Cardinal): Boolean;
-    function PumpUntilCount(var aCounter: Integer; aTarget: Integer;
-      aTimeoutMs: Cardinal): Boolean;
-    procedure PumpFor(aMs: Cardinal);
   protected
     procedure SetUp; override;
     procedure TearDown; override;
@@ -209,7 +204,7 @@ procedure TBpTasksTests.TearDown;
 begin
   BpSetTaskExceptionHook(nil);
   // no stray completion for the next test
-  PumpMessages;
+  BpPumpMessages;
   inherited;
 end;
 
@@ -299,58 +294,6 @@ begin
   while not aFlag and (GetTickCount < lvDeadline) do
     Sleep(10);
   Result := aFlag;
-end;
-
-procedure TBpTasksTests.PumpMessages;
-var
-  lvMsg: TMsg;
-begin
-  while PeekMessage(lvMsg, 0, 0, 0, PM_REMOVE) do
-  begin
-    TranslateMessage(lvMsg);
-    DispatchMessage(lvMsg);
-  end;
-end;
-
-function TBpTasksTests.PumpUntilFlag(var aFlag: Boolean;
-  aTimeoutMs: Cardinal): Boolean;
-var
-  lvDeadline: Cardinal;
-begin
-  lvDeadline := GetTickCount + aTimeoutMs;
-  while not aFlag and (GetTickCount < lvDeadline) do
-  begin
-    PumpMessages;
-    Sleep(5);
-  end;
-  Result := aFlag;
-end;
-
-function TBpTasksTests.PumpUntilCount(var aCounter: Integer; aTarget: Integer;
-  aTimeoutMs: Cardinal): Boolean;
-var
-  lvDeadline: Cardinal;
-begin
-  lvDeadline := GetTickCount + aTimeoutMs;
-  while (aCounter < aTarget) and (GetTickCount < lvDeadline) do
-  begin
-    PumpMessages;
-    Sleep(5);
-  end;
-  Result := aCounter >= aTarget;
-end;
-
-// to prove that nothing arrives
-procedure TBpTasksTests.PumpFor(aMs: Cardinal);
-var
-  lvDeadline: Cardinal;
-begin
-  lvDeadline := GetTickCount + aMs;
-  while GetTickCount < lvDeadline do
-  begin
-    PumpMessages;
-    Sleep(5);
-  end;
 end;
 
 procedure TBpTasksTests.TestTokenCancelIsSticky;
@@ -728,13 +671,13 @@ begin
     Check(lvTask.State = tskSucceeded);
     Sleep(20);
     CheckEquals(0, FCompleteCount, 'nothing fires until the queue is pumped');
-    CheckTrue(PumpUntilCount(FCompleteCount, 1, 5000),
+    CheckTrue(BpPumpUntilCount(FCompleteCount, 1, 5000),
       'OnComplete arrives through the message queue');
     Check(FCompleteThreadId = GetCurrentThreadId,
       'and runs on the pumping (main) thread');
     Check(FStateInComplete = tskSucceeded);
     CheckEquals(0, FErrorCount);
-    PumpFor(50);
+    BpPumpFor(50);
     CheckEquals(1, FCompleteCount, 'exactly once');
   finally
     lvTask.Free;
@@ -748,7 +691,7 @@ begin
   lvTask := BpRunAsync(WorkRaise, HandleComplete);
   try
     lvTask.OnError := HandleError;
-    CheckTrue(PumpUntilCount(FCompleteCount, 1, 5000));
+    CheckTrue(BpPumpUntilCount(FCompleteCount, 1, 5000));
     CheckEquals(1, FErrorCount, 'OnError fires on failure');
     CheckEquals('boom', FLastErrorMessage);
     CheckTrue(FErrorBeforeComplete, 'OnError precedes OnComplete');
@@ -767,18 +710,18 @@ begin
   CheckTrue(lvTask.WaitFor(5000), 'worker must finish promptly');
   // queued but not dispatched
   lvTask.Free;
-  PumpFor(100);
+  BpPumpFor(100);
   CheckEquals(0, FCompleteCount, 'a completion posted before Free is dropped');
 
   // a new task must not inherit the stale completion
   lvTask := BpRunAsync(WorkLoopUntilCancelled, HandleComplete);
   try
     CheckTrue(WaitForFlag(FWorkRan, 5000));
-    PumpFor(100);
+    BpPumpFor(100);
     CheckEquals(0, FCompleteCount, 'the new task fires nothing while running');
     lvTask.Cancel;
     CheckTrue(lvTask.WaitFor(5000));
-    CheckTrue(PumpUntilCount(FCompleteCount, 1, 5000), 'its own completion arrives');
+    CheckTrue(BpPumpUntilCount(FCompleteCount, 1, 5000), 'its own completion arrives');
     Check(FStateInComplete = tskCancelled);
   finally
     lvTask.Free;
@@ -788,9 +731,9 @@ end;
 procedure TBpTasksTests.TestMarshalledFreeFromInsideOwnComplete;
 begin
   BpRunAsync(WorkQuick, HandleCompleteAndFree);
-  CheckTrue(PumpUntilFlag(FFreedInHandler, 5000), 'the handler ran and freed');
+  CheckTrue(BpPumpUntilFlag(FFreedInHandler, 5000), 'the handler ran and freed');
   CheckEquals(1, FCompleteCount);
-  PumpFor(50);
+  BpPumpFor(50);
   CheckEquals(1, FCompleteCount, 'nothing fires twice');
 end;
 
@@ -810,7 +753,7 @@ begin
   try
     for i := 0 to gcThreads - 1 do
       lvCreators[i].WaitFor;
-    CheckTrue(PumpUntilCount(FCompleteCount, gcThreads * gcPerThread, 5000),
+    CheckTrue(BpPumpUntilCount(FCompleteCount, gcThreads * gcPerThread, 5000),
       'every task completes, got ' + IntToStr(FCompleteCount));
     Check(FCompleteThreadId = GetCurrentThreadId,
       'events run on the main thread, whoever created the task');
@@ -822,7 +765,7 @@ begin
         Check(lvTask.State = tskSucceeded, 'every task succeeded');
         Check(lvTask.WorkerThreadId <> GetCurrentThreadId);
       end;
-    PumpFor(50);
+    BpPumpFor(50);
     CheckEquals(gcThreads * gcPerThread, FCompleteCount, 'each exactly once');
   finally
     // any thread may free
@@ -851,17 +794,17 @@ begin
   finally
     lvFreer.Free;
   end;
-  PumpFor(100);
+  BpPumpFor(100);
   CheckEquals(0, FCompleteCount, 'the queued completion is dropped');
 
   lvTask := BpRunAsync(WorkLoopUntilCancelled, HandleComplete);
   try
     CheckTrue(WaitForFlag(FWorkRan, 5000));
-    PumpFor(100);
+    BpPumpFor(100);
     CheckEquals(0, FCompleteCount, 'no stray event while it runs');
     lvTask.Cancel;
     CheckTrue(lvTask.WaitFor(5000));
-    CheckTrue(PumpUntilCount(FCompleteCount, 1, 5000));
+    CheckTrue(BpPumpUntilCount(FCompleteCount, 1, 5000));
     Check(FStateInComplete = tskCancelled);
   finally
     lvTask.Free;
@@ -877,7 +820,7 @@ begin
   lvTask := BpRunAsync(WorkQuick, HandleCompleteSlow);
   lvFreer := TForeignFreeThread.Create(lvTask, @FInHandler, @FHandlerDone);
   try
-    CheckTrue(PumpUntilFlag(FHandlerDone, 5000), 'the slow handler ran');
+    CheckTrue(BpPumpUntilFlag(FHandlerDone, 5000), 'the slow handler ran');
     lvFreer.WaitFor;
     CheckTrue(lvFreer.DoneWhenFreed,
       'Free returned only after the running handler finished');
@@ -895,7 +838,7 @@ begin
   lvTask := BpRunAsync(WorkQuick, HandleCompleteRaise);
   try
     // not thrown through the window procedure
-    CheckTrue(PumpUntilCount(gvHookCount, 1, 5000), 'the hook saw the exception');
+    CheckTrue(BpPumpUntilCount(gvHookCount, 1, 5000), 'the hook saw the exception');
     CheckEquals('handler boom', gvHookMessage);
     Check(gvHookTask = lvTask);
     Check(gvHookThreadId = GetCurrentThreadId, 'reported on the main thread');
