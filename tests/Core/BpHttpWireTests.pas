@@ -70,6 +70,7 @@ type
     procedure TestTruncatedBodyLeavesTheFileAlone;
     procedure TestCancelLeavesTheFileAlone;
     procedure TestUnparsableUrlLeavesTheFileAlone;
+    procedure TestPartialContentLeavesTheFileAlone;
   end;
 
   TBpHttpGzipTests = class(TBpWireTestCase)
@@ -688,6 +689,24 @@ begin
   CheckEquals('ORIGINAL', string(BpReadWholeFile(FDest)),
     aWhat + ': the file was rewritten');
   CheckEquals(1, BpCountFiles(FDir), aWhat + ': a temp file was left behind');
+end;
+
+// nothing asked for a range, so a fragment must not become the whole file
+procedure TBpHttpDownloadToFileTests.TestPartialContentLeavesTheFileAlone;
+var
+  lvReply: TbpMockResponse;
+begin
+  lvReply := BpMockStatus(206, 'PART');
+  lvReply.Headers.Add('Content-Range: bytes 0-3/9999');
+  FServer.Enqueue(lvReply);
+  try
+    FClient.DownloadToFile(Url('/part.bin'), FDest);
+    Fail('expected EbpHttpClient for 206 Partial Content');
+  except
+    on E: EbpHttpClient do
+      CheckEquals(206, E.StatusCode);
+  end;
+  CheckSurvived('206');
 end;
 
 procedure TBpHttpDownloadToFileTests.TestSuccessReplacesTheFile;

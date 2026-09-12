@@ -55,7 +55,7 @@ A 404 is a response, not an exception. Only transport failures raise `EbpHttpCli
 
 **Redirects.** Followed by the client, not by WinInet, which replays the header block on every hop with no way to edit it. A hop to another origin, so any change of scheme, host or port, loses the persistent headers plus `Authorization`, `Cookie` and `Proxy-Authorization`, and never gets them back. The one exception `requests` also makes: the same host upgraded from `http` to `https` keeps them. Method per [WHATWG fetch](https://fetch.spec.whatwg.org/#http-redirect-fetch): 303 to GET unless HEAD, 301 and 302 only a POST, 307 and 308 unchanged; a downgraded method drops the body and its `Content-*` headers. `FollowRedirects := False` returns the 3xx instead.
 
-**Downloads.** `Download` streams to any `TStream`, `DownloadToFile` to a file, both in constant memory with `Int64` progress and a token. `DownloadToFile` writes to a temporary file beside the destination and renames it over only on a 2xx, so a 404, a cancel, a truncated body or a typo in the url leaves whatever was already there untouched, and no temp file behind. They block, so use a worker thread or [TbpHttpDownloadTask](#tbphttpdownloadtask).
+**Downloads.** `Download` streams to any `TStream`, `DownloadToFile` to a file, both in constant memory with `Int64` progress and a token. `DownloadToFile` writes to a temporary file beside the destination and renames it over only on a 2xx that is not a 206, so a 404, a cancel, a truncated body or a typo in the url leaves whatever was already there untouched, and no temp file behind. They block, so use a worker thread or [TbpHttpDownloadTask](#tbphttpdownloadtask).
 
 ```pascal
 procedure TMainForm.HandleProgress(aSender: TObject; const aReceived, aTotal: Int64;
@@ -68,7 +68,7 @@ end;
 lvClient.DownloadToFile(lvUrl, 'C:\temp\big.zip', HandleProgress, FToken);
 ```
 
-The file is kept only on a 2xx, and a body short of the advertised `Content-Length` is an error. Resume with `Range: bytes=<n>-` and append on a 206.
+The file is kept only on a 2xx that is not a 206, and a body short of the advertised `Content-Length` is an error. A 206 is a fragment, so `DownloadToFile` raises rather than write it over the destination; resume by streaming into a positioned `TStream` with `Range: bytes=<n>-` instead.
 
 **Wire trace.** [BpHttpTrace.pas](../src/Core/Classes/BpHttpTrace.pas) is an optional in-process `ssh -v`: `TbpHttpTrace.Attach(aClient, aSink)`, `Detach` when done. It installs a WinInet status callback, so an untraced build pays nothing. The sink runs on the I/O thread. Headers never pass through it.
 

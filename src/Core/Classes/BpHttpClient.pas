@@ -135,7 +135,7 @@ type
     function Download(const aUrl: string; aDest: TStream;
       aProgress: TbpHttpProgressEvent = nil; aToken: TbpCancellationToken = nil;
       const aHeaders: string = ''; const aMethod: string = 'GET'): TbpHttpResponse;
-    // a 2xx renames a sibling temp file over the destination, nothing else does
+    // a 200 renames a sibling temp file over the destination, nothing else does
     function DownloadToFile(const aUrl, aFileName: string;
       aProgress: TbpHttpProgressEvent = nil; aToken: TbpCancellationToken = nil;
       const aHeaders: string = ''): TbpHttpResponse;
@@ -1307,6 +1307,12 @@ begin
     finally
       lvFile.Free;
     end;
+    // 206 carries a fragment, and this call asked for a whole file; returning it
+    // would look like success to BpHttpResponseIsSuccess and quietly truncate
+    if Result.StatusCode = 206 then
+      raise EbpHttpClient.Create(
+        'Server answered 206 Partial Content for a whole-file download',
+        Result.StatusCode);
     if BpHttpResponseIsSuccess(Result) then
     begin
       BpReplaceFile(lvTemp, aFileName);
