@@ -70,6 +70,7 @@ type
     procedure TestBomDoesNotShiftTheReportedColumn;
     procedure TestStrictnessRejectsWhatTheDocsSayItDoes;
     procedure TestErrorPositionIsExact;
+    procedure TestEmbeddedNulIsNotEndOfInput;
     procedure TestNegativeZeroKeepsItsSign;
     // a wide object crosses the member count where a hash index takes over
     procedure TestWideObjectFindsEveryMember;
@@ -546,6 +547,32 @@ begin
   CheckPosition('['#10'1,'#10'  }'#10']', 3, 3);
   // a string spans lines only as escapes, so the column counts them as written
   CheckPosition('{'#10'  "a": "one",'#10'  "b": x'#10'}', 3, 8);
+end;
+
+// a PChar reader treats #0 as the end; Python's json.loads is the oracle here
+procedure TBpJsonTests.TestEmbeddedNulIsNotEndOfInput;
+var
+  lvValue: TbpJsonValue;
+
+  procedure CheckRejected(const aJson, aWhy: string);
+  begin
+    if TbpJsonValue.TryParse(aJson, lvValue) then
+    try
+      Fail(aWhy);
+    finally
+      lvValue.Free;
+    end;
+  end;
+
+begin
+  CheckRejected('{"a":1}'#0'garbage', 'junk after a NUL is still junk');
+  CheckRejected('{"a":1}'#0, 'a trailing NUL is trailing content');
+  CheckRejected('[1,'#0'2]', 'a NUL is not a value');
+  CheckRejected('"a'#0'b"', 'a raw control character cannot sit in a string');
+  CheckRejected(#0'{"a":1}', 'a leading NUL is not whitespace');
+  // and nothing above changed what a well formed document does
+  CheckTrue(TbpJsonValue.TryParse('{"a":1}  ', lvValue), 'trailing space is fine');
+  lvValue.Free;
 end;
 
 procedure TBpJsonTests.TestNegativeZeroKeepsItsSign;
