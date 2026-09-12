@@ -32,7 +32,7 @@ if BpHttpResponseIsSuccess(lvResp) then
   lvText := BpHttpResponseBodyAsUtf8(lvResp);
 ```
 
-`Get`, `Post`, `PostJson`, `Put`, `Delete`, `Patch`, `Head`, `Options`, `Execute` and the `FetchUrl` class function. Every verb takes an optional header block and a [TbpCancellationToken](#tbpcancellationtoken) last. A `user:pass@` in the URL is sent as Basic auth, the way curl and requests do it, unless the caller set an `Authorization` of their own; like every other credential it stops at a foreign origin.
+`Get`, `Post`, `PostJson`, `Put`, `Delete`, `Patch`, `Head`, `Options`, `Execute` and the `FetchUrl` class function. Every verb takes an optional header block and a [TbpCancellationToken](#tbpcancellationtoken) last. `MaxResponseBytes` caps a body held in memory, 0 meaning no cap as everywhere else. A `user:pass@` in the URL is sent as Basic auth, the way curl and requests do it, unless the caller set an `Authorization` of their own; like every other credential it stops at a foreign origin.
 
 ```pascal
 TbpHttpResponse = record

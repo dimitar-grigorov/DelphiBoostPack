@@ -61,6 +61,7 @@ type
     FFollowRedirects: Boolean;
     FMaxRedirects: Integer;
     FAutoDecompress: Boolean;
+    FMaxResponseBytes: Int64;
     FUsername: AnsiString;
     FPassword: AnsiString;
     FBearerToken: string;
@@ -176,6 +177,9 @@ type
     property MaxRedirects: Integer read FMaxRedirects write FMaxRedirects;
     // gzip and deflate on the buffered verbs, where no Content-Length is checked
     property AutoDecompress: Boolean read FAutoDecompress write FAutoDecompress;
+    // ceiling for a body held in memory; 0 is no ceiling, as every mainstream
+    // client defaults. A streamed Download never buffers, so it is unaffected
+    property MaxResponseBytes: Int64 read FMaxResponseBytes write FMaxResponseBytes;
   end;
 
   TbpHttpDownloadState = (dtsPending, dtsRunning, dtsSucceeded, dtsFailed,
@@ -961,6 +965,10 @@ begin
   repeat
     if (aToken <> nil) and aToken.IsCancellationRequested then
       RaiseOperationCancelled;
+    if (FMaxResponseBytes > 0) and (lvSize > FMaxResponseBytes) then
+      raise EbpHttpClient.CreateFmt(
+        'Response body is larger than MaxResponseBytes (%d)',
+        [FMaxResponseBytes]);
 
     if lvCapacity - lvSize < gcBufferSize then
     begin
