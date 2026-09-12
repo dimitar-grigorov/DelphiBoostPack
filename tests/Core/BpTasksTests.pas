@@ -24,10 +24,10 @@ type
     FHandlerDone: Boolean;
     FWorkerIdSeen: Cardinal;
     FWorkerIdActual: Cardinal;
-    procedure WorkQuick(aSender: TObject; aToken: TbpTaskToken);
-    procedure WorkRaise(aSender: TObject; aToken: TbpTaskToken);
-    procedure WorkLoopUntilCancelled(aSender: TObject; aToken: TbpTaskToken);
-    procedure WorkRecordThreadId(aSender: TObject; aToken: TbpTaskToken);
+    procedure WorkQuick(aSender: TObject; aToken: TbpCancellationToken);
+    procedure WorkRaise(aSender: TObject; aToken: TbpCancellationToken);
+    procedure WorkLoopUntilCancelled(aSender: TObject; aToken: TbpCancellationToken);
+    procedure WorkRecordThreadId(aSender: TObject; aToken: TbpCancellationToken);
     procedure HandleComplete(aSender: TObject);
     procedure HandleError(aSender: TObject; const aErrorMessage: string);
     procedure HandleCompleteAndFree(aSender: TObject);
@@ -213,19 +213,19 @@ begin
   inherited;
 end;
 
-procedure TBpTasksTests.WorkQuick(aSender: TObject; aToken: TbpTaskToken);
+procedure TBpTasksTests.WorkQuick(aSender: TObject; aToken: TbpCancellationToken);
 begin
   FWorkRan := True;
 end;
 
-procedure TBpTasksTests.WorkRaise(aSender: TObject; aToken: TbpTaskToken);
+procedure TBpTasksTests.WorkRaise(aSender: TObject; aToken: TbpCancellationToken);
 begin
   FWorkRan := True;
   raise EbpTasksTestError.Create('boom');
 end;
 
 procedure TBpTasksTests.WorkLoopUntilCancelled(aSender: TObject;
-  aToken: TbpTaskToken);
+  aToken: TbpCancellationToken);
 var
   lvDeadline: Cardinal;
 begin
@@ -238,7 +238,7 @@ begin
 end;
 
 procedure TBpTasksTests.WorkRecordThreadId(aSender: TObject;
-  aToken: TbpTaskToken);
+  aToken: TbpCancellationToken);
 begin
   FWorkerIdSeen := TbpTask(aSender).WorkerThreadId;
   FWorkerIdActual := GetCurrentThreadId;
@@ -355,9 +355,9 @@ end;
 
 procedure TBpTasksTests.TestTokenCancelIsSticky;
 var
-  lvToken: TbpTaskToken;
+  lvToken: TbpCancellationToken;
 begin
-  lvToken := TbpTaskToken.Create;
+  lvToken := TbpCancellationToken.Create;
   try
     CheckFalse(lvToken.IsCancellationRequested, 'fresh token is not cancelled');
     lvToken.Cancel;

@@ -83,9 +83,9 @@ FTask := BpDownloadAsync(lvUrl, 'C:\temp\big.zip', HandleProgress, HandleComplet
 // FTask.State: dtsPending / dtsRunning / dtsSucceeded / dtsFailed / dtsCancelled
 ```
 
-`Cancel` aborts even in a blocked read, and `Free` cancels, joins and releases in any state, so closing a form mid-download is safe. `Received` / `Total` are live counters, `Response` / `HttpStatus` / `ErrorMessage` / `ErrorCode` are authoritative once `IsFinished`, and all of them are lock-guarded for any thread. `OnError` fires before `OnComplete`. `Create(False)` puts the events on the worker thread, for console apps. A task is one-shot.
+`Cancel` aborts even in a blocked read, and `Free` cancels, joins and releases in any state, so closing a form mid-download is safe. `Received` / `Total` are live counters, `Response` / `HttpStatus` / `ErrorMessage` / `ErrorCode` are authoritative once `IsFinished`, and all of them are lock-guarded for any thread. `OnError` fires before `OnComplete`. `Create(False)` puts the events on the worker thread, for console apps. A task is one-shot. It runs on [TbpTask](#tbptask), so it inherits the same lifetime rules: a handler may free its own task, any thread may free it, and an exception escaping a handler goes to `BpSetTaskExceptionHook`.
 
-### [TbpCancellationToken](../src/Core/Classes/BpHttpClient.pas)
+### [TbpCancellationToken](../src/Core/Classes/BpTasks.pas)
 
 The C# `CancellationToken` for Delphi 7: one side calls `Cancel`, the working side polls `IsCancellationRequested`, and a registered cleanup runs inside `Cancel` itself, which is how a blocked read aborts instead of timing out. Thread-safe, one-shot, nothing in it is HTTP.
 
@@ -96,7 +96,7 @@ Run any method on a worker thread and get the result back on the main thread. Se
 ```pascal
 uses BpTasks;
 
-procedure TMainForm.DoCrunch(aSender: TObject; aToken: TbpTaskToken);
+procedure TMainForm.DoCrunch(aSender: TObject; aToken: TbpCancellationToken);
 begin
   while HasWorkLeft and not aToken.IsCancellationRequested do
     CrunchNextChunk;   // worker thread, no UI calls in here
@@ -108,8 +108,6 @@ FTask := BpRunAsync(DoCrunch, HandleDone);   // HandleDone runs on the main thre
 Cancellation is cooperative, so no thread is killed. An exception in the work body lands in `ErrorClass` and `ErrorMessage` instead of crossing the thread boundary; `OnError` fires first, then `OnComplete` on every terminal state.
 
 The caller owns the task and frees it from any thread. `Free` cancels, joins and cleans up in any state, and from the moment it is entered no further event starts: a queued completion is dropped, a running handler finishes first, and a handler may free its own task. Events go through one hidden dispatcher window, so they run on the main thread whichever thread created the task, and that thread has to pump messages. `Create(False)` runs them on the worker instead. An exception escaping a handler goes to `BpSetTaskExceptionHook`, else to `Classes.ApplicationHandleException`.
-
-`TbpTaskToken` is a bare interlocked flag for polling work; [TbpCancellationToken](#tbpcancellationtoken) adds cleanups that run inside `Cancel`, for when something must be torn down to make the cancel prompt.
 
 ---
 
