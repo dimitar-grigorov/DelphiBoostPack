@@ -150,6 +150,10 @@ const
   // below this a scan beats a hash table, and most objects never reach it
   gcBpJsonIndexFrom = 8;
   gcBpJsonMinBuckets = 16;
+  // a Double spans 1e-324 to 1.8e308; one power past either end is decisive
+  gcBpJsonMaxExp10 = 308;
+  gcBpJsonMinExp10 = -324;
+  gcBpJsonExpClamp = 100000;
   gcBpJsonKindNames: array[TbpJsonKind] of string =
     ('null', 'bool', 'int', 'float', 'string', 'array', 'object');
 
@@ -463,49 +467,86 @@ end;
 type
   TbpJsonNumberRange = (jnNormal, jnZero, jnOutOfRange);
 
-// jnZero when the mantissa is zero or the value underflows, jnOutOfRange when
-// the exponent is past Double range. Shorter exponents are left to Val.
-function BpJsonClassifyExponent(const aToken: string): TbpJsonNumberRange;
+// jnNormal only inside Double range, so Val is never asked for an infinity
+function BpJsonClassifyNumber(const aToken: string): TbpJsonNumberRange;
 var
-  i, lvDigits: Integer;
-  lvMantissaNonZero, lvNegExp: Boolean;
+  i, lvLen, lvIntDigits, lvFracZeros, lvExp, lvPower: Integer;
+  lvNegExp, lvSeenNonZero: Boolean;
 begin
-  Result := jnNormal;
-  lvMantissaNonZero := False;
+  lvLen := Length(aToken);
   i := 1;
-  while (i <= Length(aToken)) and (aToken[i] <> 'e') and (aToken[i] <> 'E') do
+  if (i <= lvLen) and (aToken[i] = '-') then
+    Inc(i);
+
+  // digits from the first significant one on, so 007 counts as one digit
+  lvIntDigits := 0;
+  lvSeenNonZero := False;
+  while (i <= lvLen) and (aToken[i] >= '0') and (aToken[i] <= '9') do
   begin
-    if (aToken[i] >= '1') and (aToken[i] <= '9') then
-      lvMantissaNonZero := True;
+    if lvSeenNonZero then
+      Inc(lvIntDigits)
+    else if aToken[i] <> '0' then
+    begin
+      lvSeenNonZero := True;
+      lvIntDigits := 1;
+    end;
     Inc(i);
   end;
-  if i > Length(aToken) then
+
+  // only the zeros in front of the first significant digit move the exponent
+  lvFracZeros := 0;
+  if (i <= lvLen) and (aToken[i] = '.') then
   begin
-    if not lvMantissaNonZero then
-      Result := jnZero;
+    Inc(i);
+    while (i <= lvLen) and (aToken[i] >= '0') and (aToken[i] <= '9') do
+    begin
+      if not lvSeenNonZero then
+        if aToken[i] = '0' then
+          Inc(lvFracZeros)
+        else
+          lvSeenNonZero := True;
+      Inc(i);
+    end;
+  end;
+
+  if not lvSeenNonZero then
+  begin
+    Result := jnZero;
     Exit;
   end;
-  Inc(i);
-  lvNegExp := (i <= Length(aToken)) and (aToken[i] = '-');
-  if (i <= Length(aToken)) and ((aToken[i] = '+') or (aToken[i] = '-')) then
-    Inc(i);
-  while (i <= Length(aToken)) and (aToken[i] = '0') do
-    Inc(i);
-  lvDigits := 0;
-  while (i <= Length(aToken)) and (aToken[i] >= '0') and (aToken[i] <= '9') do
+  if lvIntDigits > 0 then
+    lvPower := lvIntDigits - 1
+  else
+    lvPower := -(lvFracZeros + 1);
+
+  lvExp := 0;
+  lvNegExp := False;
+  if (i <= lvLen) and ((aToken[i] = 'e') or (aToken[i] = 'E')) then
   begin
-    Inc(lvDigits);
     Inc(i);
+    if (i <= lvLen) and ((aToken[i] = '+') or (aToken[i] = '-')) then
+    begin
+      lvNegExp := aToken[i] = '-';
+      Inc(i);
+    end;
+    while (i <= lvLen) and (aToken[i] >= '0') and (aToken[i] <= '9') do
+    begin
+      // clamped far past Double range, so the digits left cannot overflow it
+      if lvExp <= gcBpJsonExpClamp then
+        lvExp := lvExp * 10 + (Ord(aToken[i]) - Ord('0'));
+      Inc(i);
+    end;
+    if lvNegExp then
+      lvExp := -lvExp;
   end;
-  // a Double tops out near 1e308, so six exponent digits is already decisive
-  if lvDigits <= 6 then
-    Exit;
-  if not lvMantissaNonZero then
-    Result := jnZero
-  else if lvNegExp then
+
+  Inc(lvPower, lvExp);
+  if lvPower > gcBpJsonMaxExp10 then
+    Result := jnOutOfRange
+  else if lvPower < gcBpJsonMinExp10 then
     Result := jnZero
   else
-    Result := jnOutOfRange;
+    Result := jnNormal;
 end;
 
 function BpJsonParseNumber(var aReader: TbpJsonReader): TbpJsonValue;
@@ -565,8 +606,8 @@ begin
     end;
     // too big for Int64, keep the value as a float
   end;
-  // a long exponent wraps inside Val into a plausible wrong value, so settle it here
-  case BpJsonClassifyExponent(lvToken) of
+  // Val answers +Inf past Extended range, so the range is settled up front
+  case BpJsonClassifyNumber(lvToken) of
     jnZero:
       begin
         Result := TbpJsonValue.CreateFloat(0);
@@ -995,8 +1036,7 @@ begin
   Result := FNames[aIndex];
 end;
 
-// a linear scan below the threshold and a hash chain above it: most objects
-// are small, and one that is not was quadratic to parse
+// a scan below the threshold, a hash chain above it: most objects are small
 function TbpJsonValue.IndexOfName(const aName: string): Integer;
 var
   lvHash: Cardinal;
