@@ -35,7 +35,6 @@ type
     property Items[Index: Integer]: TSimpleTestItemUnique read GetItem write SetItem; default;
   end;
 
-  // Sample class with TSimpleTestCollection as a published property
   TTestClassWithCollectionUnique = class(TPersistent)
   private
     FMyCollection: TSimpleTestCollectionUnique;
@@ -60,6 +59,14 @@ type
     property CharProp: Char read FCharProp write FCharProp;
     property FloatProp: Double read FFloatProp write FFloatProp;
     property EnumProp: TMyEnumCol read FEnumProp write FEnumProp;
+  end;
+
+  // created straight into a TSimpleTestCollection, so one collection can hold two item classes
+  TSimpleTestItemSub = class(TSimpleTestItem)
+  private
+    FExtra: Integer;
+  published
+    property Extra: Integer read FExtra write FExtra;
   end;
 
   TSimpleTestCollection = class(TCollection)

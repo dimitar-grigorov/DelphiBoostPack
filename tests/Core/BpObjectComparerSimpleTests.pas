@@ -9,9 +9,24 @@ uses
 
 type
   TestTBpObjectComparer = class(TTestCase)
+  private
+    FObjA: TTestClassA;
+    FObjB: TTestClassB;
+    // helpers passed to CheckException
+    procedure CompareOldNil;
+    procedure CompareNewNil;
+    procedure CompareBothNil;
+    procedure CompareDifferentClasses;
+    procedure CompareAsStringNewNil;
+  protected
+    procedure SetUp; override;
+    procedure TearDown; override;
   published
     procedure TestCompareObjectsWithNoDifferences;
     procedure TestCompareObjectsWithDifferences;
+    procedure TestNilArgumentsRaise;
+    procedure TestMismatchedClassesRaise;
+    procedure TestChangedItemClassIsOneDifference;
     procedure TestCompareWideCharProperties;
     procedure TestCompareObjectsAsString;
 
@@ -47,6 +62,89 @@ implementation
 
 uses
   SysUtils, StrUtils, BpObjectComparerCollectionClasses;
+
+procedure TestTBpObjectComparer.SetUp;
+begin
+  inherited;
+  FObjA := TTestClassA.Create;
+  FObjB := TTestClassB.Create;
+end;
+
+procedure TestTBpObjectComparer.TearDown;
+begin
+  FObjA.Free;
+  FObjB.Free;
+  inherited;
+end;
+
+procedure TestTBpObjectComparer.CompareOldNil;
+begin
+  TbpObjectComparer.CompareObjects(nil, FObjA);
+end;
+
+procedure TestTBpObjectComparer.CompareNewNil;
+begin
+  TbpObjectComparer.CompareObjects(FObjA, nil);
+end;
+
+procedure TestTBpObjectComparer.CompareBothNil;
+begin
+  TbpObjectComparer.CompareObjects(nil, nil);
+end;
+
+procedure TestTBpObjectComparer.CompareDifferentClasses;
+begin
+  TbpObjectComparer.CompareObjects(FObjA, FObjB);
+end;
+
+procedure TestTBpObjectComparer.CompareAsStringNewNil;
+begin
+  TbpObjectComparer.CompareObjectsAsString(FObjA, nil);
+end;
+
+// nil used to be an access violation on aOld.ClassInfo or inside GetPropValue
+procedure TestTBpObjectComparer.TestNilArgumentsRaise;
+begin
+  CheckException(CompareOldNil, EbpObjectComparer);
+  CheckException(CompareNewNil, EbpObjectComparer);
+  CheckException(CompareBothNil, EbpObjectComparer);
+  CheckException(CompareAsStringNewNil, EbpObjectComparer);
+end;
+
+// aOld's property list read against aNew used to end in EPropertyError
+procedure TestTBpObjectComparer.TestMismatchedClassesRaise;
+begin
+  CheckException(CompareDifferentClasses, EbpObjectComparer);
+end;
+
+// inside a collection a changed item class is data, so it is reported and not walked
+procedure TestTBpObjectComparer.TestChangedItemClassIsOneDifference;
+var
+  Obj1, Obj2: TTestClassWithCollection;
+  Diffs: TPropDifferences;
+begin
+  Obj1 := TTestClassWithCollection.Create;
+  Obj2 := TTestClassWithCollection.Create;
+  try
+    Obj1.MyCollection.Add.Name := 'same';
+    with TSimpleTestItemSub.Create(Obj2.MyCollection) do
+    begin
+      Name := 'changed';
+      Extra := 5;
+    end;
+
+    Diffs := TbpObjectComparer.CompareObjects(Obj1, Obj2);
+    CheckEquals(1, Length(Diffs), 'the class change is the whole difference');
+    CheckEquals('MyCollection[0]', Diffs[0].OldPropPath, 'old path');
+    CheckEquals('MyCollection[0]', Diffs[0].NewPropPath, 'new path');
+    CheckEquals('TSimpleTestItem', VarToStr(Diffs[0].OldValue), 'old class');
+    CheckEquals('TSimpleTestItemSub', VarToStr(Diffs[0].NewValue), 'new class');
+    CheckEquals('0', Diffs[0].Idx, 'the item index');
+  finally
+    Obj1.Free;
+    Obj2.Free;
+  end;
+end;
 
 procedure TestTBpObjectComparer.TestCompareObjectsWithNoDifferences;
 var

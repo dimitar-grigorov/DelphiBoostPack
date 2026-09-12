@@ -44,7 +44,9 @@ type
 
   TPropDifferences = array of IPropDifference;
 
-type
+  // raised by CompareObjects for a nil argument or two arguments of different classes
+  EbpObjectComparer = class(Exception);
+
   TbpObjectComparer = class
   public
     class function CompareObjects(aOld, aNew: TPersistent): TPropDifferences;
@@ -132,7 +134,29 @@ end;
 procedure CompareCollections(aOld, aNew: TCollection; const aOldPath, aNewPath: string;
   var aState: TCompareState); forward;
 
-procedure CompareProps(aOld, aNew: TPersistent; const aOldPath, aNewPath, aIdx: string;
+procedure CompareProps(aOld, aNew: TObject; const aOldPath, aNewPath, aIdx: string;
+  var aState: TCompareState); forward;
+
+// nil and a changed class are differences at the object's own path; only equal classes are walked
+procedure ComparePair(aOld, aNew: TObject; const aOldPath, aNewPath, aIdx: string;
+  var aState: TCompareState);
+begin
+  if aNew = nil then
+  begin
+    if aOld <> nil then
+      AddDiff(aState, TPropDifference.Create(aOldPath, aNewPath, 'Exists in old', 'Missing in new', aIdx));
+  end
+  else if aOld = nil then
+    AddDiff(aState, TPropDifference.Create(aOldPath, aNewPath, 'Missing in old', 'Exists in new', aIdx))
+  else if aOld.ClassType <> aNew.ClassType then
+    AddDiff(aState, TPropDifference.Create(aOldPath, aNewPath, aOld.ClassName, aNew.ClassName, aIdx))
+  else if aOld is TCollection then
+    CompareCollections(TCollection(aOld), TCollection(aNew), aOldPath, aNewPath, aState)
+  else if aOld.ClassInfo <> nil then
+    CompareProps(aOld, aNew, aOldPath, aNewPath, aIdx, aState);
+end;
+
+procedure CompareProps(aOld, aNew: TObject; const aOldPath, aNewPath, aIdx: string;
   var aState: TCompareState);
 var
   lvPropList: PPropList;
@@ -258,7 +282,7 @@ begin
       if lvNewIdx >= 0 then
       begin
         lvMatched[lvNewIdx] := True;
-        CompareProps(lvOldItem, aNew.Items[lvNewIdx], ItemPath(aOldPath, i),
+        ComparePair(lvOldItem, aNew.Items[lvNewIdx], ItemPath(aOldPath, i),
           ItemPath(aNewPath, lvNewIdx), lvId, aState);
       end
       else
@@ -279,8 +303,12 @@ class function TbpObjectComparer.CompareObjects(aOld, aNew: TPersistent): TPropD
 var
   lvState: TCompareState;
 begin
+  if (aOld = nil) or (aNew = nil) then
+    raise EbpObjectComparer.Create('Cannot compare a nil object');
+  if aOld.ClassType <> aNew.ClassType then
+    raise EbpObjectComparer.CreateFmt('Cannot compare a %s with a %s', [aOld.ClassName, aNew.ClassName]);
   lvState.Count := 0;
-  CompareProps(aOld, aNew, '', '', '', lvState);
+  ComparePair(aOld, aNew, '', '', '', lvState);
   SetLength(lvState.Diffs, lvState.Count);
   Result := lvState.Diffs;
 end;
