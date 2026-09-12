@@ -39,8 +39,7 @@ function BpConstantTimeEquals(const A, B: AnsiString): Boolean;
 // salt + derive + format in one call; the overload picks the iteration count
 function BpHashPassword(const aPassword: AnsiString): string; overload;
 function BpHashPassword(const aPassword: AnsiString; aIterations: Integer): string; overload;
-// parses the record, re-derives, compares in constant time; malformed input
-// returns False, never raises, and a record outside the bounds below is refused
+// re-derives and compares in constant time; malformed input is False, not a raise
 function BpVerifyPassword(const aPassword: AnsiString; const aStored: string): Boolean;
 
 implementation

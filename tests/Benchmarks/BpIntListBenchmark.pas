@@ -8,8 +8,7 @@ uses
   TestFramework, SysUtils, Classes, BpBaseBenchmarkTestCase, BpIntList;
 
 type
-  // TbpIntList against the classic Delphi 2007 integer-lookup options: a linear
-  // scan over a TList and a sorted TStringList of IntToStr keys
+  // TbpIntList vs a linear TList scan and a sorted TStringList of IntToStr keys
   TBpIntListBenchmark = class(TBpBaseBenchmarkTestCase)
   private
     FValues: array of Integer;

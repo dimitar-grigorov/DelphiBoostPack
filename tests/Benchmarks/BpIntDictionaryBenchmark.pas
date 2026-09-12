@@ -8,8 +8,7 @@ uses
   TestFramework, SysUtils, Classes, BpBaseBenchmarkTestCase, BpIntDictionary;
 
 type
-  // TbpIntDictionary vs the classic D2007 integer-lookup options:
-  // linear scan over a TList (the Locate-style pattern) and sorted binary search
+  // TbpIntDictionary vs a linear TList scan and a sorted binary search
   TBpIntDictionaryBenchmark = class(TBpBaseBenchmarkTestCase)
   private
     FKeys: array of Int64;

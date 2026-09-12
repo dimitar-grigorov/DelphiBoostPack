@@ -658,9 +658,7 @@ var
   end;
 
 begin
-  // past Double range, so there is no value to return and no silent infinity.
-  // Python and JavaScript answer Infinity here; this unit cannot, because
-  // ToJson would then have to write a literal JSON has no spelling for
+  // past Double range; Python answers Infinity, which JSON has no spelling for
   CheckFails('1e400');
   CheckFails('1e5120');
   CheckFails('-1e5120');
@@ -727,8 +725,7 @@ procedure TBpJsonTests.TestUnicodeEscapeMatchesTheRawCharacter;
 var
   lvEscaped, lvRaw: TbpJsonValue;
 begin
-  // U+00E9, U+20AC and U+1F600, once escaped and once as the raw bytes the
-  // literal path already passes through. Neither may lose anything.
+  // U+00E9, U+20AC and U+1F600, once escaped and once as raw bytes
   lvEscaped := TbpJsonValue.Parse('"\u00e9\u20ac\ud83d\ude00"');
   try
 {$IF CompilerVersion >= 20.0}
@@ -754,8 +751,7 @@ begin
 end;
 
 {$IF CompilerVersion >= 20.0}
-// U+1F600 as the surrogate pair D83D DE00; a supplementary-plane char needs a
-// Unicode string, so this round-trip only holds on Delphi 2009 and later
+// U+1F600 needs a Unicode string, so this round trip holds only on D2009+
 procedure TBpJsonTests.TestSurrogatePair;
 var
   lvValue: TbpJsonValue;
@@ -1061,8 +1057,7 @@ begin
   end;
 end;
 
-// FloatToStr stops at 15 significant digits, which loses the last bits of a
-// Double; the writer must emit the shortest text that reads back identically
+// FloatToStr stops at 15 digits and loses the last bits of a Double
 procedure TBpJsonTests.TestFloatRoundTripsThroughText;
 const
   lcValues: array[0..4] of Double = (

@@ -177,8 +177,7 @@ type
     property MaxRedirects: Integer read FMaxRedirects write FMaxRedirects;
     // gzip and deflate on the buffered verbs, where no Content-Length is checked
     property AutoDecompress: Boolean read FAutoDecompress write FAutoDecompress;
-    // ceiling for a body held in memory; 0 is no ceiling, as every mainstream
-    // client defaults. A streamed Download never buffers, so it is unaffected
+    // ceiling for a body held in memory, 0 for none; a stream never buffers
     property MaxResponseBytes: Int64 read FMaxResponseBytes write FMaxResponseBytes;
   end;
 
@@ -572,8 +571,7 @@ var
   lvCopy: string;
 begin
   Result := '';
-  // asked for the userinfo, InternetCrackUrl unescapes the buffer in place, so
-  // it never gets the caller's string, and the parts come back already decoded
+  // InternetCrackUrl unescapes its buffer in place here, so it never gets aUrl
   lvCopy := Copy(aUrl, 1, Length(aUrl));
   ZeroMemory(@lvComponents, SizeOf(lvComponents));
   lvComponents.dwStructSize := SizeOf(lvComponents);
@@ -1157,8 +1155,7 @@ begin
   lvHeaders := aHeaders;
   lvCredentials := True;
   lvDroppedBody := False;
-  // an Authorization the caller set wins; a foreign origin sees neither, because
-  // this line is a request header and BuildHeaders strips those off origin
+  // a request header, so BuildHeaders drops it off origin like any other credential
   if BpHttpHeaderValue(BuildHeaders(aHeaders), 'Authorization') = '' then
   begin
     lvAuth := UrlBasicAuth(aUrl);
@@ -1315,8 +1312,7 @@ begin
     finally
       lvFile.Free;
     end;
-    // 206 carries a fragment, and this call asked for a whole file; returning it
-    // would look like success to BpHttpResponseIsSuccess and quietly truncate
+    // a 206 is a fragment, and BpHttpResponseIsSuccess would call it success
     if Result.StatusCode = 206 then
       raise EbpHttpClient.Create(
         'Server answered 206 Partial Content for a whole-file download',
@@ -1335,8 +1331,7 @@ end;
 
 { TbpHttpDownloadTask }
 
-// TbpTask owns the thread, the marshalling window and the state machine, so
-// what is left here is the download itself and the shape of its events.
+// TbpTask owns the thread, the window and the state machine; this owns the download
 
 constructor TbpHttpDownloadTask.Create(aMarshalToMainThread: Boolean);
 begin
@@ -1415,8 +1410,7 @@ begin
   EnterCriticalSection(FLock);
   Result := FErrorCode;
   LeaveCriticalSection(FLock);
-  // a cancel before the first byte never reached WinInet, but the caller
-  // checks the same code whenever the download ends cancelled
+  // a cancel before the first byte never reached WinInet, but reads as one here
   if (Result = 0) and (GetState = dtsCancelled) then
     Result := gcErrOperationCancelled;
 end;
@@ -1473,8 +1467,7 @@ begin
     FTask.ReportProgress;
 end;
 
-// event thread: a handler that sets aCancel cancels through the token, so a
-// direct-mode and a marshalled download stop the same way
+// event thread: aCancel goes through the token, so both modes stop the same way
 procedure TbpHttpDownloadTask.DispatchProgress(aSender: TObject);
 var
   lvReceived, lvTotal: Int64;

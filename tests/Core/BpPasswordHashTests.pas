@@ -110,8 +110,7 @@ end;
 
 procedure TBpPasswordHashTests.TestVerifyExternalRecord;
 const
-  // produced by .NET Rfc2898DeriveBytes (password 'p', salt 'salt', c=1000),
-  // never by our own code, so this pins cross-implementation interop
+  // from .NET Rfc2898DeriveBytes, never from our own code, so this pins interop
   lcRecord = '$pbkdf2-sha256$1000$c2FsdA==$rs96FmOyNUg3Gy2NJydDTZnhjENOrJOcqeTzVD0qDf0=';
 begin
   CheckTrue(BpVerifyPassword('p', lcRecord), 'external record verifies');
@@ -175,8 +174,7 @@ begin
   CheckFalse(BpVerifyPassword('p', '$pbkdf2-sha256$1000$c2FsdA==$c2FsdA==$extra'), 'extra field');
 end;
 
-// a record is untrusted input: an absurd work factor must be refused, not
-// obeyed, or one verify blocks its thread for the best part of an hour
+// untrusted input: an absurd work factor would block the thread for an hour
 procedure TBpPasswordHashTests.TestVerifyRejectsAbsurdWorkFactor;
 var
   lvLongHash: string;

@@ -8,8 +8,7 @@ uses
   TestFramework, SysUtils, Classes, IniFiles, BpBaseBenchmarkTestCase, BpStringList;
 
 type
-  // every number docs/FEATURES.md publishes for TbpStringList, each against
-  // the RTL class a caller would otherwise reach for
+  // every number docs/FEATURES.md publishes, against the RTL class it replaces
   TBpStringListBenchmark = class(TBpBaseBenchmarkTestCase)
   private
     FKeys: TStringList;        // in insertion order
@@ -62,8 +61,7 @@ begin
   inherited;
 end;
 
-// fills the list and, for ours, warms the index so the timed loop measures
-// maintenance rather than the one-off build
+// warms the index first, so the timed loop measures maintenance, not the build
 procedure TBpStringListBenchmark.FillIndexed(aList: TStrings);
 begin
   aList.Assign(FKeys);

@@ -184,8 +184,7 @@ begin
     FItems[i].HashCode := gcStrEmptyHash;
   // grow at 75% load; guarantees at least one always-empty slot
   FGrowThreshold := aNewCapacity shr 1 + aNewCapacity shr 2;
-  // reinsert on the cached hash codes, moving each entry as raw bits: a field
-  // copy would pay a refcount pair per string and deep-copy every variant array
+  // moved as raw bits: a field copy would pay a refcount pair per string
   for i := 0 to Length(lvOldItems) - 1 do
     if lvOldItems[i].HashCode <> gcStrEmptyHash then
     begin

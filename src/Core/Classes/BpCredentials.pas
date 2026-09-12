@@ -15,9 +15,7 @@ type
 
   TbpWideStringArray = array of WideString;
 
-  // CRED_TYPE_GENERIC under '<service>/<username>', local machine persist,
-  // secret as UTF-16LE bytes. Vault is per-user: other users cannot read it,
-  // but any process running as the same user can.
+  // CRED_TYPE_GENERIC under '<service>/<username>'; the vault is per user, so any process running as that user reads it
   TbpCredentials = class
   public
     class procedure SetPassword(const aService, aUserName, aSecret: WideString);
@@ -32,8 +30,7 @@ type
     // removes every entry under aService, returns how many
     class function DeleteAll(const aService: WideString): Integer;
 
-    // extra CryptProtectData layer keyed by aEntropy.
-    // Friction against same-user readers, not a hard boundary.
+    // a CryptProtectData layer keyed by aEntropy: friction against a same-user reader, not a boundary
     class procedure SetPasswordProtected(const aService, aUserName, aSecret,
       aEntropy: WideString);
     // raises EbpCredentials when the entry is missing or will not unprotect

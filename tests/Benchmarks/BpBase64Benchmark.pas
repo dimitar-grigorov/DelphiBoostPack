@@ -8,9 +8,7 @@ uses
   TestFramework, SysUtils, BpBaseBenchmarkTestCase, BpBase64;
 
 type
-  // BpBase64 vs the RTL EncdDecd unit. EncdDecd streams through TMemoryStream
-  // in small chunks and inserts line breaks; BpBase64 computes the exact
-  // output size and encodes in one pass.
+  // BpBase64 vs the RTL EncdDecd, which streams in chunks and inserts line breaks
   TBpBase64Benchmark = class(TBpBaseBenchmarkTestCase)
   private
     function BuildPayload(aSize: Integer): AnsiString;

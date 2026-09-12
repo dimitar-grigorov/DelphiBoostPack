@@ -8,9 +8,7 @@ uses
   TestFramework, SysUtils, BpBaseBenchmarkTestCase, BpStringBuilder;
 
 type
-  // TbpStringBuilder vs naive s := s + x concatenation. FastMM4 often extends
-  // strings in place, so the naive numbers are better than folklore says;
-  // these tests document the honest difference.
+  // TbpStringBuilder vs s := s + x, which FastMM4 often extends in place
   TBpStringBuilderBenchmark = class(TBpBaseBenchmarkTestCase)
   published
     procedure TestAppendStringBpBuilder;

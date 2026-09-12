@@ -224,8 +224,7 @@ function BpConstantTimeEquals(const A, B: AnsiString): Boolean;
 // salt + derive + format in one call; the overload picks the iteration count
 function BpHashPassword(const aPassword: AnsiString): string; overload;
 function BpHashPassword(const aPassword: AnsiString; aIterations: Integer): string; overload;
-// parses the record, re-derives, compares in constant time; malformed input
-// returns False, never raises, and a record outside the bounds below is refused
+// re-derives and compares in constant time; malformed input is False, not a raise
 function BpVerifyPassword(const aPassword: AnsiString; const aStored: string): Boolean;
 // ---------------- end BpPasswordHash.pas interface ----------------
 
@@ -447,8 +446,7 @@ begin
   Move(lvBytes[0], Pointer(Result)^, Length(lvBytes));
 end;
 
-// Not UTF8Encode: before Delphi 2009 it stops at three bytes and breaks
-// surrogate pairs.
+// not UTF8Encode: before Delphi 2009 it breaks surrogate pairs
 function WideToUtf8(const aText: WideString): AnsiString;
 var
   lvLen: Integer;

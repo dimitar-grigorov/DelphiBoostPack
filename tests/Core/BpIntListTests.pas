@@ -877,8 +877,7 @@ const
 var
   i: Integer;
 begin
-  // organ pipe: the shape that made the old recursion go quadratic and blow
-  // the stack. Anything but introsort dies here rather than failing an assert.
+  // organ pipe: the shape that made the old recursion go quadratic
   for i := 0 to lcCount - 1 do
     if i < lcCount div 2 then
       FBpIntList.Add(i)

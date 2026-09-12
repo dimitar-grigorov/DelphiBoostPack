@@ -183,8 +183,7 @@ begin
   CheckEquals('a', lvParts[1]);
 end;
 
-// a Char literal binds the Char overload, so the string overload needs a
-// multi-character delimiter to be tested at all
+// a Char literal binds the Char overload, so the string one needs two characters
 procedure TBpStrUtilsTests.TestSplitStrManyParts;
 var
   lvParts: TbpStringArray;
@@ -211,8 +210,7 @@ var
   lvText: string;
   i: Integer;
 begin
-  // 9 parts leave the loop with the array exactly full, the one grow the
-  // doubling never covers
+  // 9 parts leave the array exactly full, the one grow the doubling never covers
   lvText := '';
   for i := 1 to 9 do
   begin
@@ -336,8 +334,7 @@ end;
 
 procedure TBpStrUtilsTests.TestReplaceIgnoreCaseNonAscii;
 begin
-  // #$C0/#$E0 are an upper/lower pair both in cp1251 (Cyrillic A) and in
-  // Latin-1 (A grave), so the parity check works under D2007 and XE6
+  // #$C0/#$E0 are an upper/lower pair in cp1251 and in Latin-1 alike
   CheckReplaceParity(#$C0#$C1 + 'x' + #$E0#$E1, #$E0#$E1, 'y');
   CheckReplaceParity(#$E0#$E0#$E0, #$C0, 'z');
 end;

@@ -45,8 +45,7 @@ const
 const
   gcNoBestFit = $00000400; // WC_NO_BEST_FIT_CHARS, missing in D7's Windows.pas
 
-// True when every character survives the ANSI code page, so a code point it
-// cannot carry fails instead of arriving as '?'.
+// True when every character survives the ANSI page, rather than arriving as '?'
 function TryWideToAnsi(const aValue: WideString; out aResult: AnsiString): Boolean;
 var
   lvLen: Integer;
@@ -86,8 +85,7 @@ begin
     end;
     gcVarWord64:
     begin
-      // raw payload: a variant assignment goes through Double on D2007 and
-      // loses bits. Negative means bit 63 set, so it is past High(Int64).
+      // raw payload: a variant assignment goes through Double on D2007 and loses bits
       aResult := TVarData(aValue).VInt64;
       Result := aResult >= 0;
       if not Result then

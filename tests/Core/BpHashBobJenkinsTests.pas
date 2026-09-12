@@ -46,8 +46,7 @@ end;
 procedure TBpHashBobJenkinsTests.TestHashUniqueness;
 const
   lcCount = 50000;
-  // birthday bound: lcCount^2 / 2^33 is about 0.3 expected collisions for a
-  // perfect 32-bit hash, so a budget, not zero
+  // birthday bound: about 0.3 expected collisions here, so a budget, not zero
   lcMaxCollisions = 5;
 var
   i, index, lvCollisions: Integer;
@@ -105,8 +104,7 @@ var
   lvAllBytes: AnsiString;
   i: Integer;
 begin
-  // the published lookup3 self-test vector, the anchor that proves interop
-  // rather than mere self consistency: hashlittle('Four score...', 30, 0)
+  // the published lookup3 vector: interop, not mere self consistency
   CheckHash(Integer($17770551), 'Four score and seven years ago');
 
   CheckHash(-559038737, '');              // len 0 - early exit, no Final ($DEADBEEF)
@@ -127,8 +125,7 @@ begin
   CheckHash(-502396877, lvAllBytes);      // all byte values, multi-block
 end;
 
-// the second published lookup3 vector: the same text with initval 1, which is
-// the only test that pins the seeding of a non-zero initial value
+// the same text with initval 1, the only test that pins a non-zero seed
 procedure TBpHashBobJenkinsTests.TestKnownAnswersWithInitialValue;
 const
   lcText: AnsiString = 'Four score and seven years ago';
@@ -202,8 +199,7 @@ begin
     'Unaligned hash must match the aligned reference value');
 end;
 
-// the aligned and unaligned branches used to disagree on a negative length,
-// and the unaligned one read a byte it was never given
+// the aligned and unaligned branches used to disagree on a negative length
 procedure TBpHashBobJenkinsTests.TestNegativeLengthHashesNothing;
 var
   lvBuffer: array[0..31] of Byte;

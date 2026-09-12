@@ -51,8 +51,7 @@ begin
   CheckTrue(BpFoldedSame('Delphi', 'DELPHI'), 'the old name still works');
 end;
 
-// the fold is simple upper casing; on a single byte code page that is the
-// same relation as AnsiSameText for every pair of single characters
+// the fold is upper casing, which on a single byte page is AnsiSameText
 procedure TBpKeyFoldTests.TestFoldedEqualityOnEveryCharacterPair;
 var
   i, j, lvDisagreements: Integer;
@@ -129,8 +128,7 @@ begin
   CheckEquals(BpKeyHash('', False), BpKeyHashBuf(PChar(lvRow), 0, False), 'empty slice');
 end;
 
-// keys differing in one character must land in different buckets most of the
-// time, or every chain in the list would be long
+// one character apart must mostly land in different buckets, or chains grow
 procedure TBpKeyFoldTests.TestHashSpreadsSimilarKeys;
 var
   i, lvUsed: Integer;

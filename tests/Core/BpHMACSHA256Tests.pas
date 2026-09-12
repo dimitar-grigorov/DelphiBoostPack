@@ -104,8 +104,7 @@ begin
     'd by the HMAC algorithm.', 'case 7');
 end;
 
-// the RFC 2104 key rule changes at the 64-byte block size, and an off-by-one
-// there passes every published vector; values from python hmac
+// the RFC 2104 key rule changes at 64 bytes; values from python hmac
 procedure TBpHMACSHA256Tests.TestKeyLengthBoundaries;
 begin
   CheckHmac('b613679a0814d9ec772f95d778c35fc5ff1697c493715653c6c712144292c5ad',
