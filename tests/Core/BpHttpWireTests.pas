@@ -77,6 +77,7 @@ type
     procedure Test303TurnsPutIntoGet;
     procedure Test303LeavesHeadAlone;
     procedure TestMaxRedirectsExceededRaises;
+    procedure TestMaxRedirectsZeroReturnsTheRedirect;
     procedure TestFollowRedirectsFalseReturnsTheRedirect;
     procedure TestRedirectWithoutLocationIsReturned;
     procedure TestRedirectBodyIsDrainedSoTheConnectionIsReused;
@@ -756,6 +757,19 @@ begin
       Check(Pos('redirects', E.Message) > 0, E.Message);
   end;
   CheckEquals(3, FServer.RequestCount, 'one request plus the two allowed hops');
+end;
+
+// the interface documents 0 as having the same effect as FollowRedirects False
+procedure TBpHttpRedirectWireTests.TestMaxRedirectsZeroReturnsTheRedirect;
+var
+  lvResponse: TbpHttpResponse;
+begin
+  FClient.MaxRedirects := 0;
+  FServer.Enqueue(BpMockRedirect(302, '/second'));
+  lvResponse := FClient.Get(Url('/first'));
+  CheckEquals(302, lvResponse.StatusCode);
+  CheckEquals('/second', BpHttpHeaderValue(lvResponse.Headers, 'Location'));
+  CheckEquals(1, FServer.RequestCount, 'no hop may be taken');
 end;
 
 procedure TBpHttpRedirectWireTests.TestFollowRedirectsFalseReturnsTheRedirect;

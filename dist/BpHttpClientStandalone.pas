@@ -5,7 +5,7 @@ unit BpHttpClientStandalone;
 //   src\Core\Units\BpCompat.pas
 //   src\Core\Units\BpBase64.pas
 //   src\Core\Classes\BpHttpClient.pas
-// Source commit a9fbeb6, generated 2026-09-12 by tools\Amalgamate.ps1.
+// Source commit 7175746, generated 2026-09-12 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
 // One bundle per project: two that share a helper declare it twice.
@@ -1514,7 +1514,8 @@ begin
         Result.ContentLength := BpHttpContentLength(Result.Headers);
         Result.FinalUrl := aUrl;
         Result.Body := '';
-        if FFollowRedirects then
+        // a budget of none is documented as behaving like FollowRedirects False
+        if FFollowRedirects and (FMaxRedirects > 0) then
           aRedirectTo := BpHttpRedirectTarget(aUrl, Result.Headers, Result.StatusCode);
 
         // WinInet honours a Content-Length even on a 304, so a reply that
