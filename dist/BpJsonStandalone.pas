@@ -4,7 +4,7 @@ unit BpJsonStandalone;
 // Single-file bundle amalgamated from the DelphiBoostPack modular units:
 //   src\Core\Classes\BpStringBuilder.pas
 //   src\Core\Classes\BpJson.pas
-// Source commit 77a27be, generated 2026-09-05 by tools\Amalgamate.ps1.
+// Source commit 41c4e61, generated 2026-09-12 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
 // One bundle per project: two that share a helper declare it twice.
@@ -15,6 +15,11 @@ interface
 
 uses
   SysUtils, Math;
+
+// Range and overflow checking as the consumer set it: a unit that turns
+// either off is bracketed, so its setting ends where the unit does.
+{$IFOPT R+}{$DEFINE BPAMALG_R}{$ELSE}{$UNDEF BPAMALG_R}{$ENDIF}
+{$IFOPT Q+}{$DEFINE BPAMALG_Q}{$ELSE}{$UNDEF BPAMALG_Q}{$ENDIF}
 
 // -------------- begin BpStringBuilder.pas interface ---------------
 
@@ -79,6 +84,18 @@ type
   TbpJsonKind = (bjkNull, bjkBool, bjkInt, bjkFloat, bjkString, bjkArray,
     bjkObject);
 
+  // one member's place in its bucket chain, parallel to the name array
+  TbpJsonMemberSlot = record
+    Hash: Cardinal;
+    Next: Integer;  // next member in the bucket, -1 at the end of the chain
+  end;
+
+  PbpJsonNameIndex = ^TbpJsonNameIndex;
+  TbpJsonNameIndex = record
+    Buckets: array of Integer;
+    Slots: array of TbpJsonMemberSlot;
+  end;
+
   TbpJsonValue = class
   private
     FKind: TbpJsonKind;
@@ -88,11 +105,16 @@ type
     FStr: string;
     FItems: array of TbpJsonValue;  // array elements or object member values
     FNames: array of string;        // object member names, parallel to FItems
+    FIndex: PbpJsonNameIndex;       // nil until the member count earns a hash
     FCount: Integer;
     function GetItem(aIndex: Integer): TbpJsonValue;
     function GetName(aIndex: Integer): string;
     procedure RequireKind(aKind: TbpJsonKind);
     function IndexOfName(const aName: string): Integer;
+    procedure BuildNameIndex;
+    procedure RechainNames(aBucketCount: Integer);
+    procedure LinkName(aIndex: Integer);
+    procedure DropNameIndex;
     procedure InternalAdd(const aName: string; aChild: TbpJsonValue);
     procedure InternalPut(const aName: string; aChild: TbpJsonValue);
     function MemberOrFail(const aName: string): TbpJsonValue;
@@ -182,6 +204,7 @@ type
     function ToJsonPretty(aIndentSize: Integer = 2;
       aEscapeNonAscii: Boolean = False): string;
   end;
+{$IFDEF BPAMALG_R}{$R+}{$ELSE}{$R-}{$ENDIF}{$IFDEF BPAMALG_Q}{$Q+}{$ELSE}{$Q-}{$ENDIF}
 // -------------------- end BpJson.pas interface --------------------
 
 implementation
@@ -436,8 +459,36 @@ end;
 const
   // recursion guard, far deeper than any sane document
   gcBpJsonMaxDepth = 512;
+  // below this a scan beats a hash table, and most objects never reach it
+  gcBpJsonIndexFrom = 8;
+  gcBpJsonMinBuckets = 16;
   gcBpJsonKindNames: array[TbpJsonKind] of string =
     ('null', 'bool', 'int', 'float', 'string', 'array', 'object');
+
+// FNV-1a; BpKeyFold folds, and would cost this bundle a unit it never needs
+{$IFOPT Q+}{$DEFINE BPJSON_Q}{$Q-}{$ENDIF}
+function BpJsonNameHash(const aName: string): Cardinal;
+var
+  i: Integer;
+begin
+  Result := 2166136261;
+  for i := 1 to Length(aName) do
+    Result := (Result xor Cardinal(Ord(aName[i]))) * 16777619;
+  Result := Result xor (Result shr 16);
+  Result := Result * $85EBCA6B;
+  Result := Result xor (Result shr 13);
+  Result := Result * $C2B2AE35;
+  Result := Result xor (Result shr 16);
+end;
+{$IFDEF BPJSON_Q}{$Q+}{$UNDEF BPJSON_Q}{$ENDIF}
+
+// buckets sized so the load never passes 3/4
+function BpJsonBucketsFor(aCount: Integer): Integer;
+begin
+  Result := gcBpJsonMinBuckets;
+  while Result * 3 div 4 < aCount do
+    Result := Result * 2;
+end;
 
 type
   TbpJsonReader = record
@@ -1256,12 +1307,88 @@ begin
   Result := FNames[aIndex];
 end;
 
+// a linear scan below the threshold and a hash chain above it: most objects
+// are small, and one that is not was quadratic to parse
 function TbpJsonValue.IndexOfName(const aName: string): Integer;
+var
+  lvHash: Cardinal;
 begin
-  for Result := 0 to FCount - 1 do
-    if FNames[Result] = aName then
+  if FIndex = nil then
+  begin
+    if FCount < gcBpJsonIndexFrom then
+    begin
+      for Result := 0 to FCount - 1 do
+        if FNames[Result] = aName then
+          Exit;
+      Result := -1;
       Exit;
-  Result := -1;
+    end;
+    BuildNameIndex;
+  end;
+  lvHash := BpJsonNameHash(aName);
+  Result := FIndex.Buckets[lvHash and Cardinal(Length(FIndex.Buckets) - 1)];
+  while Result >= 0 do
+  begin
+    if (FIndex.Slots[Result].Hash = lvHash) and (FNames[Result] = aName) then
+      Exit;
+    Result := FIndex.Slots[Result].Next;
+  end;
+end;
+
+procedure TbpJsonValue.BuildNameIndex;
+var
+  i: Integer;
+begin
+  New(FIndex);
+  SetLength(FIndex.Slots, Length(FNames));
+  for i := 0 to FCount - 1 do
+    FIndex.Slots[i].Hash := BpJsonNameHash(FNames[i]);
+  RechainNames(BpJsonBucketsFor(FCount));
+end;
+
+// rebuilt from the end back, so a chain runs in member order
+procedure TbpJsonValue.RechainNames(aBucketCount: Integer);
+var
+  i, lvBucket: Integer;
+begin
+  SetLength(FIndex.Buckets, aBucketCount);
+  for i := 0 to aBucketCount - 1 do
+    FIndex.Buckets[i] := -1;
+  for i := FCount - 1 downto 0 do
+  begin
+    lvBucket := Integer(FIndex.Slots[i].Hash and Cardinal(aBucketCount - 1));
+    FIndex.Slots[i].Next := FIndex.Buckets[lvBucket];
+    FIndex.Buckets[lvBucket] := i;
+  end;
+end;
+
+// the member is already at its place in FNames, so a rechain sees it too
+procedure TbpJsonValue.LinkName(aIndex: Integer);
+var
+  lvBucket: Integer;
+begin
+  if Length(FIndex.Slots) < Length(FNames) then
+    SetLength(FIndex.Slots, Length(FNames));
+  FIndex.Slots[aIndex].Hash := BpJsonNameHash(FNames[aIndex]);
+  if FCount > Length(FIndex.Buckets) * 3 div 4 then
+  begin
+    RechainNames(Length(FIndex.Buckets) * 2);
+    Exit;
+  end;
+  lvBucket := Integer(FIndex.Slots[aIndex].Hash and
+    Cardinal(Length(FIndex.Buckets) - 1));
+  FIndex.Slots[aIndex].Next := FIndex.Buckets[lvBucket];
+  FIndex.Buckets[lvBucket] := aIndex;
+end;
+
+// every stored position moves when a member is removed, so the index goes
+procedure TbpJsonValue.DropNameIndex;
+begin
+  if FIndex <> nil then
+  begin
+    Dispose(FIndex);
+    FIndex := nil;
+  end;
 end;
 
 procedure TbpJsonValue.InternalAdd(const aName: string; aChild: TbpJsonValue);
@@ -1281,6 +1408,8 @@ begin
   if FKind = bjkObject then
     FNames[FCount] := aName;
   Inc(FCount);
+  if FIndex <> nil then
+    LinkName(FCount - 1);
 end;
 
 procedure TbpJsonValue.InternalPut(const aName: string; aChild: TbpJsonValue);
@@ -1312,6 +1441,7 @@ begin
     raise EbpJson.CreateFmt('Index %d out of range (count %d)',
       [aIndex, FCount]);
   FItems[aIndex].Free;
+  DropNameIndex;
   for lvIdx := aIndex to FCount - 2 do
   begin
     FItems[lvIdx] := FItems[lvIdx + 1];
@@ -1333,6 +1463,7 @@ begin
   FCount := 0;
   SetLength(FItems, 0);
   SetLength(FNames, 0);
+  DropNameIndex;
 end;
 
 procedure TbpJsonValue.AddNull;
@@ -1763,6 +1894,7 @@ begin
     lvSb.Free;
   end;
 end;
+{$IFDEF BPAMALG_R}{$R+}{$ELSE}{$R-}{$ENDIF}{$IFDEF BPAMALG_Q}{$Q+}{$ELSE}{$Q-}{$ENDIF}
 // ----------------- end BpJson.pas implementation ------------------
 
 end.

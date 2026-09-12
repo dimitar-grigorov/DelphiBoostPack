@@ -66,6 +66,14 @@ type
     procedure TestTryParseReturnsFalse;
     procedure TestLookupOnANonObject;
     procedure TestFindPathOversizedIndex;
+    // a wide object crosses the member count where a hash index takes over
+    procedure TestWideObjectFindsEveryMember;
+    procedure TestWideObjectKeepsInsertionOrder;
+    procedure TestWideObjectSurvivesRemoveAndReadd;
+    procedure TestWideObjectDuplicateKeyKeepsLast;
+    procedure TestWideObjectDeleteByIndex;
+    procedure TestWideObjectClones;
+    procedure TestGrowingObjectFindsEveryMemberAtEveryStep;
   end;
 
 implementation
@@ -245,6 +253,177 @@ begin
     CheckEquals(1, lvValue.GetInt('a'));
   finally
     lvValue.Free;
+  end;
+end;
+
+// wider than gcBpJsonIndexFrom, and wide enough to rechain the buckets twice
+const
+  gcWideMembers = 50;
+
+function WideMemberName(aIndex: Integer): string;
+begin
+  Result := 'key' + IntToStr(aIndex);
+end;
+
+function ParseWideObject: TbpJsonValue;
+var
+  lvText: string;
+  i: Integer;
+begin
+  lvText := '{';
+  for i := 0 to gcWideMembers - 1 do
+  begin
+    if i > 0 then
+      lvText := lvText + ',';
+    lvText := lvText + '"' + WideMemberName(i) + '":' + IntToStr(i);
+  end;
+  Result := TbpJsonValue.Parse(lvText + '}');
+end;
+
+procedure TBpJsonTests.TestWideObjectFindsEveryMember;
+var
+  lvObj: TbpJsonValue;
+  i: Integer;
+begin
+  lvObj := ParseWideObject;
+  try
+    CheckEquals(gcWideMembers, lvObj.Count);
+    for i := 0 to gcWideMembers - 1 do
+      CheckEquals(i, lvObj.GetInt(WideMemberName(i)), WideMemberName(i));
+    CheckFalse(lvObj.Contains('key' + IntToStr(gcWideMembers)),
+      'a name that was never added must not be found');
+    CheckFalse(lvObj.Contains(''), 'nor must an empty name');
+  finally
+    lvObj.Free;
+  end;
+end;
+
+procedure TBpJsonTests.TestWideObjectKeepsInsertionOrder;
+var
+  lvObj: TbpJsonValue;
+  i: Integer;
+begin
+  lvObj := ParseWideObject;
+  try
+    for i := 0 to gcWideMembers - 1 do
+      CheckEquals(WideMemberName(i), lvObj.Names[i], 'position ' + IntToStr(i));
+  finally
+    lvObj.Free;
+  end;
+end;
+
+procedure TBpJsonTests.TestWideObjectSurvivesRemoveAndReadd;
+var
+  lvObj: TbpJsonValue;
+  i: Integer;
+begin
+  lvObj := ParseWideObject;
+  try
+    // removing the first member shifts every later one, index or not
+    CheckTrue(lvObj.Remove(WideMemberName(0)));
+    CheckEquals(gcWideMembers - 1, lvObj.Count);
+    CheckFalse(lvObj.Contains(WideMemberName(0)));
+    for i := 1 to gcWideMembers - 1 do
+      CheckEquals(i, lvObj.GetInt(WideMemberName(i)), WideMemberName(i));
+
+    lvObj.SetInt(WideMemberName(0), 999);
+    CheckEquals(gcWideMembers, lvObj.Count);
+    CheckEquals(999, lvObj.GetInt(WideMemberName(0)), 'a re-added name is found');
+    CheckEquals(WideMemberName(0), lvObj.Names[gcWideMembers - 1],
+      'and lands at the end, because it is a new member');
+  finally
+    lvObj.Free;
+  end;
+end;
+
+procedure TBpJsonTests.TestWideObjectDuplicateKeyKeepsLast;
+var
+  lvObj: TbpJsonValue;
+  lvText: string;
+  i: Integer;
+begin
+  lvText := '{';
+  for i := 0 to gcWideMembers - 1 do
+    lvText := lvText + '"' + WideMemberName(i) + '":' + IntToStr(i) + ',';
+  // every name once more, in the same order, with a different value
+  for i := 0 to gcWideMembers - 1 do
+  begin
+    lvText := lvText + '"' + WideMemberName(i) + '":' + IntToStr(1000 + i);
+    if i < gcWideMembers - 1 then
+      lvText := lvText + ',';
+  end;
+  lvObj := TbpJsonValue.Parse(lvText + '}');
+  try
+    CheckEquals(gcWideMembers, lvObj.Count, 'duplicates collapse to one member');
+    for i := 0 to gcWideMembers - 1 do
+    begin
+      CheckEquals(1000 + i, lvObj.GetInt(WideMemberName(i)), 'last value wins');
+      CheckEquals(WideMemberName(i), lvObj.Names[i], 'at its first position');
+    end;
+  finally
+    lvObj.Free;
+  end;
+end;
+
+procedure TBpJsonTests.TestWideObjectDeleteByIndex;
+var
+  lvObj: TbpJsonValue;
+  i: Integer;
+begin
+  lvObj := ParseWideObject;
+  try
+    lvObj.Delete(gcWideMembers div 2);
+    CheckEquals(gcWideMembers - 1, lvObj.Count);
+    CheckFalse(lvObj.Contains(WideMemberName(gcWideMembers div 2)));
+    for i := 0 to gcWideMembers - 1 do
+      if i <> gcWideMembers div 2 then
+        CheckEquals(i, lvObj.GetInt(WideMemberName(i)), WideMemberName(i));
+  finally
+    lvObj.Free;
+  end;
+end;
+
+procedure TBpJsonTests.TestWideObjectClones;
+var
+  lvObj, lvCopy: TbpJsonValue;
+  i: Integer;
+begin
+  lvObj := ParseWideObject;
+  try
+    lvCopy := lvObj.Clone;
+    try
+      CheckEquals(gcWideMembers, lvCopy.Count);
+      for i := 0 to gcWideMembers - 1 do
+      begin
+        CheckEquals(i, lvCopy.GetInt(WideMemberName(i)), WideMemberName(i));
+        CheckEquals(WideMemberName(i), lvCopy.Names[i], 'order survives a clone');
+      end;
+    finally
+      lvCopy.Free;
+    end;
+  finally
+    lvObj.Free;
+  end;
+end;
+
+// the crossing itself, where a scan hands over to a hash chain mid-object
+procedure TBpJsonTests.TestGrowingObjectFindsEveryMemberAtEveryStep;
+var
+  lvObj: TbpJsonValue;
+  i, j: Integer;
+begin
+  lvObj := TbpJsonValue.CreateObject;
+  try
+    for i := 0 to gcWideMembers - 1 do
+    begin
+      lvObj.SetInt(WideMemberName(i), i);
+      CheckEquals(i + 1, lvObj.Count);
+      for j := 0 to i do
+        CheckEquals(j, lvObj.GetInt(WideMemberName(j)),
+          Format('member %d after %d were added', [j, i + 1]));
+    end;
+  finally
+    lvObj.Free;
   end;
 end;
 
