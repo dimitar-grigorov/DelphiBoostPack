@@ -1183,7 +1183,8 @@ begin
         Result.ContentLength := BpHttpContentLength(Result.Headers);
         Result.FinalUrl := aUrl;
         Result.Body := '';
-        if FFollowRedirects then
+        // a budget of none is documented as behaving like FollowRedirects False
+        if FFollowRedirects and (FMaxRedirects > 0) then
           aRedirectTo := BpHttpRedirectTarget(aUrl, Result.Headers, Result.StatusCode);
 
         // WinInet honours a Content-Length even on a 304, so a reply that
