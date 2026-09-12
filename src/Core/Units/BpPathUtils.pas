@@ -39,6 +39,7 @@ function BpPathUnderAnyRoot(const aPath: string;
   const aRoots: array of string): Boolean;
 
 // aPath's tail below aRoot in aPath's own case, '' when not strictly under
+// the one result in '/' and not the given separators: a tail goes on a wire
 function BpPathRelativeTo(const aPath, aRoot: string): string;
 
 // the form git, GitLab and every other wire protocol expects
