@@ -5,7 +5,7 @@ unit BpCancellationTokenTests;
 interface
 
 uses
-  TestFramework, Classes, Windows, BpHttpClient;
+  TestFramework, SysUtils, Classes, Windows, BpHttpClient;
 
 type
   // all offline; the cross-thread test uses a private worker thread
@@ -22,6 +22,7 @@ type
     procedure TestUnregisterPreventsCleanup;
     procedure TestRegisterAfterCancelRefuses;
     procedure TestCleanupsRunInRegistrationOrder;
+    procedure TestARaisingCleanupDoesNotStopTheRest;
     procedure TestCancelFromAnotherThread;
   end;
 
@@ -41,6 +42,12 @@ var
 procedure AppendCleanupLog(aData: Pointer);
 begin
   gvCleanupLog := gvCleanupLog + string(PChar(aData));
+end;
+
+procedure LogThenRaise(aData: Pointer);
+begin
+  AppendCleanupLog(aData);
+  raise Exception.Create('a cleanup that misbehaves');
 end;
 
 type
@@ -148,6 +155,22 @@ begin
 
   FToken.Cancel;
   CheckEquals('13', gvCleanupLog, 'remaining cleanups run in order');
+end;
+
+// a half-run cancel leaves handles open while the token says it cancelled
+procedure TBpCancellationTokenTests.TestARaisingCleanupDoesNotStopTheRest;
+var
+  lvId1, lvId2, lvId3: Integer;
+begin
+  CheckTrue(FToken.RegisterCleanup(AppendCleanupLog, gcTag1, lvId1));
+  CheckTrue(FToken.RegisterCleanup(LogThenRaise, gcTag2, lvId2));
+  CheckTrue(FToken.RegisterCleanup(AppendCleanupLog, gcTag3, lvId3));
+
+  FToken.Cancel;
+  CheckEquals('123', gvCleanupLog, 'every cleanup ran');
+  CheckTrue(FToken.IsCancellationRequested, 'and the token is cancelled');
+  // the registry was emptied, so nothing claims to be still pending
+  CheckFalse(FToken.UnregisterCleanup(lvId3), 'the registry was emptied');
 end;
 
 procedure TBpCancellationTokenTests.TestCancelFromAnotherThread;

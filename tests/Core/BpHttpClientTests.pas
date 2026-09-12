@@ -16,6 +16,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestDefaults;
     procedure TestParseUrl;
     procedure TestBuildHeaders;
     procedure TestBasicAuth;
@@ -48,6 +49,21 @@ procedure TBpHttpClientTests.TearDown;
 begin
   FClient.Free;
   inherited;
+end;
+
+// FEATURES.md states these as contract, so a silent change has to fail here
+procedure TBpHttpClientTests.TestDefaults;
+begin
+  CheckEquals('DelphiBoostPack/1.0', FClient.UserAgent, 'UserAgent');
+  CheckEquals(8000, Integer(FClient.ConnectTimeout), 'ConnectTimeout');
+  CheckEquals(8000, Integer(FClient.SendTimeout), 'SendTimeout');
+  CheckEquals(8000, Integer(FClient.ReceiveTimeout), 'ReceiveTimeout');
+  CheckTrue(FClient.FollowRedirects, 'FollowRedirects');
+  CheckEquals(10, FClient.MaxRedirects, 'MaxRedirects');
+  CheckTrue(FClient.AutoDecompress, 'AutoDecompress');
+  CheckEquals('', string(FClient.Username), 'Username');
+  CheckEquals('', string(FClient.Password), 'Password');
+  CheckEquals('', FClient.BearerToken, 'BearerToken');
 end;
 
 procedure TBpHttpClientTests.TestParseUrl;
@@ -92,6 +108,27 @@ begin
   Check(FClient.ParseUrl('https://example.com/#top', lvServer, lvResource,
     lvPort, lvSecure), 'fragment only should parse');
   CheckEquals('/', lvResource);
+
+  // userinfo belongs to the authority, never to the host or the request line
+  Check(FClient.ParseUrl('http://user:pass@example.com/p', lvServer, lvResource,
+    lvPort, lvSecure), 'url with userinfo should parse');
+  CheckEquals('example.com', lvServer, 'userinfo is not part of the host');
+  CheckEquals('/p', lvResource);
+
+  // an IPv6 literal keeps its brackets, which is what WinInet wants back
+  Check(FClient.ParseUrl('http://[::1]:8080/status', lvServer, lvResource,
+    lvPort, lvSecure), 'IPv6 literal with a port should parse');
+  CheckEquals('[::1]', lvServer);
+  CheckEquals(8080, lvPort);
+  Check(FClient.ParseUrl('https://[2001:db8::1]/', lvServer, lvResource,
+    lvPort, lvSecure), 'IPv6 literal without a port should parse');
+  CheckEquals('[2001:db8::1]', lvServer);
+  CheckEquals(443, lvPort);
+
+  // a query longer than the fixed buffers the parser used to carry
+  Check(FClient.ParseUrl('http://example.com/p?q=' + StringOfChar('a', 3000),
+    lvServer, lvResource, lvPort, lvSecure), 'a 3000 character query should parse');
+  CheckEquals(Length('/p?q=') + 3000, Length(lvResource), 'the whole query survives');
 
   CheckFalse(FClient.ParseUrl('not a url at all', lvServer, lvResource,
     lvPort, lvSecure), 'garbage should not parse');
@@ -207,6 +244,11 @@ const
     'Content-Type: application/json; charset=utf-8'#13#10 +
     'Content-Length: 42'#13#10 +
     'X-Rate-Limit:  100 '#13#10;
+  // the two shapes where one string cannot carry the answer
+  lcLossy = 'HTTP/1.1 200 OK'#13#10 +
+    'Set-Cookie: a=1'#13#10 +
+    'Set-Cookie: b=2'#13#10 +
+    'X-Empty:'#13#10;
 begin
   CheckEquals('application/json; charset=utf-8',
     BpHttpHeaderValue(lcHeaders, 'Content-Type'));
@@ -215,6 +257,11 @@ begin
   CheckEquals('100', BpHttpHeaderValue(lcHeaders, 'x-rate-limit'));
   CheckEquals('', BpHttpHeaderValue(lcHeaders, 'Server'), 'absent header yields empty');
   CheckEquals('', BpHttpHeaderValue('', 'Content-Type'), 'empty block yields empty');
+  // a repeated name answers with the first line, never a join of the two
+  CheckEquals('a=1', BpHttpHeaderValue(lcLossy, 'Set-Cookie'), 'first occurrence wins');
+  // and a present but empty value reads the same as an absent one
+  CheckEquals('', BpHttpHeaderValue(lcLossy, 'X-Empty'), 'empty value yields empty');
+  CheckEquals('', BpHttpHeaderValue(lcLossy, 'X-Missing'), 'and so does an absent one');
 end;
 
 procedure TBpHttpClientTests.TestIsSuccess;

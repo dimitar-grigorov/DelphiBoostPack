@@ -5,7 +5,7 @@ unit BpJsonTests;
 interface
 
 uses
-  TestFramework, SysUtils, BpJson;
+  TestFramework, SysUtils, Windows, BpJson;
 
 type
   TBpJsonTests = class(TTestCase)
@@ -992,11 +992,23 @@ end;
 procedure TBpJsonTests.TestWriterEscapeNonAscii;
 var
   lvValue: TbpJsonValue;
+  lvEscape: string;
+{$IFNDEF UNICODE}
+  lvWide: WideString;
+{$ENDIF}
 begin
   // a char above #127 stays literal by default, becomes \u.... when asked
-  lvValue := TbpJsonValue.Parse('"\u0410"'); // U+0410 Cyrillic A, present in cp1251
+{$IFDEF UNICODE}
+  lvEscape := '\u0410';  // Cyrillic A, and a Unicode string holds it anywhere
+{$ELSE}
+  // before Unicode a high byte means whatever the machine's code page says
+  SetLength(lvWide, 1);
+  MultiByteToWideChar(CP_ACP, 0, PAnsiChar(AnsiString(#$C0)), 1, PWideChar(lvWide), 1);
+  lvEscape := '\u' + LowerCase(IntToHex(Ord(lvWide[1]), 4));
+{$ENDIF}
+  lvValue := TbpJsonValue.Parse('"' + lvEscape + '"');
   try
-    CheckEquals('"\u0410"', LowerCase(lvValue.ToJson(True)));
+    CheckEquals('"' + lvEscape + '"', LowerCase(lvValue.ToJson(True)));
   finally
     lvValue.Free;
   end;
@@ -1143,6 +1155,14 @@ var
 begin
   CheckFalse(TbpJsonValue.TryParse('{bad', lvValue));
   CheckNull(lvValue, 'failed TryParse must not leak a value');
+  // a number past Double range must come back False, not raise through TryParse
+  CheckFalse(TbpJsonValue.TryParse('1e400', lvValue), 'exponent past range');
+  CheckNull(lvValue, 'no value from 1e400');
+  CheckFalse(TbpJsonValue.TryParse('1e2147483648', lvValue), 'exponent past Integer');
+  CheckFalse(TbpJsonValue.TryParse('1' + StringOfChar('0', 400), lvValue),
+    'a 401 digit integer');
+  CheckFalse(TbpJsonValue.TryParse('{"balance":' + StringOfChar('9', 400) + '}', lvValue),
+    'a 400 digit member');
   CheckTrue(TbpJsonValue.TryParse('{"ok":1}', lvValue));
   try
     CheckEquals(1, lvValue.GetInt('ok'));

@@ -13,7 +13,9 @@ type
   TBpStopWatchTests = class(TTestCase)
   published
     procedure TestDocumentedSurfaceThroughTheInterface;
+    procedure TestARunningWatchAdvances;
     procedure TestStopFreezesTheReading;
+    procedure TestStartAfterStopResumes;
     procedure TestResetAndStart;
   end;
 
@@ -41,17 +43,48 @@ begin
   CheckTrue(lvTicks >= 0, 'ticks are not negative');
 end;
 
+// 20 ms, so the GetTickCount fallback on a box without QPC also moves
+procedure TBpStopWatchTests.TestARunningWatchAdvances;
+var
+  lvSw: IStopWatch;
+  lvFirst: Int64;
+begin
+  lvSw := TStopWatch.StartNew;
+  Sleep(20);
+  lvFirst := lvSw.ElapsedTicks;
+  CheckTrue(lvFirst > 0, 'a slept-through watch has ticked');
+  CheckTrue(lvSw.ElapsedMilliseconds > 0, 'and says so in milliseconds');
+  Sleep(20);
+  CheckTrue(lvSw.ElapsedTicks > lvFirst, 'a running watch keeps ticking');
+end;
+
 procedure TBpStopWatchTests.TestStopFreezesTheReading;
 var
   lvSw: IStopWatch;
   lvFirst: Int64;
 begin
   lvSw := TStopWatch.StartNew;
-  Sleep(2);
+  Sleep(20);
   lvSw.Stop;
   lvFirst := lvSw.ElapsedTicks;
-  Sleep(5);
+  CheckTrue(lvFirst > 0, 'the watch ran before it stopped');
+  Sleep(20);
   CheckEquals(lvFirst, lvSw.ElapsedTicks, 'a stopped watch does not move');
+end;
+
+procedure TBpStopWatchTests.TestStartAfterStopResumes;
+var
+  lvSw: IStopWatch;
+  lvFirst: Int64;
+begin
+  lvSw := TStopWatch.StartNew;
+  Sleep(20);
+  lvSw.Stop;
+  lvFirst := lvSw.ElapsedTicks;
+  lvSw.Start;
+  Sleep(20);
+  lvSw.Stop;
+  CheckTrue(lvSw.ElapsedTicks > lvFirst, 'Start adds to what was there, it does not restart');
 end;
 
 procedure TBpStopWatchTests.TestResetAndStart;

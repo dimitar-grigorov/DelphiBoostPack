@@ -235,7 +235,7 @@ lvSql := lvSb.ToString;
 
 Checked against the published standard vectors (FIPS, RFC) and the Windows CryptoAPI. All pure Pascal, no DLLs.
 
-The `AnsiString` entry points hash the raw bytes they are given, so on Delphi 2009+ a `string` argument is narrowed through the active ANSI code page first and the digest differs from the Delphi 2007 one. Pass `AnsiString(UTF8Encode(lvText))` when the bytes matter. This holds for all four units below.
+The `AnsiString` entry points hash the raw bytes they are given, so on Delphi 2009+ a `string` argument is narrowed through the active ANSI code page first and anything that code page cannot carry is lost. Pass `AnsiString(UTF8Encode(lvText))` when the bytes matter, and the digest is then the same on every compiler. This holds for all four units below.
 
 ### [BpSHA256](../src/Core/Classes/BpSHA256.pas)
 
@@ -363,7 +363,7 @@ Case folds through [BpKeyFold](#bpkeyfold), never `SameText`, which is ASCII onl
 
 ### [BpVariantUtils](../src/Core/Units/BpVariantUtils.pas)
 
-Strict Variant-to-native conversions: each succeeds only when the Variant already holds that type, so nothing is parsed, widened or rounded behind your back.
+Strict Variant-to-native conversions: each succeeds only when the Variant already holds that kind of data, so no numeric string is parsed, no boolean becomes an integer and no float is truncated to one. Integers do widen, to `Int64` and to `Double`, where one past 2^53 loses precision.
 
 ```pascal
 if BpTryVarToInt(lvField, lvCount) then ...      // False for '42', True for 42

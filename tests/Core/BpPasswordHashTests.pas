@@ -24,6 +24,7 @@ type
     procedure TestVerifyRejectsAbsurdWorkFactor;
     procedure TestHashRejectsUnverifiableWorkFactor;
     procedure TestRecordFormat;
+    procedure TestSaltIsFreshPerCall;
     procedure TestSaltUniqueness;
     procedure TestConstantTimeEquals;
   end;
@@ -112,9 +113,17 @@ procedure TBpPasswordHashTests.TestVerifyExternalRecord;
 const
   // from .NET Rfc2898DeriveBytes, never from our own code, so this pins interop
   lcRecord = '$pbkdf2-sha256$1000$c2FsdA==$rs96FmOyNUg3Gy2NJydDTZnhjENOrJOcqeTzVD0qDf0=';
+  // the same derivation at 64 and 20 bytes, the key lengths we never write
+  lcRecord64 = '$pbkdf2-sha256$1000$c2FsdA==$rs96FmOyNUg3Gy2NJydDTZnhjENOrJOcqeTzVD0qDf1e' +
+    'AHDXqVbDkuFQi6U7zd+NhWGnt67wJeTOXmx8WQkJNw==';
+  lcRecord20 = '$pbkdf2-sha256$1000$c2FsdA==$rs96FmOyNUg3Gy2NJydDTZnhjEM=';
 begin
   CheckTrue(BpVerifyPassword('p', lcRecord), 'external record verifies');
   CheckFalse(BpVerifyPassword('q', lcRecord), 'wrong password against external record');
+  CheckTrue(BpVerifyPassword('p', lcRecord64), '64 byte key verifies');
+  CheckFalse(BpVerifyPassword('q', lcRecord64), 'wrong password, 64 byte key');
+  CheckTrue(BpVerifyPassword('p', lcRecord20), '20 byte key verifies');
+  CheckFalse(BpVerifyPassword('q', lcRecord20), 'wrong password, 20 byte key');
 end;
 
 procedure TBpPasswordHashTests.TestVerifyWrongPassword;
@@ -232,6 +241,20 @@ begin
   CheckEquals('$pbkdf2-sha256$1000$', Copy(lvStored, 1, 20), 'record prefix');
   // 16 salt bytes -> 24 base64 chars, 32 key bytes -> 44, plus 4 separators
   CheckEquals(Length('$pbkdf2-sha256$1000$') + 24 + 1 + 44, Length(lvStored), 'record length');
+end;
+
+// BpGenerateSalt being random is not the same as BpHashPassword calling it
+procedure TBpPasswordHashTests.TestSaltIsFreshPerCall;
+var
+  lvA, lvB: string;
+begin
+  lvA := BpHashPassword('pw', 1000);
+  lvB := BpHashPassword('pw', 1000);
+  CheckFalse(lvA = lvB, 'one password twice must not give one record');
+  // the salt is the 24 base64 characters after '$pbkdf2-sha256$1000$'
+  CheckFalse(Copy(lvA, 21, 24) = Copy(lvB, 21, 24), 'the salt itself must differ');
+  CheckTrue(BpVerifyPassword('pw', lvA), 'first record verifies');
+  CheckTrue(BpVerifyPassword('pw', lvB), 'second record verifies');
 end;
 
 procedure TBpPasswordHashTests.TestSaltUniqueness;

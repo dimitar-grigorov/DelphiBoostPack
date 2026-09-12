@@ -41,6 +41,7 @@ type
     procedure TestUrlCredentialsArePercentDecoded;
     procedure TestUrlCredentialsAgreeWithSetBasicAuth;
     procedure TestExplicitAuthorizationBeatsTheUrl;
+    procedure TestUsernameAndPasswordAnswerAChallenge;
   end;
 
   TBpHttpBodyWireTests = class(TBpWireTestCase)
@@ -515,6 +516,25 @@ begin
   CheckEquals('request', lvRequest.HeaderValue('X-Scope'));
   CheckEquals(0, CountOccurrences(lvRequest.RawHead, 'client'),
     'the replaced value must not reach the wire');
+end;
+
+// Username/Password are WinInet-level, so only a real 401 exercises them
+procedure TBpHttpHeaderWireTests.TestUsernameAndPasswordAnswerAChallenge;
+var
+  lvChallenge: TbpMockResponse;
+  lvResponse: TbpHttpResponse;
+begin
+  lvChallenge := TbpMockResponse.Create(401);
+  lvChallenge.Headers.Add('WWW-Authenticate: Basic realm="test"');
+  FServer.Enqueue(lvChallenge);
+  FServer.Enqueue(BpMockOk('in'));
+  FClient.Username := 'user';
+  FClient.Password := 'pass';
+  lvResponse := FClient.Get(Url('/secret'));
+  CheckEquals(200, lvResponse.StatusCode, 'the challenge must be answered');
+  CheckFalse(NextRequest.HasHeader('Authorization'), 'the first try is unauthenticated');
+  CheckEquals('Basic dXNlcjpwYXNz', NextRequest.HeaderValue('Authorization'),
+    'the retry carries user:pass');
 end;
 
 procedure TBpHttpHeaderWireTests.TestColonInValueStaysOneLine;
