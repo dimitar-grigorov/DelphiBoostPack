@@ -8,7 +8,7 @@ unit BpHashes;
 //   src\Core\Classes\BpMD5.pas
 //   src\Core\Classes\BpHMACSHA256.pas
 //   src\Core\Classes\BpPasswordHash.pas
-// Source commit 75432ca, generated 2026-09-12 by tools\Amalgamate.ps1.
+// Source commit bd6fc23, generated 2026-09-12 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
 // One bundle per project: two that share a helper declare it twice.
@@ -97,6 +97,8 @@ type
     destructor Destroy; override;
     // resets to a fresh hash; Final calls it automatically
     procedure Init;
+    // copies a hash in progress, so a shared prefix is compressed only once
+    procedure Assign(aSource: TbpSHA256);
     procedure Update(const aData; aSize: Integer); overload;
     procedure Update(const aBytes: TBytes); overload;
     procedure Update(const aText: AnsiString); overload;
@@ -167,9 +169,9 @@ type
 type
   TbpHMACSHA256 = class
   private
-    FHasher: TbpSHA256;                // inner hash while streaming, outer in Final
-    FInnerPad: array[0..63] of Byte;   // key xor $36
-    FOuterPad: array[0..63] of Byte;   // key xor $5C
+    FHasher: TbpSHA256;  // the message in progress, inner then outer
+    FInner: TbpSHA256;   // key xor $36 already compressed, once per key
+    FOuter: TbpSHA256;   // key xor $5C already compressed, once per key
     procedure SetKey(const aKey; aKeySize: Integer);
   public
     constructor Create(const aKey; aKeySize: Integer); overload;
@@ -598,6 +600,14 @@ begin
   Inc(FHash[5], lvF);
   Inc(FHash[6], lvG);
   Inc(FHash[7], lvH);
+end;
+
+procedure TbpSHA256.Assign(aSource: TbpSHA256);
+begin
+  FHash := aSource.FHash;
+  FLenBits := aSource.FLenBits;
+  FBuffer := aSource.FBuffer;
+  FIndex := aSource.FIndex;
 end;
 
 procedure TbpSHA256.Update(const aData; aSize: Integer);
@@ -1051,6 +1061,7 @@ end;
 procedure TbpHMACSHA256.SetKey(const aKey; aKeySize: Integer);
 var
   lvHashedKey: TbpSHA256Digest;
+  lvInnerPad, lvOuterPad: array[0..63] of Byte;
   lvKeyBytes: PByte;
   lvKeyLen, i: Integer;
 begin
@@ -1071,24 +1082,31 @@ begin
   begin
     if i < lvKeyLen then
     begin
-      FInnerPad[i] := lvKeyBytes^ xor $36;
-      FOuterPad[i] := lvKeyBytes^ xor $5C;
+      lvInnerPad[i] := lvKeyBytes^ xor $36;
+      lvOuterPad[i] := lvKeyBytes^ xor $5C;
       Inc(lvKeyBytes);
     end
     else
     begin
-      FInnerPad[i] := $36;
-      FOuterPad[i] := $5C;
+      lvInnerPad[i] := $36;
+      lvOuterPad[i] := $5C;
     end;
   end;
-  // start the inner hash: SHA256(ipad || ...)
-  FHasher.Update(FInnerPad, SizeOf(FInnerPad));
+  // each pad is a whole block and depends only on the key, so compress it once
+  FInner.Update(lvInnerPad, SizeOf(lvInnerPad));
+  FOuter.Update(lvOuterPad, SizeOf(lvOuterPad));
+  FillChar(lvInnerPad, SizeOf(lvInnerPad), 0);
+  FillChar(lvOuterPad, SizeOf(lvOuterPad), 0);
+  FillChar(lvHashedKey, SizeOf(lvHashedKey), 0);
+  FHasher.Assign(FInner);
 end;
 
 constructor TbpHMACSHA256.Create(const aKey; aKeySize: Integer);
 begin
   inherited Create;
   FHasher := TbpSHA256.Create;
+  FInner := TbpSHA256.Create;
+  FOuter := TbpSHA256.Create;
   SetKey(aKey, aKeySize);
 end;
 
@@ -1110,11 +1128,11 @@ begin
   end;
 end;
 
+// the pad midstates are key material, and TbpSHA256.Destroy wipes its own
 destructor TbpHMACSHA256.Destroy;
 begin
-  // the pads hold key material, wipe them
-  FillChar(FInnerPad, SizeOf(FInnerPad), 0);
-  FillChar(FOuterPad, SizeOf(FOuterPad), 0);
+  FInner.Free;
+  FOuter.Free;
   FHasher.Free;
   inherited Destroy;
 end;
@@ -1138,13 +1156,13 @@ procedure TbpHMACSHA256.Final(out aDigest: TbpSHA256Digest);
 var
   lvInnerDigest: TbpSHA256Digest;
 begin
-  // inner Final resets the hasher, so the same instance runs the outer pass
   FHasher.Final(lvInnerDigest);
-  FHasher.Update(FOuterPad, SizeOf(FOuterPad));
+  // resuming from the pad midstates halves the compressions per message
+  FHasher.Assign(FOuter);
   FHasher.Update(lvInnerDigest, SizeOf(lvInnerDigest));
   FHasher.Final(aDigest);
-  // re-arm the inner hash for the next message with the same key
-  FHasher.Update(FInnerPad, SizeOf(FInnerPad));
+  // re-armed for the next message with the same key
+  FHasher.Assign(FInner);
 end;
 
 class function TbpHMACSHA256.Compute(const aKey, aText: AnsiString): TbpSHA256Digest;
