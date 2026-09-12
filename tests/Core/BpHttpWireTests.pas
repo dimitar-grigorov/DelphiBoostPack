@@ -13,17 +13,6 @@ uses
   BpMockHttpServer, BpTestSupport;
 
 type
-  // no published method here: RTTI would hand it to every descendant suite
-  TBpWireTestCase = class(TTestCase)
-  protected
-    FServer: TbpMockHttpServer;
-    FClient: TbpHttpClient;
-    procedure SetUp; override;
-    procedure TearDown; override;
-    function Url(const aPath: string): string;
-    function NextRequest: TbpRecordedRequest;
-  end;
-
   TBpHttpVerbTests = class(TBpWireTestCase)
   published
     procedure TestGetReachesTheServer;
@@ -222,38 +211,6 @@ procedure TDelayedCancelThread.Execute;
 begin
   Sleep(FDelayMs);
   FToken.Cancel;
-end;
-
-{ TBpWireTestCase }
-
-procedure TBpWireTestCase.SetUp;
-begin
-  inherited;
-  FServer := TbpMockHttpServer.Create;
-  FClient := TbpHttpClient.Create;
-  // short, so a wire test that hangs fails instead of stalling the suite
-  FClient.ConnectTimeout := 4000;
-  FClient.SendTimeout := 4000;
-  FClient.ReceiveTimeout := 4000;
-end;
-
-procedure TBpWireTestCase.TearDown;
-begin
-  FreeAndNil(FClient);   // closes the session, which lets the server threads end
-  FreeAndNil(FServer);
-  inherited;
-end;
-
-function TBpWireTestCase.Url(const aPath: string): string;
-begin
-  Result := FServer.Url(aPath);
-end;
-
-function TBpWireTestCase.NextRequest: TbpRecordedRequest;
-begin
-  Result := FServer.TakeRequest;
-  if Result = nil then
-    Fail('the server recorded no request');
 end;
 
 { TBpHttpVerbTests }
