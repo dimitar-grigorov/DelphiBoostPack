@@ -29,6 +29,7 @@ uses
   BpVariantUtils in 'Core\Units\BpVariantUtils.pas',
   StopWatch in 'Core\Units\StopWatch.pas',
   BpKeyFold in 'Core\Units\BpKeyFold.pas',
+  BpPathUtils in 'Core\Units\BpPathUtils.pas',
   BpStringList in 'Core\Classes\BpStringList.pas',
   BpCompat in 'Core\Units\BpCompat.pas',
   BpHttpTrace in 'Core\Classes\BpHttpTrace.pas';
