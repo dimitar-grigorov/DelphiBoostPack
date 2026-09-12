@@ -30,6 +30,7 @@ implementation
 const
   gcFlatMembers = 20000;  // one object, which is where a linear scan squares
   gcSmallObjects = 20000; // four members each, the shape of a real document
+  gcRuns = 5;             // one reading is worth nothing on a boosting CPU
 
 function MemberName(aIndex: Integer): string;
 begin
@@ -73,34 +74,41 @@ end;
 procedure TBpJsonBenchmark.TestParseFlatObject;
 var
   lvValue: TbpJsonValue;
+  i: Integer;
 begin
-  StartBenchmark;
-  lvValue := TbpJsonValue.Parse(FFlat);
-  StopBenchmark;
-  try
-    CheckEquals(gcFlatMembers, lvValue.Count);
-    LogStatusFmt('Parse one object of %d members (%d KB) - %.3f ms',
-      [gcFlatMembers, Length(FFlat) div 1024, GetElapsedTime]);
-  finally
-    lvValue.Free;
+  for i := 1 to gcRuns do
+  begin
+    StartBenchmark;
+    lvValue := TbpJsonValue.Parse(FFlat);
+    StopBenchmark;
+    try
+      CheckEquals(gcFlatMembers, lvValue.Count);
+    finally
+      lvValue.Free;
+    end;
   end;
+  LogStatusFmt('Parse one object of %d members (%d KB) - %.3f ms median of %d',
+    [gcFlatMembers, Length(FFlat) div 1024, MedianTime, SampleCount]);
 end;
 
 procedure TBpJsonBenchmark.TestLookupInFlatObject;
 var
   lvValue: TbpJsonValue;
-  i, lvSum: Integer;
+  i, j, lvSum: Integer;
 begin
   lvValue := TbpJsonValue.Parse(FFlat);
   try
-    lvSum := 0;
-    StartBenchmark;
-    for i := 0 to gcFlatMembers - 1 do
-      Inc(lvSum, lvValue.GetIntDef(MemberName(i), -1));
-    StopBenchmark;
-    CheckEquals(gcFlatMembers * (gcFlatMembers - 1) div 2, lvSum);
-    LogStatusFmt('Look up all %d members by name - %.3f ms',
-      [gcFlatMembers, GetElapsedTime]);
+    for j := 1 to gcRuns do
+    begin
+      lvSum := 0;
+      StartBenchmark;
+      for i := 0 to gcFlatMembers - 1 do
+        Inc(lvSum, lvValue.GetIntDef(MemberName(i), -1));
+      StopBenchmark;
+      CheckEquals(gcFlatMembers * (gcFlatMembers - 1) div 2, lvSum);
+    end;
+    LogStatusFmt('Look up all %d members by name - %.3f ms median of %d',
+      [gcFlatMembers, MedianTime, SampleCount]);
   finally
     lvValue.Free;
   end;
@@ -109,36 +117,43 @@ end;
 procedure TBpJsonBenchmark.TestParseManySmallObjects;
 var
   lvValue: TbpJsonValue;
+  i: Integer;
 begin
-  StartBenchmark;
-  lvValue := TbpJsonValue.Parse(FSmall);
-  StopBenchmark;
-  try
-    CheckEquals(gcSmallObjects, lvValue.Count);
-    LogStatusFmt('Parse %d objects of 4 members (%d KB) - %.3f ms',
-      [gcSmallObjects, Length(FSmall) div 1024, GetElapsedTime]);
-  finally
-    lvValue.Free;
+  for i := 1 to gcRuns do
+  begin
+    StartBenchmark;
+    lvValue := TbpJsonValue.Parse(FSmall);
+    StopBenchmark;
+    try
+      CheckEquals(gcSmallObjects, lvValue.Count);
+    finally
+      lvValue.Free;
+    end;
   end;
+  LogStatusFmt('Parse %d objects of 4 members (%d KB) - %.3f ms median of %d',
+    [gcSmallObjects, Length(FSmall) div 1024, MedianTime, SampleCount]);
 end;
 
 procedure TBpJsonBenchmark.TestBuildFlatObject;
 var
   lvValue: TbpJsonValue;
-  i: Integer;
+  i, j: Integer;
 begin
-  lvValue := TbpJsonValue.CreateObject;
-  try
-    StartBenchmark;
-    for i := 0 to gcFlatMembers - 1 do
-      lvValue.SetInt(MemberName(i), i);
-    StopBenchmark;
-    CheckEquals(gcFlatMembers, lvValue.Count);
-    LogStatusFmt('Build one object of %d members with SetInt - %.3f ms',
-      [gcFlatMembers, GetElapsedTime]);
-  finally
-    lvValue.Free;
+  for j := 1 to gcRuns do
+  begin
+    lvValue := TbpJsonValue.CreateObject;
+    try
+      StartBenchmark;
+      for i := 0 to gcFlatMembers - 1 do
+        lvValue.SetInt(MemberName(i), i);
+      StopBenchmark;
+      CheckEquals(gcFlatMembers, lvValue.Count);
+    finally
+      lvValue.Free;
+    end;
   end;
+  LogStatusFmt('Build one object of %d members with SetInt - %.3f ms median of %d',
+    [gcFlatMembers, MedianTime, SampleCount]);
 end;
 
 initialization
