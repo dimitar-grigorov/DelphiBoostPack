@@ -39,6 +39,7 @@ type
     procedure TestBearerReplacesAnExplicitAuthorization;
     procedure TestUrlCredentialsBecomeBasicAuth;
     procedure TestUrlCredentialsArePercentDecoded;
+    procedure TestUrlCredentialsAgreeWithSetBasicAuth;
     procedure TestExplicitAuthorizationBeatsTheUrl;
   end;
 
@@ -427,6 +428,25 @@ begin
   FClient.Get(WithUserInfo(Url('/b'), '%2540:pass'));
   lvRequest := NextRequest;
   CheckEquals('Basic JTQwOnBhc3M=', lvRequest.HeaderValue('Authorization'));
+end;
+
+// the two auth paths must put the same bytes on the wire for the same password
+procedure TBpHttpHeaderWireTests.TestUrlCredentialsAgreeWithSetBasicAuth;
+var
+  lvFromUrl, lvFromApi: string;
+begin
+  // a url carries non-ASCII percent-escaped, so these are the UTF-8 bytes of paB
+  FServer.Enqueue(BpMockOk('ok'));
+  FClient.Get(WithUserInfo(Url('/a'), 'user:pa%C3%9F'));
+  lvFromUrl := NextRequest.HeaderValue('Authorization');
+
+  FClient.SetBasicAuth('user', WideChar('p') + WideChar('a') + WideChar($00DF));
+  FServer.Enqueue(BpMockOk('ok'));
+  FClient.Get(Url('/b'));
+  lvFromApi := NextRequest.HeaderValue('Authorization');
+
+  CheckEquals('Basic dXNlcjpwYcOf', lvFromUrl, 'the url path sends the decoded bytes');
+  CheckEquals(lvFromUrl, lvFromApi, 'url credentials and SetBasicAuth must agree');
 end;
 
 procedure TBpHttpHeaderWireTests.TestExplicitAuthorizationBeatsTheUrl;
