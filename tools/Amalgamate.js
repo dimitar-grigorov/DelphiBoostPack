@@ -10,9 +10,9 @@
 //
 // Sections are spliced textually, uses clauses merged. It does not parse
 // Pascal, only masks comments, strings and directives before looking for
-// keywords. Units must have no finalization, no clashing identifiers and no
-// 'in' file references. From mksqlite3c.tcl: begin and end markers, each file
-// in once, an AMALGAMATION define, a check of the result before writing.
+// keywords. Units must have no clashing identifiers and no 'in' file
+// references. From mksqlite3c.tcl: begin and end markers, each file in once,
+// an AMALGAMATION define, a check of the result before writing.
 
 'use strict';
 
@@ -78,17 +78,19 @@ function parseUnit(unitPath) {
   const mInt = /^interface\s*$/m.exec(mask);
   const mImpl = /^implementation\s*$/m.exec(mask);
   if (!mInt || !mImpl) throw new Error('missing interface/implementation in ' + unitPath);
-  if (/^finalization\s*$/m.test(mask)) throw new Error('finalization section not supported: ' + unitPath);
   const mInit = /^initialization\s*$/m.exec(mask);
+  const mFin = /^finalization\s*$/m.exec(mask);
   const mEnd = /^end\./m.exec(mask);
   if (!mEnd) throw new Error('no final end. in ' + unitPath);
 
   const preBlock = text.substring(unitEnd, mInt.index);
   const intStart = mInt.index + mInt[0].length;
   const implStart = mImpl.index + mImpl[0].length;
-  const implEnd = mInit ? mInit.index : mEnd.index;
-  let initBody = '';
-  if (mInit) initBody = text.substring(mInit.index + mInit[0].length, mEnd.index);
+  const sectionStarts = [mInit, mFin, mEnd].filter((m) => m).map((m) => m.index);
+  const implEnd = Math.min.apply(null, sectionStarts);
+  const initEnd = mFin ? mFin.index : mEnd.index;
+  const initBody = mInit ? text.substring(mInit.index + mInit[0].length, initEnd) : '';
+  const finBody = mFin ? text.substring(mFin.index + mFin[0].length, mEnd.index) : '';
 
   // strips a section's uses clause, found in the mask so comments cannot lie
   const stripUses = (body, offset) => {
@@ -118,6 +120,7 @@ function parseUnit(unitPath) {
     intBody: trimNewlines(intBody),
     implBody: trimNewlines(implBody),
     initBody: trimNewlines(initBody),
+    finBody: trimNewlines(finBody),
     uses: intUses.concat(implUses),
     // pre-block switches, re-applied where the unit's code goes
     preSwitches: preBlock.match(/\{\$[A-Za-z]+[+-]\}/g) || [],
@@ -207,15 +210,19 @@ function renderBundle(name, manifestPath) {
     emit(u, 'implementation', u.implBody,
       u.preSwitches.length ? [u.preSwitches.join(''), ''] : []);
 
-  const inits = units.filter((u) => u.initBody);
-  if (inits.length) {
+  const section = (keyword, ordered) => {
+    const bodies = ordered.filter((u) => u[keyword + 'Body']);
+    if (!bodies.length) return;
     out.push('');
-    out.push('initialization');
-    for (const u of inits) {
+    out.push(keyword === 'init' ? 'initialization' : 'finalization');
+    for (const u of bodies) {
       out.push('  // from ' + u.name + '.pas');
-      out.push(u.initBody);
+      out.push(u[keyword + 'Body']);
     }
-  }
+  };
+  section('init', units);
+  // reverse, the order the compiler would have finalized these units in
+  section('fin', units.slice().reverse());
   out.push('');
   out.push('end.');
 
