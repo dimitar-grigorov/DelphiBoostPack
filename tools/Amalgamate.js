@@ -7,6 +7,7 @@
 // --check regenerates into memory and fails when a committed bundle differs,
 // which is the gate that keeps dist\ from lagging src\. Generation is therefore
 // reproducible: the same sources give the same bytes on any day.
+// It also runs CheckMirrors.js, so one gate covers both kinds of drift.
 //
 // Sections are spliced textually, uses clauses merged. It does not parse
 // Pascal, only masks comments, strings and directives before looking for
@@ -18,6 +19,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const mirror = require('./CheckMirrors');
 
 const TOOLS = __dirname;
 const ROOT = path.dirname(TOOLS);
@@ -276,6 +278,7 @@ function main() {
   } else {
     console.log('All bundles match their sources.');
   }
+  if (!mirror.report(mirror.checkMirrors(SRC_DIR))) process.exitCode = 1;
 }
 
 main();
