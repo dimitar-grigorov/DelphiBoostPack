@@ -46,6 +46,7 @@ type
     procedure TestBasicAuthIsSentOnce;
     procedure TestPerRequestHeaderReplacesPersistent;
     procedure TestColonInValueStaysOneLine;
+    procedure TestServerCookiesAreNotStored;
     procedure TestExplicitAuthorizationReplacesTheBearer;
     procedure TestBearerReplacesAnExplicitAuthorization;
   end;
@@ -449,6 +450,25 @@ begin
   CheckEquals(1, lvRequest.HeaderCount('X-Note'));
   CheckEquals('a: b, c', lvRequest.HeaderValue('X-Note'));
   CheckEquals(0, lvRequest.HeaderCount('a'), 'no header named after the value');
+end;
+
+// the client keeps no jar, so WinInet's per-user one must not answer for it
+procedure TBpHttpHeaderWireTests.TestServerCookiesAreNotStored;
+var
+  lvReply: TbpMockResponse;
+  lvSecond: TbpRecordedRequest;
+begin
+  lvReply := BpMockOk('one');
+  lvReply.Headers.Add('Set-Cookie: sid=abc; Path=/');
+  FServer.Enqueue(lvReply);
+  FServer.Enqueue(BpMockOk('two'));
+  FClient.Get(Url('/first'));
+  FClient.Get(Url('/second'));
+  NextRequest;
+  lvSecond := NextRequest;
+  CheckFalse(lvSecond.HasHeader('Cookie'),
+    'nothing the client did not send may come back, got: ' +
+    lvSecond.HeaderValue('Cookie'));
 end;
 
 // one Authorization line, whichever was set last: two would let the server
@@ -900,6 +920,7 @@ var
   lvSecond: TbpRecordedRequest;
 begin
   FClient.AddHeader('Authorization', 'Bearer secret-token');
+  FClient.AddHeader('Cookie', 'session=abc');
   FClient.AddHeader('Proxy-Authorization', 'Basic cHJveHk=');
   FClient.AddHeader('X-Api-Key', 'persistent-key');
 
@@ -910,6 +931,8 @@ begin
   lvSecond := FOther.TakeRequest;
   Check(lvSecond <> nil, 'the other origin never saw the hop');
   CheckFalse(lvSecond.HasHeader('Authorization'), 'Authorization must not follow');
+  CheckFalse(lvSecond.HasHeader('Cookie'),
+    'Cookie must not follow, got: ' + lvSecond.HeaderValue('Cookie'));
   CheckFalse(lvSecond.HasHeader('Proxy-Authorization'),
     'Proxy-Authorization must not follow');
   CheckFalse(lvSecond.HasHeader('X-Api-Key'),
