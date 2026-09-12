@@ -59,7 +59,14 @@ type
     procedure TestStripIndexFromProperty_EmptyString;
     procedure TestStripIndexFromProperty_NestedBrackets;
     procedure TestStripIndexFromProperty_OnlyBrackets;
-    procedure TestStripIndexFromProperty_BracketsAtEdges;    
+    procedure TestStripIndexFromProperty_BracketsAtEdges;
+  end;
+
+  TestTInterfacedCollectionItem = class(TTestCase)
+  published
+    procedure TestItemDoesNotPinARefCountedOwner;
+    procedure TestItemReferenceKeepsTheOwnerAlive;
+    procedure TestUncountedOwnerAndNoOwnerReturnMinusOne;
   end;
 
 implementation
@@ -946,8 +953,81 @@ begin
   CheckEquals('Property', lvResult);
 end;
 
+// the item used to hold a counted reference to its owner, a cycle no outside release could break
+procedure TestTInterfacedCollectionItem.TestItemDoesNotPinARefCountedOwner;
+var
+  Owner: TRefCountedOwner;
+  OwnerIntf: IInterface;
+  Destroyed: Boolean;
+begin
+  Destroyed := False;
+  Owner := TRefCountedOwner.Create(@Destroyed);
+  OwnerIntf := Owner;
+  CheckEquals(1, Owner.RefCount, 'the test holds the only reference');
+
+  Owner.Items.Add;
+  CheckEquals(1, Owner.RefCount, 'adding an item adds no reference');
+
+  OwnerIntf := nil;
+  CheckTrue(Destroyed, 'the last outside reference frees the owner, items and all');
+end;
+
+procedure TestTInterfacedCollectionItem.TestItemReferenceKeepsTheOwnerAlive;
+var
+  Owner: TRefCountedOwner;
+  OwnerIntf, ItemIntf: IInterface;
+  Destroyed: Boolean;
+begin
+  Destroyed := False;
+  Owner := TRefCountedOwner.Create(@Destroyed);
+  OwnerIntf := Owner;
+
+  CheckTrue(Supports(Owner.Items.Add, IInterface, ItemIntf), 'the item is interfaced');
+  CheckEquals(2, Owner.RefCount, 'the item reference counts on the owner');
+
+  OwnerIntf := nil;
+  CheckFalse(Destroyed, 'the item reference alone keeps the owner alive');
+  ItemIntf := nil;
+  CheckTrue(Destroyed, 'and releasing it frees the owner');
+end;
+
+procedure TestTInterfacedCollectionItem.TestUncountedOwnerAndNoOwnerReturnMinusOne;
+var
+  Component: TComponent;
+  Owned: TOwnedCollection;
+  Orphan: TSimpleTestCollectionUnique;
+  Item: TCollectionItem;
+  ItemIntf: IInterface;
+begin
+  Component := TComponent.Create(nil);
+  Orphan := TSimpleTestCollectionUnique.Create;
+  try
+    Owned := TOwnedCollection.Create(Component, TSimpleTestItemUnique);
+    try
+      Item := Owned.Add;
+      CheckTrue(Supports(Item, IInterface, ItemIntf), 'the item is interfaced');
+      CheckEquals(-1, ItemIntf._AddRef, 'a TComponent owner does not count');
+      CheckEquals(-1, ItemIntf._Release, 'a TComponent owner does not count');
+      ItemIntf := nil;
+      CheckEquals(1, Owned.Count, 'the item outlives its last interface reference');
+    finally
+      Owned.Free;
+    end;
+
+    Item := Orphan.Add;
+    CheckTrue(Supports(Item, IInterface, ItemIntf), 'the item is interfaced');
+    CheckEquals(-1, ItemIntf._AddRef, 'no owner, no count');
+    ItemIntf := nil;
+    CheckEquals(1, Orphan.Count, 'the item outlives its last interface reference');
+  finally
+    Orphan.Free;
+    Component.Free;
+  end;
+end;
+
 initialization
   TestFramework.RegisterTest(TestTBpObjectComparer.Suite);
+  TestFramework.RegisterTest(TestTInterfacedCollectionItem.Suite);
 
 end.
 

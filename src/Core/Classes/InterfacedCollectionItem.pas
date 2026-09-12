@@ -1,7 +1,9 @@
 unit InterfacedCollectionItem;
 
-// A TCollectionItem that forwards IInterface to its owning collection's
-// owner, so items can be queried for interfaces the owner implements.
+// A TCollectionItem with interface support whose reference counts go to the
+// owner of its collection, as in TInterfacedPersistent: an interface reference
+// to an item keeps the owner alive, and without a counted owner the item is
+// not reference counted at all.
 
 interface
 
@@ -11,7 +13,7 @@ uses
 type
   TInterfacedCollectionItem = class(TCollectionItem, IInterface)
   private
-    FOwnerInterface: IInterface;
+    FOwnerIntf: Pointer; // IInterface held uncounted, or the item would pin a refcounted owner in a cycle
   protected
     function QueryInterface(const IID: TGUID; out Obj): HResult; stdcall;
     function _AddRef: Integer; stdcall;
@@ -30,9 +32,20 @@ begin
 end;
 
 procedure TInterfacedCollectionItem.SetOwnerInterface;
+var
+  lvOwner: TPersistent;
+  lvEntry: PInterfaceEntry;
 begin
-  if Assigned(Collection) and (Collection.Owner <> nil) then
-    Collection.Owner.GetInterface(IInterface, FOwnerInterface);
+  FOwnerIntf := nil;
+  if Collection = nil then
+    Exit;
+  lvOwner := Collection.Owner;
+  if lvOwner = nil then
+    Exit;
+  // through the interface table, not GetInterface, whose AddRef and Release pair would free an owner nobody holds yet
+  lvEntry := lvOwner.GetInterfaceEntry(IInterface);
+  if (lvEntry <> nil) and (lvEntry^.IOffset <> 0) then
+    FOwnerIntf := Pointer(PAnsiChar(lvOwner) + lvEntry^.IOffset);
 end;
 
 function TInterfacedCollectionItem.QueryInterface(const IID: TGUID; out Obj): HResult;
@@ -45,19 +58,18 @@ end;
 
 function TInterfacedCollectionItem._AddRef: Integer;
 begin
-  if Assigned(FOwnerInterface) then
-    Result := FOwnerInterface._AddRef
+  if FOwnerIntf <> nil then
+    Result := IInterface(FOwnerIntf)._AddRef
   else
     Result := -1;
 end;
 
 function TInterfacedCollectionItem._Release: Integer;
 begin
-  if Assigned(FOwnerInterface) then
-    Result := FOwnerInterface._Release
+  if FOwnerIntf <> nil then
+    Result := IInterface(FOwnerIntf)._Release
   else
     Result := -1;
 end;
 
 end.
-
