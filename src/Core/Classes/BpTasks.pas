@@ -426,7 +426,11 @@ begin
     FCancelled := 1;
     // run in registration order, then dropped so a later Unregister sees none
     for i := 0 to High(FCleanupProcs) do
-      FCleanupProcs[i](FCleanupData[i]);
+      // one raising cleanup must not strand the handles the rest would close
+      try
+        FCleanupProcs[i](FCleanupData[i]);
+      except
+      end;
     SetLength(FCleanupProcs, 0);
     SetLength(FCleanupData, 0);
     SetLength(FCleanupIds, 0);

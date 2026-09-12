@@ -422,7 +422,7 @@ function BpDownloadToStreamAsync(const aUrl: string; aDest: TStream;
 function BpHttpResponseIsSuccess(const aResponse: TbpHttpResponse): Boolean;
 // decodes the body as UTF-8; invalid bytes become U+FFFD, not an error
 function BpHttpResponseBodyAsUtf8(const aResponse: TbpHttpResponse): WideString;
-// value of a header line from a raw CRLF header block, '' when absent
+// value of the first line with that name; '' for an absent and an empty one alike
 function BpHttpHeaderValue(const aHeaders, aName: string): string;
 // Content-Length parsed from a raw header block; -1 when absent or invalid
 function BpHttpContentLength(const aHeaders: string): Int64;
@@ -749,7 +749,11 @@ begin
     FCancelled := 1;
     // run in registration order, then dropped so a later Unregister sees none
     for i := 0 to High(FCleanupProcs) do
-      FCleanupProcs[i](FCleanupData[i]);
+      // one raising cleanup must not strand the handles the rest would close
+      try
+        FCleanupProcs[i](FCleanupData[i]);
+      except
+      end;
     SetLength(FCleanupProcs, 0);
     SetLength(FCleanupData, 0);
     SetLength(FCleanupIds, 0);
