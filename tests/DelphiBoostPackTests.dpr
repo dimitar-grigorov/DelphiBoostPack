@@ -8,6 +8,7 @@ program DelphiBoostPackTests;
 {$ENDIF}
 
 uses
+  BpLeakGate in 'Core\BpLeakGate.pas',
   Forms,
   TestFramework,
   GUITestRunner,
@@ -93,7 +94,9 @@ var
 
 begin
   {$IF CompilerVersion >= 18.0}
-  System.ReportMemoryLeaksOnShutdown := True;
+  // the RTL reports a leak with a modal MessageBox, which nobody is there to
+  // click on a console runner; BpLeakGate reports and fails the run instead
+  System.ReportMemoryLeaksOnShutdown := not IsConsole;
   {$IFEND}
   Application.Initialize;
   if IsConsole then
