@@ -1,11 +1,9 @@
 unit StopWatch;
 
-// Delphi 7-2007 high-precision stopwatch, a QueryPerformanceCounter wrapper
-// used by the benchmarks.
+// A QueryPerformanceCounter stopwatch with the shape Delphi 2009 later gave
+// TStopwatch, handed out as an interface so there is nothing to free.
 
 interface
-
-{$IF CompilerVersion < 20.0} // below Delphi 2009
 
 type
   IStopWatch = interface
@@ -40,7 +38,6 @@ type
     procedure Start;
     procedure ResetAndStart;    
     class function StartNew: IStopWatch;
-    class function Instance: IStopWatch;    
     procedure Stop;
     function GetElapsedMilliseconds: Double;
     function GetElapsedTicks: Int64;
@@ -51,17 +48,10 @@ type
     property IsRunning: Boolean read GetIsRunning;
   end;
 
-{$IFEND}  
-
 implementation
-
-{$IF CompilerVersion < 20.0}  // below Delphi 2009
 
 uses
   Windows;
-
-var
-  StopWatchInstance: IStopWatch = nil;
 
 const
   TicksPerMillisecond = 10000;
@@ -147,13 +137,6 @@ begin
   Result.Start;
 end;
 
-class function TStopWatch.Instance: IStopWatch;
-begin
-  if StopWatchInstance = nil then
-    StopWatchInstance := TStopWatch.Create;
-  Result := StopWatchInstance;
-end;
-
 procedure TStopwatch.Stop;
 begin
   if FRunning then
@@ -167,8 +150,6 @@ function TStopWatch.GetIsRunning: Boolean;
 begin
   Result := FRunning;
 end;
-
-{$IFEND}
 
 end.
 

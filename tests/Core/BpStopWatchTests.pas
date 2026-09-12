@@ -15,7 +15,6 @@ type
     procedure TestDocumentedSurfaceThroughTheInterface;
     procedure TestStopFreezesTheReading;
     procedure TestResetAndStart;
-    procedure TestInstanceIsShared;
   end;
 
 {$IFEND}
@@ -68,11 +67,6 @@ begin
   lvSw.ResetAndStart;
   CheckTrue(lvSw.IsRunning, 'ResetAndStart runs');
   lvSw.Stop;
-end;
-
-procedure TBpStopWatchTests.TestInstanceIsShared;
-begin
-  Check(TStopWatch.Instance = TStopWatch.Instance, 'one shared instance');
 end;
 
 initialization
