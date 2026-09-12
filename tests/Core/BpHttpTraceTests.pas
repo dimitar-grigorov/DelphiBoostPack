@@ -5,7 +5,7 @@ unit BpHttpTraceTests;
 interface
 
 uses
-  TestFramework, SysUtils, Windows, BpHttpTrace;
+  TestFramework, Windows, BpHttpTrace;
 
 type
   // decoder only, no network

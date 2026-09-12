@@ -11,7 +11,7 @@ unit BpPasswordHash;
 interface
 
 uses
-  SysUtils, BpSHA256, BpHMACSHA256, BpCompat;
+  SysUtils, BpSHA256, BpHMACSHA256;
 
 const
   // OWASP recommendation for PBKDF2-HMAC-SHA256 as of 2023+

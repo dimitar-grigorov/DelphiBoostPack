@@ -5,7 +5,7 @@ unit BpEncodingTests;
 interface
 
 uses
-  TestFramework, Windows, SysUtils, BpEncoding;
+  TestFramework, Windows, BpEncoding;
 
 type
   TBpEncodingTests = class(TTestCase)

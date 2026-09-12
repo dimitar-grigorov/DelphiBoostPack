@@ -5,7 +5,7 @@ unit BpSysUtilsTests;
 interface
 
 uses
-  TestFramework, TypInfo;
+  TestFramework;
 
 type
   TBpSysUtilsTests = class(TTestCase)
