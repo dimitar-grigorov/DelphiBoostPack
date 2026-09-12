@@ -141,6 +141,14 @@ begin
   CheckEquals('Authorization: Bearer abc123'#13#10'x-custom : four',
     FClient.BuildHeaders(' x-custom : four'), 'match is case and space insensitive');
 
+  // one Authorization line whichever order they were set in, last writer wins
+  FClient.AddHeader('Authorization', 'Basic AAAA');
+  CheckEquals('X-Custom: two'#13#10'Authorization: Basic AAAA',
+    FClient.BuildHeaders(''), 'an explicit header replaces the bearer token');
+  FClient.BearerToken := 'later';
+  CheckEquals('X-Custom: two'#13#10'Authorization: Bearer later',
+    FClient.BuildHeaders(''), 'and the bearer token replaces it back');
+
   FClient.ClearHeaders;
   FClient.BearerToken := '';
   CheckEquals('', FClient.BuildHeaders(''), 'clear removes everything');

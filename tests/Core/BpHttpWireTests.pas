@@ -46,6 +46,8 @@ type
     procedure TestBasicAuthIsSentOnce;
     procedure TestPerRequestHeaderReplacesPersistent;
     procedure TestColonInValueStaysOneLine;
+    procedure TestExplicitAuthorizationReplacesTheBearer;
+    procedure TestBearerReplacesAnExplicitAuthorization;
   end;
 
   TBpHttpBodyWireTests = class(TBpWireTestCase)
@@ -446,6 +448,36 @@ begin
   CheckEquals(1, lvRequest.HeaderCount('X-Note'));
   CheckEquals('a: b, c', lvRequest.HeaderValue('X-Note'));
   CheckEquals(0, lvRequest.HeaderCount('a'), 'no header named after the value');
+end;
+
+// one Authorization line, whichever was set last: two would let the server
+// pick the one the caller did not mean
+procedure TBpHttpHeaderWireTests.TestExplicitAuthorizationReplacesTheBearer;
+var
+  lvRequest: TbpRecordedRequest;
+begin
+  FClient.BearerToken := 'tok-456';
+  FClient.AddHeader('Authorization', 'Basic AAAA');
+  FServer.Enqueue(BpMockOk('ok'));
+  FClient.Get(Url('/a'));
+  lvRequest := NextRequest;
+  CheckEquals(1, lvRequest.HeaderCount('Authorization'));
+  CheckEquals('Basic AAAA', lvRequest.HeaderValue('Authorization'));
+  CheckEquals(0, CountOccurrences(lvRequest.RawHead, 'tok-456'));
+end;
+
+procedure TBpHttpHeaderWireTests.TestBearerReplacesAnExplicitAuthorization;
+var
+  lvRequest: TbpRecordedRequest;
+begin
+  FClient.AddHeader('Authorization', 'Basic AAAA');
+  FClient.BearerToken := 'tok-456';
+  FServer.Enqueue(BpMockOk('ok'));
+  FClient.Get(Url('/a'));
+  lvRequest := NextRequest;
+  CheckEquals(1, lvRequest.HeaderCount('Authorization'));
+  CheckEquals('Bearer tok-456', lvRequest.HeaderValue('Authorization'));
+  CheckEquals(0, CountOccurrences(lvRequest.RawHead, 'Basic AAAA'));
 end;
 
 { TBpHttpBodyWireTests }
