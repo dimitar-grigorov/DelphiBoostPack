@@ -68,6 +68,7 @@ type
     procedure TestFindPathOversizedIndex;
     procedure TestExponentPastDoubleRange;
     procedure TestBomDoesNotShiftTheReportedColumn;
+    procedure TestNegativeZeroKeepsItsSign;
     // a wide object crosses the member count where a hash index takes over
     procedure TestWideObjectFindsEveryMember;
     procedure TestWideObjectKeepsInsertionOrder;
@@ -456,6 +457,51 @@ begin
   Check(Pos('position 6', lvPlain) > 0, lvPlain);
   lvWithBom := ParseErrorMessage(gcJsonBom + '{"a":}');
   CheckEquals(lvPlain, lvWithBom, 'a BOM must not move the reported position');
+end;
+
+// the only difference from plain zero is the sign bit, so read that
+function IsNegativeZero(const aValue: Double): Boolean;
+begin
+  Result := (aValue = 0) and (PInt64(@aValue)^ <> 0);
+end;
+
+procedure TBpJsonTests.TestNegativeZeroKeepsItsSign;
+var
+  lvValue: TbpJsonValue;
+
+  procedure CheckSign(const aJson: string; aNegative: Boolean);
+  begin
+    lvValue := TbpJsonValue.Parse(aJson);
+    try
+      CheckEquals(aNegative, IsNegativeZero(lvValue.AsFloat), aJson);
+    finally
+      lvValue.Free;
+    end;
+  end;
+
+begin
+  CheckSign('-0.0', True);
+  CheckSign('-0e5120', True);
+  CheckSign('-0.000e10', True);
+  CheckSign('0.0', False);
+  CheckSign('0e5120', False);
+  // underflow keeps the sign of the value it came from, as IEEE rounding does
+  CheckSign('-1e-999999', True);
+  CheckSign('1e-999999', False);
+
+  // and it survives the writer, so a document round trips unchanged
+  lvValue := TbpJsonValue.Parse('-0.0');
+  try
+    CheckEquals('-0', lvValue.ToJson);
+  finally
+    lvValue.Free;
+  end;
+  lvValue := TbpJsonValue.Parse('0.0');
+  try
+    CheckEquals('0', lvValue.ToJson);
+  finally
+    lvValue.Free;
+  end;
 end;
 
 procedure TBpJsonTests.TestExponentPastDoubleRange;
