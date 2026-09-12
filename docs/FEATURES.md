@@ -315,14 +315,14 @@ Entries land under `'<service>/<username>'` in the vault the Control Panel shows
 
 ### [TbpObjectComparer](../src/Core/Classes/BpObjectComparer.pas)
 
-Diffs two `TPersistent` objects by RTTI and reports which published properties changed, `TCollection` items included.
+Diffs two `TPersistent` objects of the same class by RTTI and reports which published properties changed. Nested `TPersistent` properties are walked under a dotted path and `TCollection` items are diffed one by one; a `TComponent` reference is compared by identity only, and a cycle stops where the object is already open.
 
 ```pascal
 lvDiffs := TbpObjectComparer.CompareObjects(lvBefore, lvAfter);   // IPropDifference
 Memo1.Text := TbpObjectComparer.CompareObjectsAsString(lvBefore, lvAfter);
 ```
 
-Each difference carries the property path and the old and new values, ready for an audit log. Collection items match by identity rather than position when they implement `IUniqueID`, which is why old and new paths are separate fields: a moved item is reported as changed, not as two unrelated edits.
+Each difference carries the property path and the old and new values, ready for an audit log. Collection items match by identity rather than position when they implement `IUniqueID`, which is why old and new paths are separate fields: a moved item is reported as changed, not as two unrelated edits. Items sharing an id pair up in order. A nil argument or two different classes raise `EbpObjectComparer`; nil or a changed class further down is one difference.
 
 ### [BpKeyFold](../src/Core/Units/BpKeyFold.pas)
 

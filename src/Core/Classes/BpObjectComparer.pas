@@ -1,6 +1,6 @@
 unit BpObjectComparer;
 
-// Diffs two objects by RTTI and reports the changed published properties, collections included.
+// Diffs two objects by RTTI and reports the changed published properties, nested objects and collections included.
 
 interface
 
@@ -64,6 +64,7 @@ type
   TCompareState = record
     Diffs: TPropDifferences;
     Count: Integer;
+    Path: TList; // the old-side objects open on the current descent, so a cycle is skipped, not followed
   end;
 
 constructor TPropDifference.Create(const aOldPropPath, aNewPropPath: string; const aOldValue,
@@ -137,6 +138,13 @@ procedure CompareCollections(aOld, aNew: TCollection; const aOldPath, aNewPath: 
 procedure CompareProps(aOld, aNew: TObject; const aOldPath, aNewPath, aIdx: string;
   var aState: TCompareState); forward;
 
+function ComponentName(aComponent: TComponent): string;
+begin
+  Result := aComponent.Name;
+  if Result = '' then
+    Result := aComponent.ClassName;
+end;
+
 // nil and a changed class are differences at the object's own path; only equal classes are walked
 procedure ComparePair(aOld, aNew: TObject; const aOldPath, aNewPath, aIdx: string;
   var aState: TCompareState);
@@ -150,10 +158,25 @@ begin
     AddDiff(aState, TPropDifference.Create(aOldPath, aNewPath, 'Missing in old', 'Exists in new', aIdx))
   else if aOld.ClassType <> aNew.ClassType then
     AddDiff(aState, TPropDifference.Create(aOldPath, aNewPath, aOld.ClassName, aNew.ClassName, aIdx))
-  else if aOld is TCollection then
-    CompareCollections(TCollection(aOld), TCollection(aNew), aOldPath, aNewPath, aState)
-  else if aOld.ClassInfo <> nil then
-    CompareProps(aOld, aNew, aOldPath, aNewPath, aIdx, aState);
+  else if (aOld is TComponent) and not (csSubComponent in TComponent(aOld).ComponentStyle) then
+  begin
+    // a reference, as in streaming: identity is the value, the name is what the log can show
+    if aOld <> aNew then
+      AddDiff(aState, TPropDifference.Create(aOldPath, aNewPath,
+        ComponentName(TComponent(aOld)), ComponentName(TComponent(aNew)), aIdx));
+  end
+  else if aState.Path.IndexOf(aOld) < 0 then
+  begin
+    aState.Path.Add(aOld);
+    try
+      if aOld is TCollection then
+        CompareCollections(TCollection(aOld), TCollection(aNew), aOldPath, aNewPath, aState)
+      else if aOld.ClassInfo <> nil then
+        CompareProps(aOld, aNew, aOldPath, aNewPath, aIdx, aState);
+    finally
+      aState.Path.Delete(aState.Path.Count - 1);
+    end;
+  end;
 end;
 
 procedure CompareProps(aOld, aNew: TObject; const aOldPath, aNewPath, aIdx: string;
@@ -165,7 +188,6 @@ var
   lvOldValue, lvNewValue: Variant;
   lvOldPropPath, lvNewPropPath: string;
   lvOldWide, lvNewWide: WideString;
-  lvOldObj, lvNewObj: TObject;
 begin
   lvPropCount := GetPropList(aOld.ClassInfo, tkProperties, nil);
   GetMem(lvPropList, lvPropCount * SizeOf(Pointer));
@@ -202,18 +224,8 @@ begin
           end;
         tkClass:
           begin
-            lvOldObj := GetObjectProp(aOld, lvPropInfo);
-            lvNewObj := GetObjectProp(aNew, lvPropInfo);
-            if (lvOldObj is TCollection) and (lvNewObj is TCollection) then
-              CompareCollections(TCollection(lvOldObj), TCollection(lvNewObj),
-                lvOldPropPath, lvNewPropPath, aState)
-            // one side nil is a real difference, not a reason to dereference nil
-            else if (lvOldObj is TCollection) then
-              AddDiff(aState, TPropDifference.Create(lvOldPropPath,
-                lvNewPropPath, 'Exists in old', 'Missing in new', aIdx))
-            else if (lvNewObj is TCollection) then
-              AddDiff(aState, TPropDifference.Create(lvOldPropPath,
-                lvNewPropPath, 'Missing in old', 'Exists in new', aIdx));
+            ComparePair(GetObjectProp(aOld, lvPropInfo), GetObjectProp(aNew, lvPropInfo),
+              lvOldPropPath, lvNewPropPath, aIdx, aState);
             Continue;
           end;
       else
@@ -308,7 +320,12 @@ begin
   if aOld.ClassType <> aNew.ClassType then
     raise EbpObjectComparer.CreateFmt('Cannot compare a %s with a %s', [aOld.ClassName, aNew.ClassName]);
   lvState.Count := 0;
-  ComparePair(aOld, aNew, '', '', '', lvState);
+  lvState.Path := TList.Create;
+  try
+    ComparePair(aOld, aNew, '', '', '', lvState);
+  finally
+    lvState.Path.Free;
+  end;
   SetLength(lvState.Diffs, lvState.Count);
   Result := lvState.Diffs;
 end;

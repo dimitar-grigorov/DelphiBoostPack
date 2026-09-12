@@ -39,7 +39,36 @@ type
     property VariantProp: Variant read FVariantProp write FVariantProp;
   end;
 
+  // an owned sub-object, a link to another node that can close a cycle, and a component reference
+  TTestNode = class(TPersistent)
+  private
+    FValue: Integer;
+    FInner: TTestClassA;
+    FNext: TTestNode;
+    FRef: TComponent;
+  public
+    constructor Create;
+    destructor Destroy; override;
+  published
+    property Value: Integer read FValue write FValue;
+    property Inner: TTestClassA read FInner write FInner;
+    property Next: TTestNode read FNext write FNext;
+    property Ref: TComponent read FRef write FRef;
+  end;
+
 implementation
+
+constructor TTestNode.Create;
+begin
+  inherited Create;
+  FInner := TTestClassA.Create;
+end;
+
+destructor TTestNode.Destroy;
+begin
+  FInner.Free;
+  inherited Destroy;
+end;
 
 end.
 
