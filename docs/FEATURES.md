@@ -55,7 +55,7 @@ A 404 is a response, not an exception. Only transport failures raise `EbpHttpCli
 
 **Redirects.** Followed by the client, not by WinInet, which replays the header block on every hop with no way to edit it. A hop to another origin, so any change of scheme, host or port, loses the persistent headers plus `Authorization`, `Cookie` and `Proxy-Authorization`, and never gets them back. The one exception `requests` also makes: the same host upgraded from `http` to `https` keeps them. Method per [WHATWG fetch](https://fetch.spec.whatwg.org/#http-redirect-fetch): 303 to GET unless HEAD, 301 and 302 only a POST, 307 and 308 unchanged; a downgraded method drops the body and its `Content-*` headers. `FollowRedirects := False` returns the 3xx instead.
 
-**Downloads.** `Download` streams to any `TStream`, `DownloadToFile` to a file, both in constant memory with `Int64` progress and a token. They block, so use a worker thread or [TbpHttpDownloadTask](#tbphttpdownloadtask).
+**Downloads.** `Download` streams to any `TStream`, `DownloadToFile` to a file, both in constant memory with `Int64` progress and a token. `DownloadToFile` writes to a temporary file beside the destination and renames it over only on a 2xx, so a 404, a cancel, a truncated body or a typo in the url leaves whatever was already there untouched, and no temp file behind. They block, so use a worker thread or [TbpHttpDownloadTask](#tbphttpdownloadtask).
 
 ```pascal
 procedure TMainForm.HandleProgress(aSender: TObject; const aReceived, aTotal: Int64;

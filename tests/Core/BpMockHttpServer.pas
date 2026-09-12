@@ -172,8 +172,7 @@ begin
   end;
 end;
 
-// deliberately not BpHttpHeaderValue: a server that reused the parser under
-// test could not prove the client actually wrote the header correctly
+// not BpHttpHeaderValue: reusing the parser under test would prove nothing
 function MockHeaderScan(const aHeaders, aName: string;
   out aValue: string): Integer;
 var
@@ -315,9 +314,7 @@ begin
   inherited Create(False);
 end;
 
-// closesocket is the only call that reliably ends a blocked recv on Windows,
-// and WinInet pools a keep-alive socket well past the handle that opened it,
-// so waiting for the peer would cost every test the full receive timeout
+// the only call that reliably ends a blocked recv; shutdown does not
 procedure TbpMockConnection.CloseOnce;
 begin
   FServer.Lock;
@@ -387,8 +384,7 @@ begin
   Result.ConnectionId := FId;
   Delete(FInBuf, 1, lvSplit + 3);
 
-  // this client never chunks a request, so no chunked decoder here; one would
-  // desync the connection and fail the test rather than pass it quietly
+  // no chunked decoder: this client never chunks, and one would desync loudly
   if MockHeaderScan(Result.Headers, 'Content-Length', lvValue) > 0 then
   begin
     lvLength := StrToIntDef(lvValue, 0);
@@ -582,8 +578,7 @@ begin
   LeaveCriticalSection(FLock);
 end;
 
-// the acceptor thread is joined before the connections are, so no connection
-// can appear after this has walked the list
+// the acceptor is joined first, so no connection appears behind this walk
 procedure TbpMockHttpServer.Shutdown;
 var
   i: Integer;
