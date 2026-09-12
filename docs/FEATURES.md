@@ -396,9 +396,9 @@ To avoid adding ten units to a project, take one self-contained file from [dist/
 |--------|----------|
 | [BpDictionaries.pas](../dist/BpDictionaries.pas) | both dictionaries, the key fold and the Variant helpers |
 | [BpHashes.pas](../dist/BpHashes.pas) | SHA-256, MD5, HMAC-SHA256, PBKDF2, Base64 |
-| [BpHttpClientStandalone.pas](../dist/BpHttpClientStandalone.pas) | HTTP client, downloads, async task, cancellation token, Base64 |
+| [BpHttpClientStandalone.pas](../dist/BpHttpClientStandalone.pas) | HTTP client, downloads, async task, cancellation token |
 | [BpJsonStandalone.pas](../dist/BpJsonStandalone.pas) | JSON reader/writer with the string builder |
 
-Generated from the modular units, SQLite amalgamation style, by [tools/Amalgamate.js](../tools/Amalgamate.js), which `tools\VerifyBundles.cmd` re-runs in `--check` mode so a bundle cannot lag its source. Treat them as build artifacts: fix the real unit and regenerate.
+Generated from the modular units, SQLite amalgamation style, by [tools/Amalgamate.js](../tools/Amalgamate.js), which `tools\VerifyBundles.cmd` re-runs in `--check` mode so a bundle cannot lag its source, alongside [tools/CheckMirrors.js](../tools/CheckMirrors.js) for regions a unit deliberately copies rather than depends on. Treat them as build artifacts: fix the real unit and regenerate.
 
-One catch: two bundles that embed the same helper declare its identifiers twice, and which one you get depends on `uses` order, so an `EbpBase64` raised inside one is not the `EbpBase64` the other catches. Today that is `BpHashes` and `BpHttpClientStandalone`. Use one or the other, and do not mix a bundle with the modular units it contains.
+One catch: two bundles that exported the same helper would declare it twice, and which one you got would depend on `uses` order. No pair does today, because `BpHttpClientStandalone` keeps its Base64 copy private; [tools/smoke/SmokeBundlesTogether.dpr](../tools/smoke/SmokeBundlesTogether.dpr) compiles it against `BpHashes` to keep that true. Do not mix a bundle with the modular units it contains.

@@ -22,7 +22,7 @@ node "%HERE%Amalgamate.js" --check
 if errorlevel 1 goto :fail
 
 set "FAILED="
-for %%B in (BpDictionaries BpHashes BpHttpClientStandalone BpJsonStandalone) do call :Verify %%B
+for %%B in (BpDictionaries BpHashes BpHttpClientStandalone BpJsonStandalone BundlesTogether) do call :Verify %%B
 if defined FAILED goto :fail
 
 echo All bundles verified.

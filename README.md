@@ -98,7 +98,7 @@ Full descriptions and examples in the [feature guide](docs/FEATURES.md).
 
 ## One file instead of ten
 
-[dist/](dist/) holds amalgamated builds, SQLite style: [BpDictionaries.pas](dist/BpDictionaries.pas), [BpHashes.pas](dist/BpHashes.pas), [BpHttpClientStandalone.pas](dist/BpHttpClientStandalone.pas), [BpJsonStandalone.pas](dist/BpJsonStandalone.pas). Each is self-contained - take the one you need and nothing else. They can be combined, with one exception: the hashes and HTTP bundles both embed Base64, so pick one of those two. Treat them as build artifacts: fix the real unit and regenerate. [Details ->](docs/FEATURES.md#single-file-bundles)
+[dist/](dist/) holds amalgamated builds, SQLite style: [BpDictionaries.pas](dist/BpDictionaries.pas), [BpHashes.pas](dist/BpHashes.pas), [BpHttpClientStandalone.pas](dist/BpHttpClientStandalone.pas), [BpJsonStandalone.pas](dist/BpJsonStandalone.pas). Each is self-contained - take the one you need and nothing else. They can be combined: no two of them export the same helper. Treat them as build artifacts: fix the real unit and regenerate. [Details ->](docs/FEATURES.md#single-file-bundles)
 
 ## Building and testing
 

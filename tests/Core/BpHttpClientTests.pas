@@ -5,7 +5,7 @@ unit BpHttpClientTests;
 interface
 
 uses
-  TestFramework, SysUtils, BpHttpClient;
+  TestFramework, SysUtils, BpHttpClient, BpBase64;
 
 type
   // basic offline tests, no network access needed
@@ -19,6 +19,7 @@ type
     procedure TestParseUrl;
     procedure TestBuildHeaders;
     procedure TestBasicAuth;
+    procedure TestBasicAuthMatchesBpBase64;
     procedure TestMethodToString;
     procedure TestHeaderValue;
     procedure TestIsSuccess;
@@ -169,6 +170,24 @@ begin
   FClient.SetBasicAuth('user', lvPassword);
   CheckEquals('Authorization: Basic dXNlcjpwYcOf', FClient.BuildHeaders(''),
     'non-ascii credentials go out as UTF-8, not the machine code page');
+end;
+
+// the client mirrors BpBase64's encoder; the text is checked by CheckMirrors.js,
+// this pins the wiring around it, where a wrong alphabet or padding would hide
+procedure TBpHttpClientTests.TestBasicAuthMatchesBpBase64;
+var
+  lvPassword: WideString;
+  i: Integer;
+begin
+  lvPassword := '';
+  // every remainder of 3 and both padding cases, over ASCII and above it
+  for i := 0 to 12 do
+  begin
+    FClient.SetBasicAuth('u', lvPassword);
+    CheckEquals('Authorization: Basic ' + Base64EncodeUtf8('u:' + lvPassword),
+      FClient.BuildHeaders(''), Format('password of %d characters', [i]));
+    lvPassword := lvPassword + WideChar($00A0 + i * 37);
+  end;
 end;
 
 procedure TBpHttpClientTests.TestMethodToString;

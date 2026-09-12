@@ -8,7 +8,13 @@ unit BpHttpClient;
 // House rule: the library is one class per unit, this one is deliberately
 // self-contained. A helper of up to ~300 lines that nothing else needs lives
 // here rather than in a unit of its own; the moment a second unit needs it,
-// it moves out, which is what Base64 and the cancellation token did.
+// it moves out, which is what the cancellation token did.
+//
+// It also ships as the single-file BpHttpClientStandalone bundle, where every
+// dependency is a unit the consumer is forced to carry. So the ~55 lines of
+// Base64 it needs are mirrored from BpBase64 rather than used, which is what
+// keeps that bundle down to this unit and BpTasks. The copy is not free-hand:
+// tools\CheckMirrors.js fails the build if the two regions stop matching.
 
 interface
 
@@ -300,15 +306,101 @@ const
 
 implementation
 
-uses
-  BpBase64;
-
 const
   gcBufferSize = 8192;
   gcDownloadBufferSize = 65536;  // bigger chunks pay off on large bodies
   gcDefaultTimeout = 8000;  // milliseconds
   gcDefaultUserAgent = 'DelphiBoostPack/1.0';
   gcRequestContext = 1;  // non-zero, or WinInet skips its status callbacks
+
+// bp:mirror base64-encode
+// Copied, not shared: tools\CheckMirrors.js fails if the copies stop matching.
+const
+  gcBase64Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+// RFC 4648. aSize past (MaxInt div 4) * 3 wraps the length arithmetic below,
+// which each copy guards in its own vocabulary before calling in here.
+function Base64EncodeBuffer(aSource: PByte; aSize: Integer;
+  const aAlphabet: string; aPadded: Boolean): string;
+var
+  lvDest: PChar;
+  lvB0, lvB1, lvB2: Byte;
+  lvFull, lvRest, lvOutLen, i: Integer;
+begin
+  Result := '';
+  if aSize <= 0 then
+    Exit;
+  lvFull := aSize div 3;
+  lvRest := aSize mod 3;
+  lvOutLen := lvFull * 4;
+  if lvRest > 0 then
+  begin
+    if aPadded then
+      Inc(lvOutLen, 4)
+    else
+      Inc(lvOutLen, lvRest + 1);
+  end;
+  SetLength(Result, lvOutLen);
+  lvDest := Pointer(Result);
+  for i := 1 to lvFull do
+  begin
+    lvB0 := aSource^; Inc(aSource);
+    lvB1 := aSource^; Inc(aSource);
+    lvB2 := aSource^; Inc(aSource);
+    lvDest[0] := aAlphabet[(lvB0 shr 2) + 1];
+    lvDest[1] := aAlphabet[(((lvB0 and $03) shl 4) or (lvB1 shr 4)) + 1];
+    lvDest[2] := aAlphabet[(((lvB1 and $0F) shl 2) or (lvB2 shr 6)) + 1];
+    lvDest[3] := aAlphabet[(lvB2 and $3F) + 1];
+    Inc(lvDest, 4);
+  end;
+  if lvRest = 1 then
+  begin
+    lvB0 := aSource^;
+    lvDest[0] := aAlphabet[(lvB0 shr 2) + 1];
+    lvDest[1] := aAlphabet[((lvB0 and $03) shl 4) + 1];
+    if aPadded then
+    begin
+      lvDest[2] := '=';
+      lvDest[3] := '=';
+    end;
+  end
+  else if lvRest = 2 then
+  begin
+    lvB0 := aSource^; Inc(aSource);
+    lvB1 := aSource^;
+    lvDest[0] := aAlphabet[(lvB0 shr 2) + 1];
+    lvDest[1] := aAlphabet[(((lvB0 and $03) shl 4) or (lvB1 shr 4)) + 1];
+    lvDest[2] := aAlphabet[((lvB1 and $0F) shl 2) + 1];
+    if aPadded then
+      lvDest[3] := '=';
+  end;
+end;
+// bp:mirror-end
+
+// RFC 7617 wants UTF-8, and the Windows tables are all Delphi 7 has to make it
+function CredentialUtf8(const aText: WideString): AnsiString;
+var
+  lvLen: Integer;
+begin
+  Result := '';
+  if aText = '' then
+    Exit;
+  lvLen := WideCharToMultiByte(CP_UTF8, 0, PWideChar(aText), Length(aText),
+    nil, 0, nil, nil);
+  if lvLen <= 0 then
+    raise EbpHttpClient.Create('Credentials cannot be encoded as UTF-8');
+  SetLength(Result, lvLen);
+  WideCharToMultiByte(CP_UTF8, 0, PWideChar(aText), Length(aText),
+    PAnsiChar(Result), lvLen, nil, nil);
+end;
+
+// the size the encoder above will not check for itself, in this unit's words
+function Base64Credential(const aBytes: AnsiString): string;
+begin
+  if Length(aBytes) > (MaxInt div 4) * 3 then
+    raise EbpHttpClient.Create('Credentials are too large to encode');
+  Result := Base64EncodeBuffer(Pointer(aBytes), Length(aBytes), gcBase64Chars, True);
+end;
 
 procedure AppendHeaderLine(var aHeaders: string; const aLine: string);
 begin
@@ -513,7 +605,7 @@ begin
         'Basic auth user must not contain a colon or a control character');
   // RFC 7617 says UTF-8, and the ANSI page would differ from machine to machine
   AddHeader('Authorization', 'Basic ' +
-    Base64EncodeUtf8(aUser + ':' + aPassword));
+    Base64Credential(CredentialUtf8(aUser + ':' + aPassword)));
 end;
 
 class function TbpHttpClient.MethodToString(aMethod: TbpHttpMethod): string;
@@ -587,7 +679,7 @@ begin
   lvPassword := CrackedPart(lvComponents.lpszPassword,
     lvComponents.dwPasswordLength);
   // percent-decoding already produced the UTF-8 bytes RFC 7617 wants, so no transcode
-  Result := 'Basic ' + Base64Encode(lvUser + ':' + lvPassword);
+  Result := 'Basic ' + Base64Credential(lvUser + ':' + lvPassword);
 end;
 
 function TbpHttpClient.ParseUrl(const aUrl: string; out aServerName,
