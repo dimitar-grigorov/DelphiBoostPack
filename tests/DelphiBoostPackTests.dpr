@@ -82,6 +82,8 @@ uses
   BpVariantUtils in '..\src\Core\Units\BpVariantUtils.pas',
   BpKeyFoldTests in 'Core\BpKeyFoldTests.pas',
   BpKeyFold in '..\src\Core\Units\BpKeyFold.pas',
+  BpPathUtilsTests in 'Core\BpPathUtilsTests.pas',
+  BpPathUtils in '..\src\Core\Units\BpPathUtils.pas',
   BpStringListTests in 'Core\BpStringListTests.pas',
   BpStringList in '..\src\Core\Classes\BpStringList.pas',
   BpCompat in '..\src\Core\Units\BpCompat.pas',

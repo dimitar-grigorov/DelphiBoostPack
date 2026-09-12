@@ -68,5 +68,6 @@
     <DCCReference Include="Core\Classes\BpStringList.pas" />
     <DCCReference Include="Core\Units\BpCompat.pas" />
     <DCCReference Include="Core\Units\BpKeyFold.pas" />
+    <DCCReference Include="Core\Units\BpPathUtils.pas" />
   </ItemGroup>
 </Project>
