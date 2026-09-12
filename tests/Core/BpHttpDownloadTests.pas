@@ -22,7 +22,7 @@ type
     procedure TestClassifyCancelledError;
     procedure TestDownloadRejectsNilStream;
     procedure TestDownloadHonoursPreCancelledToken;
-    procedure TestDownloadToFileDeletesFileOnPreCancelledToken;
+    procedure TestDownloadToFileKeepsTheOldFileOnPreCancelledToken;
     procedure TestTaskInitialState;
     procedure TestTaskStartValidation;
     procedure TestTaskInvalidUrlFails;
@@ -51,7 +51,7 @@ type
   published
     procedure TestHttpsGet;
     procedure TestStreamingDownloadWithProgress;
-    procedure TestDownloadToFileKeepsGoodDeletesBad;
+    procedure TestDownloadToFileOnlyWritesOnSuccess;
     procedure TestAsyncDownloadCompletes;
   end;
 
@@ -68,6 +68,18 @@ const
 var
   gvOnlineProbed: Boolean = False;
   gvOnlineAvailable: Boolean = False;
+
+function FileSizeOf(const aFileName: string): Integer;
+var
+  lvFile: TFileStream;
+begin
+  lvFile := TFileStream.Create(aFileName, fmOpenRead or fmShareDenyNone);
+  try
+    Result := lvFile.Size;
+  finally
+    lvFile.Free;
+  end;
+end;
 
 function TempFilePath(const aName: string): string;
 var
@@ -190,15 +202,22 @@ begin
   end;
 end;
 
-procedure TBpHttpDownloadTests.TestDownloadToFileDeletesFileOnPreCancelledToken;
+procedure TBpHttpDownloadTests.TestDownloadToFileKeepsTheOldFileOnPreCancelledToken;
 var
   lvToken: TbpCancellationToken;
   lvFileName: string;
+  lvFile: TFileStream;
 begin
   lvToken := TbpCancellationToken.Create;
+  lvFileName := TempFilePath('bp_download_cancelled_test.tmp');
   try
+    lvFile := TFileStream.Create(lvFileName, fmCreate);
+    try
+      lvFile.WriteBuffer(PAnsiChar('KEEPME')^, 6);
+    finally
+      lvFile.Free;
+    end;
     lvToken.Cancel;
-    lvFileName := TempFilePath('bp_download_cancelled_test.tmp');
     try
       FClient.DownloadToFile('https://example.com/', lvFileName, nil, lvToken);
       Fail('expected EbpHttpClientCancelled');
@@ -206,8 +225,10 @@ begin
       on EbpHttpClientCancelled do
         ; // expected
     end;
-    CheckFalse(FileExists(lvFileName), 'partial file must be deleted');
+    CheckTrue(FileExists(lvFileName), 'the file that was there must survive');
+    CheckEquals(6, FileSizeOf(lvFileName), 'and must not have been truncated');
   finally
+    SysUtils.DeleteFile(lvFileName);
     lvToken.Free;
   end;
 end;
@@ -441,7 +462,7 @@ begin
   end;
 end;
 
-procedure TBpHttpDownloadOnlineTests.TestDownloadToFileKeepsGoodDeletesBad;
+procedure TBpHttpDownloadOnlineTests.TestDownloadToFileOnlyWritesOnSuccess;
 var
   lvFileName: string;
   lvResponse: TbpHttpResponse;
@@ -461,7 +482,7 @@ begin
   lvFileName := TempFilePath('bp_download_404_test.bin');
   lvResponse := FClient.DownloadToFile(gcNotFoundUrl, lvFileName);
   CheckEquals(404, lvResponse.StatusCode);
-  CheckFalse(FileExists(lvFileName), 'non-2xx download deletes the file');
+  CheckFalse(FileExists(lvFileName), 'a non-2xx writes no file at all');
 end;
 
 procedure TBpHttpDownloadOnlineTests.TestAsyncDownloadCompletes;
