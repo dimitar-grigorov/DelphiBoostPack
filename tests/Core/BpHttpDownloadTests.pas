@@ -5,7 +5,8 @@ unit BpHttpDownloadTests;
 interface
 
 uses
-  TestFramework, SysUtils, Classes, Windows, BpHttpClient;
+  TestFramework, SysUtils, Classes, Windows, BpHttpClient, BpTasks,
+  BpMockHttpServer, BpTestSupport;
 
 type
   // offline: progress math, header parsing, error classification, state machine
@@ -30,44 +31,100 @@ type
     procedure TestDownloadAsyncFactory;
   end;
 
-  // integration against public endpoints, skipped with a status note when offline
-  TBpHttpDownloadOnlineTests = class(TTestCase)
+  // the async download end to end, against the loopback server; no network
+  TBpHttpDownloadTaskTests = class(TBpWireTestCase)
   private
-    FClient: TbpHttpClient;
-    FProgressCalls: Integer;
+    FTask: TbpHttpDownloadTask;
+    FStream: TMemoryStream;
+    FDir: string;
+    FDest: string;
+    FCompleteCount: Integer;
+    FErrorCount: Integer;
+    FProgressCount: Integer;
+    FCompleteThreadId: Cardinal;
+    FProgressThreadId: Cardinal;
+    FErrorBeforeComplete: Boolean;
+    FFreedInHandler: Boolean;
+    FCancelOnData: Boolean;
+    FMonotonic: Boolean;
     FLastReceived: Int64;
     FLastTotal: Int64;
-    FMonotonic: Boolean;
-    FCompleteFired: Boolean;
-    FErrorFired: Boolean;
-    function SkipIfOffline: Boolean;
+    FStateInComplete: TbpHttpDownloadState;
+    function NewTask(aMarshal: Boolean): TbpHttpDownloadTask;
+    procedure EnqueueStall;
     procedure HandleProgress(aSender: TObject; const aReceived, aTotal: Int64;
       var aCancel: Boolean);
     procedure HandleComplete(aSender: TObject);
     procedure HandleError(aSender: TObject; const aErrorMessage: string);
+    procedure HandleCompleteAndFree(aSender: TObject);
+    procedure HandleErrorAndFree(aSender: TObject; const aErrorMessage: string);
+    procedure HandleCompleteRaise(aSender: TObject);
   protected
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestMarshalledCompleteRunsOnTheCreatingThread;
+    procedure TestFailedStatusPinsResponseAndStatus;
+    procedure TestTransportFailurePinsWhatItKnows;
+    procedure TestFreeWhileRunningFiresNothing;
+    procedure TestFreeFromInsideOwnCompleteMarshalled;
+    procedure TestFreeFromInsideOwnCompleteDirect;
+    procedure TestFreeFromInsideOwnErrorMarshalled;
+    procedure TestFreeFromInsideOwnErrorDirect;
+    procedure TestFreeMarshalledFromAForeignThread;
+    procedure TestHandlerExceptionReachesTheHook;
+    procedure TestProgressArrivesOnTheCreatingThread;
+    procedure TestProgressPostsCoalesce;
+    procedure TestCancelFromAProgressHandler;
+    procedure TestNotFoundLeavesTheFileAlone;
+    procedure TestCancelMidBodyLeavesNoTempFile;
+    procedure TestStreamingDownloadReportsTheTotal;
+  end;
+
+  // the one thing the loopback server cannot serve: a real TLS handshake
+  TBpHttpsOnlineTests = class(TTestCase)
+  private
+    function SkipIfOffline: Boolean;
+  published
     procedure TestHttpsGet;
-    procedure TestStreamingDownloadWithProgress;
-    procedure TestDownloadToFileOnlyWritesOnSuccess;
-    procedure TestAsyncDownloadCompletes;
   end;
 
 implementation
 
 const
-  // this endpoint returns exactly the requested byte count, so progress is exact
-  gcProbeUrl = 'https://speed.cloudflare.com/__down?bytes=16';
-  gcSmallUrl = 'https://speed.cloudflare.com/__down?bytes=65536';
-  gcMediumUrl = 'https://speed.cloudflare.com/__down?bytes=262144';
-  gcHtmlUrl = 'https://example.com/';
-  gcNotFoundUrl = 'https://example.com/definitely-not-here-404';
+  // never contacted: every test using it stops before any network activity
+  gcUnreachableUrl = 'http://127.0.0.1:1/never-contacted';
+  gcTlsUrl = 'https://example.com/';
+
+  gcClaimed = 10485760;  // Content-Length the stalling reply advertises
+  gcBurst = 65536;       // what it really sends before going quiet
+  gcBigBody = 1048576;
+  gcReadBuffer = 65536;  // BpHttpClient's download buffer, mirrored to count reads
+
+type
+  EbpDownloadTestError = class(Exception);
+
+  // frees a task on a thread that did not create it
+  TForeignFreeThread = class(TThread)
+  private
+    FTask: TbpHttpDownloadTask;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(aTask: TbpHttpDownloadTask);
+  end;
 
 var
   gvOnlineProbed: Boolean = False;
   gvOnlineAvailable: Boolean = False;
+  gvHookCount: Integer;
+  gvHookMessage: string;
+
+procedure DownloadTestExceptionHook(aTask: TbpTask; aException: Exception);
+begin
+  Inc(gvHookCount);
+  gvHookMessage := aException.Message;
+end;
 
 function FileSizeOf(const aFileName: string): Integer;
 var
@@ -81,12 +138,18 @@ begin
   end;
 end;
 
-function TempFilePath(const aName: string): string;
-var
-  lvBuffer: array[0..MAX_PATH] of Char;
+{ TForeignFreeThread }
+
+constructor TForeignFreeThread.Create(aTask: TbpHttpDownloadTask);
 begin
-  GetTempPath(MAX_PATH, lvBuffer);
-  Result := IncludeTrailingPathDelimiter(lvBuffer) + aName;
+  FTask := aTask;
+  FreeOnTerminate := False;
+  inherited Create(False);
+end;
+
+procedure TForeignFreeThread.Execute;
+begin
+  FTask.Free;
 end;
 
 { TBpHttpDownloadTests }
@@ -168,7 +231,7 @@ end;
 procedure TBpHttpDownloadTests.TestDownloadRejectsNilStream;
 begin
   try
-    FClient.Download('https://example.com/', nil);
+    FClient.Download(gcUnreachableUrl, nil);
     Fail('expected EbpHttpClient for nil stream');
   except
     on EbpHttpClientCancelled do
@@ -189,7 +252,7 @@ begin
   try
     lvToken.Cancel;
     try
-      FClient.Download('https://example.com/', lvStream, nil, lvToken);
+      FClient.Download(gcUnreachableUrl, lvStream, nil, lvToken);
       Fail('expected EbpHttpClientCancelled');
     except
       on E: EbpHttpClientCancelled do
@@ -206,20 +269,14 @@ procedure TBpHttpDownloadTests.TestDownloadToFileKeepsTheOldFileOnPreCancelledTo
 var
   lvToken: TbpCancellationToken;
   lvFileName: string;
-  lvFile: TFileStream;
 begin
   lvToken := TbpCancellationToken.Create;
-  lvFileName := TempFilePath('bp_download_cancelled_test.tmp');
+  lvFileName := BpTempFilePath('bp_download_cancelled_test.tmp');
   try
-    lvFile := TFileStream.Create(lvFileName, fmCreate);
-    try
-      lvFile.WriteBuffer(PAnsiChar('KEEPME')^, 6);
-    finally
-      lvFile.Free;
-    end;
+    BpWriteWholeFile(lvFileName, 'KEEPME');
     lvToken.Cancel;
     try
-      FClient.DownloadToFile('https://example.com/', lvFileName, nil, lvToken);
+      FClient.DownloadToFile(gcUnreachableUrl, lvFileName, nil, lvToken);
       Fail('expected EbpHttpClientCancelled');
     except
       on EbpHttpClientCancelled do
@@ -236,6 +293,7 @@ end;
 procedure TBpHttpDownloadTests.TestTaskInitialState;
 var
   lvTask: TbpHttpDownloadTask;
+  lvStart: Cardinal;
 begin
   lvTask := TbpHttpDownloadTask.Create(False);
   try
@@ -243,7 +301,10 @@ begin
     Check(lvTask.Received = 0);
     Check(lvTask.Total = -1, 'total unknown before headers');
     CheckFalse(lvTask.IsFinished);
-    CheckFalse(lvTask.WaitFor(0), 'a never-started task has not finished');
+    // a task with no thread has nothing to wait on, so it must not wait at all
+    lvStart := GetTickCount;
+    CheckFalse(lvTask.WaitFor(5000), 'a never-started task has not finished');
+    Check(GetTickCount - lvStart < 1000, 'WaitFor must return, not burn its timeout');
     CheckEquals('', lvTask.ErrorMessage);
   finally
     lvTask.Free;
@@ -265,7 +326,7 @@ begin
       on EbpHttpClient do ;
     end;
 
-    lvTask.Url := 'https://example.com/file.bin';
+    lvTask.Url := gcUnreachableUrl;
     try
       lvTask.Start;
       Fail('expected raise: no destination');
@@ -274,7 +335,7 @@ begin
     end;
 
     lvTask.DestStream := lvStream;
-    lvTask.DestFileName := TempFilePath('bp_task_both_dest.tmp');
+    lvTask.DestFileName := BpTempFilePath('bp_task_both_dest.tmp');
     try
       lvTask.Start;
       Fail('expected raise: both destinations');
@@ -325,7 +386,7 @@ begin
   lvStream := TMemoryStream.Create;
   lvTask := TbpHttpDownloadTask.Create(False);
   try
-    lvTask.Url := 'https://example.com/file.bin';
+    lvTask.Url := gcUnreachableUrl;
     lvTask.DestStream := lvStream;
     lvTask.Cancel;
     // the pre-cancelled token stops the worker before any network activity
@@ -358,30 +419,420 @@ begin
   end;
 end;
 
-{ TBpHttpDownloadOnlineTests }
+{ TBpHttpDownloadTaskTests }
 
-procedure TBpHttpDownloadOnlineTests.SetUp;
+procedure TBpHttpDownloadTaskTests.SetUp;
 begin
   inherited;
-  FClient := TbpHttpClient.Create;
-  FProgressCalls := 0;
-  FLastReceived := 0;
-  FLastTotal := -1;
+  FDir := BpMakeTempDir('bp_task');
+  FDest := IncludeTrailingPathDelimiter(FDir) + 'payload.bin';
+  BpWriteWholeFile(FDest, 'ORIGINAL');
+  FStream := TMemoryStream.Create;
   FMonotonic := True;
-  FCompleteFired := False;
-  FErrorFired := False;
+  FLastTotal := -1;
+  FStateInComplete := dtsPending;
 end;
 
-procedure TBpHttpDownloadOnlineTests.TearDown;
+procedure TBpHttpDownloadTaskTests.TearDown;
 begin
-  FClient.Free;
+  FreeAndNil(FTask);
+  FreeAndNil(FStream);
+  BpDeleteTree(FDir);
   inherited;
 end;
 
-function TBpHttpDownloadOnlineTests.SkipIfOffline: Boolean;
+// the test owns the task through FTask; a handler that frees it clears FTask
+function TBpHttpDownloadTaskTests.NewTask(
+  aMarshal: Boolean): TbpHttpDownloadTask;
+begin
+  FTask := TbpHttpDownloadTask.Create(aMarshal);
+  FTask.DestStream := FStream;
+  FTask.Client.ConnectTimeout := 4000;
+  FTask.Client.SendTimeout := 4000;
+  FTask.Client.ReceiveTimeout := 4000;
+  Result := FTask;
+end;
+
+procedure TBpHttpDownloadTaskTests.EnqueueStall;
+var
+  lvReply: TbpMockResponse;
+begin
+  lvReply := BpMockOk(BpRepeated($42, gcBurst));
+  lvReply.ClaimedLength := gcClaimed;
+  lvReply.Effect := mseStall;
+  FServer.Enqueue(lvReply);
+end;
+
+procedure TBpHttpDownloadTaskTests.HandleProgress(aSender: TObject;
+  const aReceived, aTotal: Int64; var aCancel: Boolean);
+begin
+  Inc(FProgressCount);
+  FProgressThreadId := GetCurrentThreadId;
+  if aReceived < FLastReceived then
+    FMonotonic := False;
+  FLastReceived := aReceived;
+  FLastTotal := aTotal;
+  if FCancelOnData and (aReceived > 0) then
+    aCancel := True;
+end;
+
+procedure TBpHttpDownloadTaskTests.HandleComplete(aSender: TObject);
+begin
+  Inc(FCompleteCount);
+  FCompleteThreadId := GetCurrentThreadId;
+  FStateInComplete := TbpHttpDownloadTask(aSender).State;
+end;
+
+procedure TBpHttpDownloadTaskTests.HandleError(aSender: TObject;
+  const aErrorMessage: string);
+begin
+  Inc(FErrorCount);
+  if FCompleteCount = 0 then
+    FErrorBeforeComplete := True;
+end;
+
+procedure TBpHttpDownloadTaskTests.HandleCompleteAndFree(aSender: TObject);
+begin
+  Inc(FCompleteCount);
+  FTask := nil;  // TearDown must not free it a second time
+  TbpHttpDownloadTask(aSender).Free;
+  FFreedInHandler := True;
+end;
+
+procedure TBpHttpDownloadTaskTests.HandleErrorAndFree(aSender: TObject;
+  const aErrorMessage: string);
+begin
+  Inc(FErrorCount);
+  FTask := nil;
+  TbpHttpDownloadTask(aSender).Free;
+  FFreedInHandler := True;
+end;
+
+procedure TBpHttpDownloadTaskTests.HandleCompleteRaise(aSender: TObject);
+begin
+  Inc(FCompleteCount);
+  raise EbpDownloadTestError.Create('from the completion handler');
+end;
+
+procedure TBpHttpDownloadTaskTests.TestMarshalledCompleteRunsOnTheCreatingThread;
+var
+  lvTask: TbpHttpDownloadTask;
+begin
+  FServer.Enqueue(BpMockOk(BpRepeated($41, 4096)));
+  lvTask := NewTask(True);
+  lvTask.Url := Url('/payload.bin');
+  lvTask.OnComplete := HandleComplete;
+  lvTask.OnError := HandleError;
+  lvTask.Start;
+
+  CheckTrue(lvTask.WaitFor(10000), 'the worker must finish');
+  CheckEquals(0, FCompleteCount, 'nothing fires before the queue is pumped');
+  CheckTrue(BpPumpUntilCount(FCompleteCount, 1, 5000), 'OnComplete must arrive');
+  CheckEquals(Integer(GetCurrentThreadId), Integer(FCompleteThreadId),
+    'the event belongs to the thread that created the task');
+  CheckEquals(0, FErrorCount, 'OnError must not fire on success');
+  Check(lvTask.State = dtsSucceeded, lvTask.ErrorMessage);
+  Check(FStateInComplete = dtsSucceeded, 'the state is final inside OnComplete');
+  Check(lvTask.Received = 4096);
+  Check(lvTask.Total = 4096);
+  CheckEquals(4096, FStream.Size);
+  CheckEquals(200, lvTask.Response.StatusCode);
+end;
+
+procedure TBpHttpDownloadTaskTests.TestFailedStatusPinsResponseAndStatus;
+var
+  lvTask: TbpHttpDownloadTask;
+begin
+  FServer.Enqueue(BpMockStatus(404, 'no such thing'));
+  lvTask := NewTask(True);
+  lvTask.Url := Url('/missing.bin');
+  lvTask.OnComplete := HandleComplete;
+  lvTask.OnError := HandleError;
+  lvTask.Start;
+
+  CheckTrue(lvTask.WaitFor(10000), 'the worker must finish');
+  CheckTrue(BpPumpUntilCount(FCompleteCount, 1, 5000), 'OnComplete must arrive');
+  CheckEquals(1, FErrorCount, 'OnError must fire once');
+  CheckTrue(FErrorBeforeComplete, 'OnError comes before OnComplete');
+  Check(lvTask.State = dtsFailed);
+  CheckEquals(404, lvTask.HttpStatus);
+  CheckEquals(404, lvTask.Response.StatusCode, 'the response stays readable');
+end;
+
+procedure TBpHttpDownloadTaskTests.TestTransportFailurePinsWhatItKnows;
+var
+  lvReply: TbpMockResponse;
+  lvTask: TbpHttpDownloadTask;
+begin
+  lvReply := BpMockOk('');
+  lvReply.Effect := mseNoResponse;  // the socket closes with nothing on it
+  FServer.Enqueue(lvReply);
+
+  lvTask := NewTask(True);
+  lvTask.Url := Url('/silent.bin');
+  lvTask.OnComplete := HandleComplete;
+  lvTask.OnError := HandleError;
+  lvTask.Start;
+
+  CheckTrue(lvTask.WaitFor(15000), 'the worker must finish');
+  CheckTrue(BpPumpUntilCount(FCompleteCount, 1, 5000), 'OnComplete must arrive');
+  CheckTrue(FErrorBeforeComplete, 'OnError comes before OnComplete');
+  Check(lvTask.State = dtsFailed, lvTask.ErrorMessage);
+  CheckEquals(0, lvTask.Response.StatusCode, 'no reply, so no status');
+  Check(lvTask.ErrorMessage <> '', 'the failure must say something');
+end;
+
+procedure TBpHttpDownloadTaskTests.TestFreeWhileRunningFiresNothing;
+var
+  lvTask: TbpHttpDownloadTask;
+begin
+  EnqueueStall;
+  lvTask := NewTask(True);
+  lvTask.Url := Url('/stall.bin');
+  lvTask.Client.ReceiveTimeout := 25000;
+  lvTask.OnProgress := HandleProgress;
+  lvTask.OnComplete := HandleComplete;
+  lvTask.OnError := HandleError;
+  lvTask.Start;
+
+  CheckTrue(BpPumpUntilCount(FProgressCount, 1, 10000), 'the body must start');
+  FreeAndNil(FTask);  // cancels the live read, joins, and drops the completion
+  BpPumpFor(150);
+  CheckEquals(0, FCompleteCount, 'a freed task fires no completion');
+  CheckEquals(0, FErrorCount, 'a freed task fires no error');
+end;
+
+procedure TBpHttpDownloadTaskTests.TestFreeFromInsideOwnCompleteMarshalled;
+var
+  lvTask: TbpHttpDownloadTask;
+begin
+  FServer.Enqueue(BpMockOk('ok'));
+  lvTask := NewTask(True);
+  lvTask.Url := Url('/small.bin');
+  lvTask.OnComplete := HandleCompleteAndFree;
+  lvTask.Start;
+
+  CheckTrue(lvTask.WaitFor(10000), 'the worker must finish');
+  CheckTrue(BpPumpUntilFlag(FFreedInHandler, 5000),
+    'the handler ran and freed its own task');
+end;
+
+procedure TBpHttpDownloadTaskTests.TestFreeFromInsideOwnCompleteDirect;
+var
+  lvTask: TbpHttpDownloadTask;
+begin
+  FServer.Enqueue(BpMockOk('ok'));
+  lvTask := NewTask(False);
+  lvTask.Url := Url('/small.bin');
+  lvTask.OnComplete := HandleCompleteAndFree;
+  lvTask.Start;
+
+  CheckTrue(BpWaitForFlag(FFreedInHandler, 10000),
+    'the worker freed its own task without joining itself');
+end;
+
+procedure TBpHttpDownloadTaskTests.TestFreeFromInsideOwnErrorMarshalled;
+var
+  lvTask: TbpHttpDownloadTask;
+begin
+  FServer.Enqueue(BpMockStatus(500, 'boom'));
+  lvTask := NewTask(True);
+  lvTask.Url := Url('/broken.bin');
+  lvTask.OnError := HandleErrorAndFree;
+  lvTask.OnComplete := HandleComplete;
+  lvTask.Start;
+
+  CheckTrue(lvTask.WaitFor(10000), 'the worker must finish');
+  CheckTrue(BpPumpUntilFlag(FFreedInHandler, 5000), 'OnError ran and freed');
+  BpPumpFor(100);
+  CheckEquals(0, FCompleteCount, 'a task freed in OnError gets no OnComplete');
+end;
+
+procedure TBpHttpDownloadTaskTests.TestFreeFromInsideOwnErrorDirect;
+var
+  lvTask: TbpHttpDownloadTask;
+begin
+  FServer.Enqueue(BpMockStatus(500, 'boom'));
+  lvTask := NewTask(False);
+  lvTask.Url := Url('/broken.bin');
+  lvTask.OnError := HandleErrorAndFree;
+  lvTask.OnComplete := HandleComplete;
+  lvTask.Start;
+
+  CheckTrue(BpWaitForFlag(FFreedInHandler, 10000), 'OnError ran and freed');
+  CheckEquals(0, FCompleteCount, 'a task freed in OnError gets no OnComplete');
+end;
+
+procedure TBpHttpDownloadTaskTests.TestFreeMarshalledFromAForeignThread;
+var
+  lvTask: TbpHttpDownloadTask;
+  lvFreer: TForeignFreeThread;
+begin
+  FServer.Enqueue(BpMockOk('ok'));
+  lvTask := NewTask(True);
+  lvTask.Url := Url('/small.bin');
+  lvTask.OnComplete := HandleComplete;
+  lvTask.Start;
+  CheckTrue(lvTask.WaitFor(10000), 'the worker must finish');
+
+  FTask := nil;  // the foreign thread owns it from here
+  lvFreer := TForeignFreeThread.Create(lvTask);
+  // a blocked freer is left unjoined on purpose: joining it would hang the suite
+  if WaitForSingleObject(lvFreer.Handle, 10000) <> WAIT_OBJECT_0 then
+    Fail('freeing a marshalled task from a foreign thread blocked');
+  lvFreer.Free;
+
+  BpPumpFor(100);
+  CheckEquals(0, FCompleteCount, 'the queued completion died with the task');
+end;
+
+procedure TBpHttpDownloadTaskTests.TestHandlerExceptionReachesTheHook;
+var
+  lvTask: TbpHttpDownloadTask;
+begin
+  FServer.Enqueue(BpMockOk('ok'));
+  gvHookCount := 0;
+  gvHookMessage := '';
+  BpSetTaskExceptionHook(DownloadTestExceptionHook);
+  try
+    lvTask := NewTask(True);
+    lvTask.Url := Url('/small.bin');
+    lvTask.OnComplete := HandleCompleteRaise;
+    lvTask.Start;
+    CheckTrue(lvTask.WaitFor(10000), 'the worker must finish');
+    CheckTrue(BpPumpUntilCount(gvHookCount, 1, 5000),
+      'the hook must see what the handler raised');
+    CheckEquals('from the completion handler', gvHookMessage);
+  finally
+    BpSetTaskExceptionHook(nil);
+  end;
+end;
+
+procedure TBpHttpDownloadTaskTests.TestProgressArrivesOnTheCreatingThread;
+var
+  lvTask: TbpHttpDownloadTask;
+begin
+  FServer.Enqueue(BpMockOk(BpRepeated($41, 8192)));
+  lvTask := NewTask(True);
+  lvTask.Url := Url('/payload.bin');
+  lvTask.OnProgress := HandleProgress;
+  lvTask.OnComplete := HandleComplete;
+  lvTask.Start;
+
+  CheckTrue(lvTask.WaitFor(10000), 'the worker must finish');
+  CheckTrue(BpPumpUntilCount(FProgressCount, 1, 5000), 'progress must arrive');
+  CheckEquals(Integer(GetCurrentThreadId), Integer(FProgressThreadId),
+    'progress belongs to the thread that created the task');
+  CheckTrue(FMonotonic, 'the received counter never goes backwards');
+end;
+
+// the worker samples once per read, so the queue must not grow with the body
+procedure TBpHttpDownloadTaskTests.TestProgressPostsCoalesce;
+var
+  lvTask: TbpHttpDownloadTask;
+  lvReads: Integer;
+begin
+  FServer.Enqueue(BpMockOk(BpRepeated($41, gcBigBody)));
+  lvTask := NewTask(True);
+  lvTask.Url := Url('/big.bin');
+  lvTask.OnProgress := HandleProgress;
+  lvTask.OnComplete := HandleComplete;
+  lvTask.Start;
+
+  // WaitFor does not pump, so every sample taken here had to collapse into one
+  CheckTrue(lvTask.WaitFor(30000), 'the worker must finish');
+  Check(lvTask.Received = gcBigBody, 'the whole body arrived');
+  lvReads := gcBigBody div gcReadBuffer;
+  Check(lvReads >= 16, 'the body must be big enough to need many reads');
+  BpPumpMessages;
+  CheckEquals(1, FProgressCount,
+    Format('%d samples had to collapse into one event', [lvReads]));
+  Check(FLastReceived = gcBigBody, 'the one event carries the newest count');
+end;
+
+procedure TBpHttpDownloadTaskTests.TestCancelFromAProgressHandler;
+var
+  lvTask: TbpHttpDownloadTask;
+begin
+  EnqueueStall;
+  FCancelOnData := True;
+  lvTask := NewTask(False);  // direct, so the handler runs as the body arrives
+  lvTask.Url := Url('/stall.bin');
+  lvTask.Client.ReceiveTimeout := 25000;
+  lvTask.OnProgress := HandleProgress;
+  lvTask.Start;
+
+  CheckTrue(lvTask.WaitFor(15000), 'the cancel must stop the download');
+  Check(lvTask.State = dtsCancelled, 'aCancel in a progress handler cancels');
+  CheckTrue(lvTask.Token.IsCancellationRequested, 'and it goes through the token');
+end;
+
+procedure TBpHttpDownloadTaskTests.TestNotFoundLeavesTheFileAlone;
+var
+  lvTask: TbpHttpDownloadTask;
+begin
+  FServer.Enqueue(BpMockStatus(404, 'no such thing'));
+  lvTask := NewTask(False);
+  lvTask.DestStream := nil;
+  lvTask.DestFileName := FDest;
+  lvTask.Url := Url('/missing.bin');
+  lvTask.Start;
+
+  CheckTrue(lvTask.WaitFor(10000), 'the worker must finish');
+  Check(lvTask.State = dtsFailed);
+  CheckEquals(404, lvTask.HttpStatus);
+  CheckEquals('ORIGINAL', string(BpReadWholeFile(FDest)),
+    'a 404 body must not become the payload');
+  CheckEquals(1, BpCountFiles(FDir), 'a temp file was left behind');
+end;
+
+procedure TBpHttpDownloadTaskTests.TestCancelMidBodyLeavesNoTempFile;
+var
+  lvTask: TbpHttpDownloadTask;
+begin
+  EnqueueStall;
+  lvTask := NewTask(False);
+  lvTask.DestStream := nil;
+  lvTask.DestFileName := FDest;
+  lvTask.Url := Url('/stall.bin');
+  lvTask.Client.ReceiveTimeout := 25000;
+  lvTask.OnProgress := HandleProgress;
+  lvTask.Start;
+
+  CheckTrue(BpWaitForCount(FProgressCount, 2, 10000), 'the body must start');
+  lvTask.Cancel;
+  CheckTrue(lvTask.WaitFor(15000), 'the cancel must stop the download');
+  Check(lvTask.State = dtsCancelled);
+  CheckEquals('ORIGINAL', string(BpReadWholeFile(FDest)),
+    'a cancelled download must not touch the destination');
+  CheckEquals(1, BpCountFiles(FDir), 'a temp file was left behind');
+end;
+
+procedure TBpHttpDownloadTaskTests.TestStreamingDownloadReportsTheTotal;
+var
+  lvTask: TbpHttpDownloadTask;
+begin
+  FServer.Enqueue(BpMockOk(BpRepeated($41, gcBurst)));
+  lvTask := NewTask(False);  // direct, so progress arrives without a pump
+  lvTask.Url := Url('/payload.bin');
+  lvTask.OnProgress := HandleProgress;
+  lvTask.Start;
+
+  CheckTrue(lvTask.WaitFor(15000), 'the worker must finish');
+  Check(lvTask.State = dtsSucceeded, lvTask.ErrorMessage);
+  CheckEquals(gcBurst, FStream.Size, 'every byte lands in the stream');
+  Check(FLastTotal = gcBurst, 'progress reports the total from Content-Length');
+  Check(FLastReceived = gcBurst, 'the final tick equals the size');
+  Check(FProgressCount >= 2, 'expected the initial tick and at least one more');
+  CheckTrue(FMonotonic, 'the received counter never goes backwards');
+  CheckEquals('', string(lvTask.Response.Body), 'a streamed body stays empty');
+end;
+
+{ TBpHttpsOnlineTests }
+
+function TBpHttpsOnlineTests.SkipIfOffline: Boolean;
 var
   lvClient: TbpHttpClient;
-  lvResponse: TbpHttpResponse;
 begin
   if not gvOnlineProbed then
   begin
@@ -391,8 +842,7 @@ begin
       lvClient.ConnectTimeout := 5000;
       lvClient.ReceiveTimeout := 5000;
       try
-        lvResponse := lvClient.Get(gcProbeUrl);
-        gvOnlineAvailable := BpHttpResponseIsSuccess(lvResponse);
+        gvOnlineAvailable := BpHttpResponseIsSuccess(lvClient.Get(gcTlsUrl));
       except
         gvOnlineAvailable := False;
       end;
@@ -405,115 +855,22 @@ begin
     Status('SKIPPED: no network access, integration test not executed');
 end;
 
-procedure TBpHttpDownloadOnlineTests.HandleProgress(aSender: TObject;
-  const aReceived, aTotal: Int64; var aCancel: Boolean);
-begin
-  Inc(FProgressCalls);
-  if aReceived < FLastReceived then
-    FMonotonic := False;
-  FLastReceived := aReceived;
-  FLastTotal := aTotal;
-end;
-
-procedure TBpHttpDownloadOnlineTests.HandleComplete(aSender: TObject);
-begin
-  FCompleteFired := True;
-end;
-
-procedure TBpHttpDownloadOnlineTests.HandleError(aSender: TObject;
-  const aErrorMessage: string);
-begin
-  FErrorFired := True;
-end;
-
-procedure TBpHttpDownloadOnlineTests.TestHttpsGet;
+procedure TBpHttpsOnlineTests.TestHttpsGet;
 var
+  lvClient: TbpHttpClient;
   lvResponse: TbpHttpResponse;
 begin
   if SkipIfOffline then
     Exit;
-  // TLS via Schannel, no OpenSSL anywhere near this
-  lvResponse := FClient.Get(gcHtmlUrl);
-  CheckEquals(200, lvResponse.StatusCode);
-  Check(Pos('Example Domain', string(lvResponse.Body)) > 0,
-    'expected page text in the body');
-end;
-
-procedure TBpHttpDownloadOnlineTests.TestStreamingDownloadWithProgress;
-var
-  lvStream: TMemoryStream;
-  lvResponse: TbpHttpResponse;
-begin
-  if SkipIfOffline then
-    Exit;
-  lvStream := TMemoryStream.Create;
+  lvClient := TbpHttpClient.Create;
   try
-    lvResponse := FClient.Download(gcMediumUrl, lvStream, HandleProgress);
+    // TLS via Schannel, the one thing the loopback server cannot serve
+    lvResponse := lvClient.Get(gcTlsUrl);
     CheckEquals(200, lvResponse.StatusCode);
-    CheckEquals('', string(lvResponse.Body), 'streamed response keeps Body empty');
-    Check(lvResponse.ContentLength = 262144, 'Content-Length parsed');
-    Check(lvStream.Size = 262144, 'every byte lands in the stream');
-    Check(FLastTotal = 262144, 'progress reports the total');
-    Check(FLastReceived = 262144, 'final progress equals the size');
-    Check(FProgressCalls >= 2, 'expected the initial and at least one data tick');
-    CheckTrue(FMonotonic, 'received counter never goes backwards');
+    Check(Pos('Example Domain', string(lvResponse.Body)) > 0,
+      'expected page text in the body');
   finally
-    lvStream.Free;
-  end;
-end;
-
-procedure TBpHttpDownloadOnlineTests.TestDownloadToFileOnlyWritesOnSuccess;
-var
-  lvFileName: string;
-  lvResponse: TbpHttpResponse;
-begin
-  if SkipIfOffline then
-    Exit;
-  lvFileName := TempFilePath('bp_download_ok_test.bin');
-  try
-    lvResponse := FClient.DownloadToFile(gcSmallUrl, lvFileName);
-    CheckEquals(200, lvResponse.StatusCode);
-    CheckTrue(FileExists(lvFileName), 'successful download keeps the file');
-  finally
-    SysUtils.DeleteFile(lvFileName);
-  end;
-
-  // a 404 body must not survive pretending to be the payload
-  lvFileName := TempFilePath('bp_download_404_test.bin');
-  lvResponse := FClient.DownloadToFile(gcNotFoundUrl, lvFileName);
-  CheckEquals(404, lvResponse.StatusCode);
-  CheckFalse(FileExists(lvFileName), 'a non-2xx writes no file at all');
-end;
-
-procedure TBpHttpDownloadOnlineTests.TestAsyncDownloadCompletes;
-var
-  lvTask: TbpHttpDownloadTask;
-  lvStream: TMemoryStream;
-begin
-  if SkipIfOffline then
-    Exit;
-  lvStream := TMemoryStream.Create;
-  lvTask := TbpHttpDownloadTask.Create(False);  // events on the worker thread
-  try
-    lvTask.Url := gcSmallUrl;
-    lvTask.DestStream := lvStream;
-    lvTask.OnProgress := HandleProgress;
-    lvTask.OnComplete := HandleComplete;
-    lvTask.OnError := HandleError;
-    lvTask.Start;
-    CheckFalse(lvTask.MarshalToMainThread);
-    CheckTrue(lvTask.WaitFor(30000), 'download must finish within 30s');
-    Check(lvTask.State = dtsSucceeded, 'expected success, got: ' + lvTask.ErrorMessage);
-    Check(lvStream.Size = 65536, 'every byte lands in the stream');
-    Check(lvTask.Received = 65536);
-    Check(lvTask.Total = 65536);
-    CheckEquals(200, lvTask.Response.StatusCode);
-    CheckTrue(FCompleteFired, 'OnComplete must fire');
-    CheckFalse(FErrorFired, 'OnError must not fire on success');
-    CheckTrue(FMonotonic);
-  finally
-    lvTask.Free;
-    lvStream.Free;
+    lvClient.Free;
   end;
 end;
 
@@ -522,7 +879,8 @@ initialization
   RegisterTest(TBpHttpDownloadTests.Suite);
 {$IFNDEF NO_INTEGRATION}
   // integration, on by default; NO_INTEGRATION gives a socket-free run
-  RegisterTest(TBpHttpDownloadOnlineTests.Suite);
+  RegisterTest(TBpHttpDownloadTaskTests.Suite);
+  RegisterTest(TBpHttpsOnlineTests.Suite);
 {$ENDIF}
 
 end.
