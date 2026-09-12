@@ -29,6 +29,11 @@ type
     procedure TestChangedItemClassIsOneDifference;
     procedure TestCompareWideCharProperties;
     procedure TestCompareInt64Properties;
+    procedure TestNestedObjectPropertiesAreWalked;
+    procedure TestNilNestedObjectIsOneDifference;
+    procedure TestComponentReferenceComparesByIdentity;
+    procedure TestObjectCycleTerminates;
+    procedure TestCollectionReachableFromItsItemTerminates;
     procedure TestCompareObjectsAsString;
 
     procedure TestCompareWithSameCollectionData;
@@ -62,7 +67,7 @@ type
 implementation
 
 uses
-  SysUtils, StrUtils, BpObjectComparerCollectionClasses;
+  SysUtils, Classes, StrUtils, BpObjectComparerCollectionClasses;
 
 procedure TestTBpObjectComparer.SetUp;
 begin
@@ -242,6 +247,138 @@ begin
     CheckEquals($100000000, OldValue, 'old value');
     CheckEquals($200000000, NewValue, 'new value');
   finally
+    Obj2.Free;
+  end;
+end;
+
+procedure TestTBpObjectComparer.TestNestedObjectPropertiesAreWalked;
+var
+  Node1, Node2: TTestNode;
+  Diffs: TPropDifferences;
+begin
+  Node1 := TTestNode.Create;
+  Node2 := TTestNode.Create;
+  try
+    Node1.Inner.StringProp := 'before';
+    Node2.Inner.StringProp := 'after';
+
+    Diffs := TbpObjectComparer.CompareObjects(Node1, Node2);
+    CheckEquals(1, Length(Diffs), 'the nested change is found');
+    CheckEquals('Inner.StringProp', Diffs[0].OldPropPath, 'old path');
+    CheckEquals('Inner.StringProp', Diffs[0].NewPropPath, 'new path');
+    CheckEquals('before', VarToStr(Diffs[0].OldValue), 'old value');
+    CheckEquals('after', VarToStr(Diffs[0].NewValue), 'new value');
+  finally
+    Node1.Free;
+    Node2.Free;
+  end;
+end;
+
+procedure TestTBpObjectComparer.TestNilNestedObjectIsOneDifference;
+var
+  Node1, Node2: TTestNode;
+  Diffs: TPropDifferences;
+begin
+  Node1 := TTestNode.Create;
+  Node2 := TTestNode.Create;
+  try
+    Node1.Inner.StringProp := 'kept';
+    Node2.Inner.Free;
+    Node2.Inner := nil;
+
+    Diffs := TbpObjectComparer.CompareObjects(Node1, Node2);
+    CheckEquals(1, Length(Diffs), 'the vanished object is one difference, its properties are not walked');
+    CheckEquals('Inner', Diffs[0].OldPropPath, 'property path');
+    CheckEquals('Exists in old', VarToStr(Diffs[0].OldValue), 'old value');
+    CheckEquals('Missing in new', VarToStr(Diffs[0].NewValue), 'new value');
+
+    Diffs := TbpObjectComparer.CompareObjects(Node2, Node1);
+    CheckEquals(1, Length(Diffs), 'and one the other way round');
+    CheckEquals('Missing in old', VarToStr(Diffs[0].OldValue), 'old value');
+    CheckEquals('Exists in new', VarToStr(Diffs[0].NewValue), 'new value');
+  finally
+    Node1.Free;
+    Node2.Free;
+  end;
+end;
+
+// a component is a reference, as in streaming, so its own properties are not diffed
+procedure TestTBpObjectComparer.TestComponentReferenceComparesByIdentity;
+var
+  Node1, Node2: TTestNode;
+  Shared, Other: TComponent;
+  Diffs: TPropDifferences;
+begin
+  Node1 := TTestNode.Create;
+  Node2 := TTestNode.Create;
+  Shared := TComponent.Create(nil);
+  Other := TComponent.Create(nil);
+  try
+    Shared.Name := 'Shared';
+    Node1.Ref := Shared;
+    Node2.Ref := Shared;
+    Diffs := TbpObjectComparer.CompareObjects(Node1, Node2);
+    CheckEquals(0, Length(Diffs), 'the same component on both sides');
+
+    Node2.Ref := Other;
+    Diffs := TbpObjectComparer.CompareObjects(Node1, Node2);
+    CheckEquals(1, Length(Diffs), 'a different component is one difference');
+    CheckEquals('Ref', Diffs[0].OldPropPath, 'property path');
+    CheckEquals('Shared', VarToStr(Diffs[0].OldValue), 'the name when it has one');
+    CheckEquals('TComponent', VarToStr(Diffs[0].NewValue), 'the class when it has none');
+  finally
+    Node1.Free;
+    Node2.Free;
+    Shared.Free;
+    Other.Free;
+  end;
+end;
+
+// a node whose Next points back at it used to be an unbounded descent
+procedure TestTBpObjectComparer.TestObjectCycleTerminates;
+var
+  Head1, Tail1, Head2, Tail2: TTestNode;
+  Diffs: TPropDifferences;
+begin
+  Head1 := TTestNode.Create;
+  Tail1 := TTestNode.Create;
+  Head2 := TTestNode.Create;
+  Tail2 := TTestNode.Create;
+  try
+    Head1.Next := Tail1;
+    Tail1.Next := Head1;
+    Head2.Next := Tail2;
+    Tail2.Next := Head2;
+    Tail1.Value := 1;
+    Tail2.Value := 2;
+
+    Diffs := TbpObjectComparer.CompareObjects(Head1, Head2);
+    CheckEquals(1, Length(Diffs), 'the tail is compared once, the way back is not followed');
+    CheckEquals('Next.Value', Diffs[0].OldPropPath, 'property path');
+  finally
+    Head1.Free;
+    Tail1.Free;
+    Head2.Free;
+    Tail2.Free;
+  end;
+end;
+
+procedure TestTBpObjectComparer.TestCollectionReachableFromItsItemTerminates;
+var
+  Obj1, Obj2: TTestClassWithSelfRefCollection;
+  Diffs: TPropDifferences;
+begin
+  Obj1 := TTestClassWithSelfRefCollection.Create;
+  Obj2 := TTestClassWithSelfRefCollection.Create;
+  try
+    TSelfRefItem(Obj1.Items.Add).Value := 1;
+    TSelfRefItem(Obj2.Items.Add).Value := 2;
+
+    Diffs := TbpObjectComparer.CompareObjects(Obj1, Obj2);
+    CheckEquals(1, Length(Diffs), 'the item is compared once');
+    CheckEquals('Items[0].Value', Diffs[0].OldPropPath, 'property path');
+  finally
+    Obj1.Free;
     Obj2.Free;
   end;
 end;

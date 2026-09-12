@@ -89,6 +89,26 @@ type
     property MyCollection: TSimpleTestCollection read FMyCollection write FMyCollection;
   end;
 
+  // Back publishes the item's own collection, so a walk that follows it never ends
+  TSelfRefItem = class(TCollectionItem)
+  private
+    FValue: Integer;
+    function GetBack: TCollection;
+  published
+    property Value: Integer read FValue write FValue;
+    property Back: TCollection read GetBack;
+  end;
+
+  TTestClassWithSelfRefCollection = class(TPersistent)
+  private
+    FItems: TCollection;
+  public
+    constructor Create;
+    destructor Destroy; override;
+  published
+    property Items: TCollection read FItems;
+  end;
+
 implementation
 
 uses
@@ -169,6 +189,23 @@ end;
 destructor TTestClassWithCollection.Destroy;
 begin
   FMyCollection.Free;
+  inherited Destroy;
+end;
+
+function TSelfRefItem.GetBack: TCollection;
+begin
+  Result := Collection;
+end;
+
+constructor TTestClassWithSelfRefCollection.Create;
+begin
+  inherited Create;
+  FItems := TCollection.Create(TSelfRefItem);
+end;
+
+destructor TTestClassWithSelfRefCollection.Destroy;
+begin
+  FItems.Free;
   inherited Destroy;
 end;
 
