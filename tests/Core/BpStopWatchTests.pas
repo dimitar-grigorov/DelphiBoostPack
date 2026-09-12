@@ -7,7 +7,7 @@ interface
 {$IF CompilerVersion < 20.0} // the unit itself stops there
 
 uses
-  TestFramework, Windows, SysUtils, StopWatch;
+  TestFramework, SysUtils, StopWatch;
 
 type
   TBpStopWatchTests = class(TTestCase)

@@ -7,7 +7,7 @@ unit BpIntDictionary;
 interface
 
 uses
-  SysUtils, Classes, Variants;
+  SysUtils, Variants;
 
 type
   // raised for missing keys, duplicate keys and failed typed conversions

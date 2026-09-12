@@ -5,7 +5,7 @@ unit BpCancellationTokenTests;
 interface
 
 uses
-  TestFramework, SysUtils, Classes, Windows, BpHttpClient;
+  TestFramework, Classes, Windows, BpHttpClient;
 
 type
   // all offline; the cross-thread test uses a private worker thread

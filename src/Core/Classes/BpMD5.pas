@@ -13,7 +13,7 @@ unit BpMD5;
 interface
 
 uses
-  SysUtils, BpCompat;
+  SysUtils;
 
 type
   TbpMD5Digest = array[0..15] of Byte;
