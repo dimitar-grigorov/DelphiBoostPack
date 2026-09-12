@@ -50,12 +50,10 @@ type
     procedure TestCompareCollectionsWithMultipleDifferences;
     procedure TestCompareCollectionsWithItemsInDifferentOrder;
     procedure TestDuplicateIdsPairUpInOrder;
-    //Index based collection tests
     procedure TestCompareCollectionsWithSameIndexNoUniqueId;
-    //procedure TestCompareCollectionsWithDifferentLengthsNoUniqueId;
-    //procedure TestCompareEmptyAndPopulatedCollectionNoUniqueId;
+    procedure TestCompareCollectionsWithDifferentLengthsNoUniqueId;
+    procedure TestCompareEmptyAndPopulatedCollectionNoUniqueId;
 
-    //StripIndexFromProperty Tests
     procedure TestStripIndexFromProperty_NoBrackets;
     procedure TestStripIndexFromProperty_WithBrackets;
     procedure TestStripIndexFromProperty_EmptyString;
@@ -435,7 +433,7 @@ begin
   Obj2 := TTestClassWithCollectionUnique.Create;
   try
     Obj1.MyCollection.Add.ID := 1;
-    Obj2.MyCollection.Add.ID := 2; // Different ID
+    Obj2.MyCollection.Add.ID := 2;
 
     Diffs := TbpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(2, Length(Diffs), 'Should find differences in collections for each item');
@@ -453,8 +451,7 @@ begin
   Obj1 := TTestClassWithCollectionUnique.Create;
   Obj2 := TTestClassWithCollectionUnique.Create;
   try
-    // Obj1 has no items added to MyCollection
-    Obj2.MyCollection.Add.ID := 1; // Obj2 has one item
+    Obj2.MyCollection.Add.ID := 1;
 
     Diffs := TbpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(2, Length(Diffs), 'Should find differences for count and the missing item');
@@ -661,7 +658,6 @@ begin
     CheckEquals(1, Length(Diffs), 'One difference expected');
     CheckEquals('MyCollection[0].EnumProp', Diffs[0].OldPropPath, 'Property path should match');
 
-    // Compare the string representations of the enum values
     CheckEquals('meValueOne', Diffs[0].OldValue, 'Old value should match');
     CheckEquals('meValueTwo', Diffs[0].NewValue, 'New value should match');
   finally
@@ -738,7 +734,7 @@ begin
 
     with Obj2.MyCollection.Add do
     begin
-      ID := 33; // Reverse order
+      ID := 33;
       Name := 'Item2';
     end;
     with Obj2.MyCollection.Add do
@@ -827,6 +823,75 @@ begin
     CheckEquals('MyCollection[0].Name', Diffs[3].OldPropPath, 'Property path should match');
     CheckEquals('Item1', Diffs[3].OldValue, 'Old value should match');
     CheckEquals('Item2', Diffs[3].NewValue, 'New value should match');
+  finally
+    Obj1.Free;
+    Obj2.Free;
+  end;
+end;
+
+procedure TestTBpObjectComparer.TestCompareCollectionsWithDifferentLengthsNoUniqueId;
+var
+  Obj1, Obj2: TTestClassWithCollection;
+  Diffs: TPropDifferences;
+begin
+  Obj1 := TTestClassWithCollection.Create;
+  Obj2 := TTestClassWithCollection.Create;
+  try
+    Obj1.MyCollection.Add.Name := 'a';
+    Obj1.MyCollection.Add.Name := 'b';
+    Obj1.MyCollection.Add.Name := 'c';
+    Obj2.MyCollection.Add.Name := 'a';
+
+    Diffs := TbpObjectComparer.CompareObjects(Obj1, Obj2);
+    CheckEquals(3, Length(Diffs), 'the count and the two surplus items');
+    CheckEquals('MyCollection.Count', Diffs[0].OldPropPath, 'count path');
+    CheckEquals(3, Integer(Diffs[0].OldValue), 'old count');
+    CheckEquals(1, Integer(Diffs[0].NewValue), 'new count');
+
+    CheckEquals('MyCollection[1]', Diffs[1].OldPropPath, 'old path');
+    CheckEquals('MyCollection[1]', Diffs[1].NewPropPath, 'new path');
+    CheckEquals('Exists in old', VarToStr(Diffs[1].OldValue), 'old value');
+    CheckEquals('Missing in new', VarToStr(Diffs[1].NewValue), 'new value');
+    CheckEquals('1', Diffs[1].Idx, 'the item index');
+
+    CheckEquals('MyCollection[2]', Diffs[2].OldPropPath, 'old path');
+    CheckEquals('Exists in old', VarToStr(Diffs[2].OldValue), 'old value');
+    CheckEquals('2', Diffs[2].Idx, 'the item index');
+  finally
+    Obj1.Free;
+    Obj2.Free;
+  end;
+end;
+
+procedure TestTBpObjectComparer.TestCompareEmptyAndPopulatedCollectionNoUniqueId;
+var
+  Obj1, Obj2: TTestClassWithCollection;
+  Diffs: TPropDifferences;
+begin
+  Obj1 := TTestClassWithCollection.Create;
+  Obj2 := TTestClassWithCollection.Create;
+  try
+    Obj2.MyCollection.Add.Name := 'new';
+
+    Diffs := TbpObjectComparer.CompareObjects(Obj1, Obj2);
+    CheckEquals(2, Length(Diffs), 'the count and the added item');
+    CheckEquals('MyCollection.Count', Diffs[0].OldPropPath, 'count path');
+    CheckEquals(0, Integer(Diffs[0].OldValue), 'old count');
+    CheckEquals(1, Integer(Diffs[0].NewValue), 'new count');
+    CheckEquals('MyCollection[0]', Diffs[1].OldPropPath, 'old path');
+    CheckEquals('MyCollection[0]', Diffs[1].NewPropPath, 'new path');
+    CheckEquals('Missing in old', VarToStr(Diffs[1].OldValue), 'old value');
+    CheckEquals('Exists in new', VarToStr(Diffs[1].NewValue), 'new value');
+    CheckEquals('0', Diffs[1].Idx, 'the item index');
+
+    Diffs := TbpObjectComparer.CompareObjects(Obj2, Obj1);
+    CheckEquals(2, Length(Diffs), 'the count and the removed item');
+    CheckEquals(1, Integer(Diffs[0].OldValue), 'old count');
+    CheckEquals(0, Integer(Diffs[0].NewValue), 'new count');
+    CheckEquals('MyCollection[0]', Diffs[1].OldPropPath, 'old path');
+    CheckEquals('Exists in old', VarToStr(Diffs[1].OldValue), 'old value');
+    CheckEquals('Missing in new', VarToStr(Diffs[1].NewValue), 'new value');
+    CheckEquals('0', Diffs[1].Idx, 'the item index');
   finally
     Obj1.Free;
     Obj2.Free;
