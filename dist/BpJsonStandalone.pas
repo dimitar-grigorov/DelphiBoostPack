@@ -4,7 +4,7 @@ unit BpJsonStandalone;
 // Single-file bundle amalgamated from the DelphiBoostPack modular units:
 //   src\Core\Classes\BpStringBuilder.pas
 //   src\Core\Classes\BpJson.pas
-// Source commit 1bb0418, generated 2026-09-12 by tools\Amalgamate.ps1.
+// Source commit deeb8a7, generated 2026-09-12 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
 // One bundle per project: two that share a helper declare it twice.
@@ -922,7 +922,11 @@ begin
   case BpJsonClassifyNumber(lvToken) of
     jnZero:
       begin
-        Result := TbpJsonValue.CreateFloat(0);
+        lvFloat := 0;
+        // negated at run time, because -0.0 written out folds to plain zero
+        if lvToken[1] = '-' then
+          lvFloat := -lvFloat;
+        Result := TbpJsonValue.CreateFloat(lvFloat);
         Exit;
       end;
     jnOutOfRange:
@@ -1068,6 +1072,12 @@ var
 begin
   if IsNan(aValue) or IsInfinite(aValue) then
     raise EbpJson.Create('NaN and Infinity cannot be written as JSON');
+  // FloatToStrF drops the sign of a negative zero, and it round trips as text
+  if (aValue = 0) and (PInt64(@aValue)^ <> 0) then
+  begin
+    Result := '-0';
+    Exit;
+  end;
   FillChar(lvFs, SizeOf(lvFs), 0);
   lvFs.DecimalSeparator := '.';
   for lvPrec := 15 to 17 do
