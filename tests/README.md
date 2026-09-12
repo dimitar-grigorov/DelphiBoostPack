@@ -47,7 +47,7 @@ Pass `/nointeg` for an offline, socket-free run (handy in locked-down CI or when
 
 ### Benchmarks
 
-Off by default. [Benchmarks/](Benchmarks) times the performance units against their RTL equivalents so the speed claims in the main README are measured, not asserted: `BpStringBuilderBenchmark`, `BpStrUtilsBenchmark`, `BpStrDictionaryBenchmark`, `BpIntDictionaryBenchmark`, `BpBase64Benchmark`, `BpHashBenchmark`, `BpStringOperationsBenchmark`, `BpTypesOperationsBenchmark`, `BpStringListBenchmark`, `BpIntListBenchmark`. They share `BpBaseBenchmarkTestCase` for timing and status output, and back off gracefully on a low-memory box instead of failing the run. Only performance-sensitive units get a benchmark.
+Off by default. [Benchmarks/](Benchmarks) times the performance units against their RTL equivalents so the speed claims in the main README are measured, not asserted: `BpStringBuilderBenchmark`, `BpStrUtilsBenchmark`, `BpStrDictionaryBenchmark`, `BpIntDictionaryBenchmark`, `BpBase64Benchmark`, `BpHashBenchmark`, `BpStringOperationsBenchmark`, `BpTypesOperationsBenchmark`, `BpStringListBenchmark`, `BpIntListBenchmark`, `BpJsonBenchmark`. They share `BpBaseBenchmarkTestCase` for timing and status output, and back off gracefully on a low-memory box instead of failing the run. Only performance-sensitive units get a benchmark.
 
 ## Adding a test
 
