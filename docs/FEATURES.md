@@ -137,8 +137,11 @@ Four shapes per type: `GetX` raises, `GetXDef` returns the default, `TryGetX` re
 lvRoot := TbpJsonValue.CreateObject;
 lvRoot.SetStr('name', 'first');              // create-or-replace; AddX appends
 lvRoot.SetArray('tags').AddStr('new');       // container setters chain
+lvRoot.SetValue('body', lvOther.ExtractName('payload'));  // move a subtree over
 Memo1.Text := lvRoot.ToJsonPretty;
 ```
+
+A value built with `CreateXxx` or `Clone` is yours until `Add` or `SetValue` takes it over, and `Extract` / `ExtractName` hand it back. A container refuses `nil`, a value that already belongs somewhere, and any attach that would make a cycle; a refused call leaves the value with the caller.
 
 `ToJson(True)` escapes everything above #127 as `\uXXXX`. Below Delphi 2009 a string holds UTF-8 bytes in and out.
 

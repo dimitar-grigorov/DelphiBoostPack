@@ -80,6 +80,15 @@ type
     procedure TestWideObjectDeleteByIndex;
     procedure TestWideObjectClones;
     procedure TestGrowingObjectFindsEveryMemberAtEveryStep;
+    // building a tree by hand: the factories, attaching, and taking back
+    procedure TestFactoriesMakeEveryKind;
+    procedure TestAttachBuiltValues;
+    procedure TestAttachRefusesWhatWouldCorruptTheTree;
+    procedure TestExtractHandsOwnershipBack;
+    procedure TestSubtreeMovesBetweenDocuments;
+    procedure TestSetValueReplacesInPlace;
+    procedure TestExtractKeepsTheNameIndexHonest;
+    procedure TestSetArraySetObjectAndAddFloat;
   end;
 
 implementation
@@ -1295,6 +1304,288 @@ begin
     CheckNull(lvValue.FindPath('tags[]'), 'empty index');
   finally
     lvValue.Free;
+  end;
+end;
+
+// every kind a factory can make, and the two names the docs promise for it
+procedure TBpJsonTests.TestFactoriesMakeEveryKind;
+var
+  lvValue: TbpJsonValue;
+begin
+  lvValue := TbpJsonValue.CreateNull;
+  try
+    CheckTrue(lvValue.IsNull);
+    CheckEquals('null', lvValue.KindName);
+    CheckEquals('null', lvValue.ToJson);
+  finally
+    lvValue.Free;
+  end;
+
+  lvValue := TbpJsonValue.CreateBool(True);
+  try
+    CheckTrue(lvValue.AsBool);
+    CheckEquals('bool', lvValue.KindName);
+  finally
+    lvValue.Free;
+  end;
+
+  lvValue := TbpJsonValue.CreateInt(-42);
+  try
+    Check(lvValue.AsInt = -42);
+    CheckEquals('int', lvValue.KindName);
+    // an int reads as a float, and nothing else converts
+    CheckEquals(-42, lvValue.AsFloat, 1E-12);
+  finally
+    lvValue.Free;
+  end;
+
+  lvValue := TbpJsonValue.CreateFloat(1.5);
+  try
+    CheckEquals(1.5, lvValue.AsFloat, 1E-12);
+    CheckEquals('float', lvValue.KindName);
+  finally
+    lvValue.Free;
+  end;
+
+  lvValue := TbpJsonValue.CreateStr('hi');
+  try
+    CheckEquals('hi', lvValue.AsStr);
+    CheckEquals('string', lvValue.KindName);
+  finally
+    lvValue.Free;
+  end;
+
+  lvValue := TbpJsonValue.CreateArray;
+  try
+    CheckEquals(0, lvValue.Count);
+    CheckEquals('array', lvValue.KindName);
+    CheckEquals('[]', lvValue.ToJson);
+  finally
+    lvValue.Free;
+  end;
+
+  lvValue := TbpJsonValue.CreateObject;
+  try
+    CheckEquals(0, lvValue.Count);
+    CheckEquals('object', lvValue.KindName);
+    CheckEquals('{}', lvValue.ToJson);
+  finally
+    lvValue.Free;
+  end;
+end;
+
+procedure TBpJsonTests.TestAttachBuiltValues;
+var
+  lvRoot, lvChild: TbpJsonValue;
+begin
+  lvRoot := TbpJsonValue.CreateObject;
+  try
+    lvChild := TbpJsonValue.CreateObject;
+    lvChild.SetInt('id', 7);
+    lvRoot.SetValue('item', lvChild);
+
+    lvChild := TbpJsonValue.CreateArray;
+    lvChild.AddInt(1);
+    lvChild.AddInt(2);
+    lvRoot.SetValue('list', lvChild);
+
+    lvRoot.Find('list').Add(TbpJsonValue.CreateStr('three'));
+
+    CheckEquals('{"item":{"id":7},"list":[1,2,"three"]}', lvRoot.ToJson);
+    Check(lvRoot.FindPath('item.id').AsInt = 7, 'the attached subtree is reachable');
+  finally
+    lvRoot.Free;
+  end;
+end;
+
+procedure TBpJsonTests.TestAttachRefusesWhatWouldCorruptTheTree;
+var
+  lvRoot, lvArray, lvLoose: TbpJsonValue;
+
+  procedure CheckRefused(const aWhat: string);
+  begin
+    Fail(aWhat + ' was accepted');
+  end;
+
+begin
+  lvRoot := TbpJsonValue.CreateObject;
+  try
+    lvArray := TbpJsonValue.CreateArray;
+    lvRoot.SetValue('list', lvArray);
+
+    try
+      lvArray.Add(nil);
+      CheckRefused('nil');
+    except
+      on EbpJson do ;
+    end;
+
+    // already attached: taking it a second time would free it twice
+    lvLoose := TbpJsonValue.CreateInt(1);
+    lvArray.Add(lvLoose);
+    try
+      lvRoot.SetValue('again', lvLoose);
+      CheckRefused('a value that already has a container');
+    except
+      on EbpJson do ;
+    end;
+    CheckEquals(1, lvArray.Count, 'the refused attach changed nothing');
+
+    try
+      lvArray.Add(lvArray);
+      CheckRefused('a container inside itself');
+    except
+      on EbpJson do ;
+    end;
+
+    // and into its own descendant, which is the same cycle one step further
+    lvLoose := lvArray.AddObject;
+    try
+      lvLoose.SetValue('up', lvRoot);
+      CheckRefused('an ancestor inside its own descendant');
+    except
+      on EbpJson do ;
+    end;
+
+    // a caller that still owns a refused value can attach it somewhere legal
+    lvLoose := TbpJsonValue.CreateInt(9);
+    try
+      lvLoose.Add(lvLoose);
+      CheckRefused('a non-array Add');
+    except
+      on EbpJson do ;
+    end;
+    lvArray.Add(lvLoose);
+    CheckEquals(3, lvArray.Count);
+  finally
+    lvRoot.Free;
+  end;
+end;
+
+procedure TBpJsonTests.TestExtractHandsOwnershipBack;
+var
+  lvRoot, lvTaken: TbpJsonValue;
+begin
+  lvRoot := TbpJsonValue.Parse('{"a":1,"b":[10,20,30],"c":"keep"}');
+  try
+    lvTaken := lvRoot.Find('b').Extract(1);
+    try
+      Check(lvTaken.AsInt = 20, 'the extracted value is the one asked for');
+      CheckEquals('[10,30]', lvRoot.Find('b').ToJson, 'the rest renumbers');
+    finally
+      lvTaken.Free;
+    end;
+
+    lvTaken := lvRoot.ExtractName('a');
+    try
+      Check(lvTaken.AsInt = 1);
+      CheckFalse(lvRoot.Contains('a'), 'the member is gone from the object');
+    finally
+      lvTaken.Free;
+    end;
+
+    CheckNull(lvRoot.ExtractName('nothing'), 'a missing member extracts as nil');
+    CheckEquals('{"b":[10,30],"c":"keep"}', lvRoot.ToJson);
+  finally
+    lvRoot.Free;
+  end;
+end;
+
+// the point of the whole API: a subtree can move between documents
+procedure TBpJsonTests.TestSubtreeMovesBetweenDocuments;
+var
+  lvFrom, lvTo, lvMoved: TbpJsonValue;
+begin
+  lvFrom := TbpJsonValue.Parse('{"payload":{"id":7,"tags":["x","y"]}}');
+  lvTo := TbpJsonValue.CreateObject;
+  try
+    lvMoved := lvFrom.ExtractName('payload');
+    lvTo.SetValue('body', lvMoved);
+    CheckEquals('{}', lvFrom.ToJson, 'the source no longer owns it');
+    CheckEquals('{"body":{"id":7,"tags":["x","y"]}}', lvTo.ToJson);
+    // and it is a normal member of its new owner now
+    Check(lvTo.FindPath('body.tags[1]').AsStr = 'y');
+  finally
+    lvTo.Free;
+    lvFrom.Free;
+  end;
+end;
+
+procedure TBpJsonTests.TestSetValueReplacesInPlace;
+var
+  lvRoot: TbpJsonValue;
+begin
+  lvRoot := TbpJsonValue.Parse('{"a":1,"b":2,"c":3}');
+  try
+    lvRoot.SetValue('b', TbpJsonValue.CreateStr('two'));
+    CheckEquals(3, lvRoot.Count, 'a replacement is not an addition');
+    CheckEquals('{"a":1,"b":"two","c":3}', lvRoot.ToJson,
+      'last one wins and keeps its place, as SetStr does');
+  finally
+    lvRoot.Free;
+  end;
+end;
+
+// the lazy hash index has to survive an extract, at the width where it exists
+procedure TBpJsonTests.TestExtractKeepsTheNameIndexHonest;
+const
+  lcMembers = 40;
+var
+  lvRoot, lvTaken: TbpJsonValue;
+  i: Integer;
+begin
+  lvRoot := TbpJsonValue.CreateObject;
+  try
+    for i := 0 to lcMembers - 1 do
+      lvRoot.SetInt('m' + IntToStr(i), i);
+    // force the index into existence before anything is removed
+    Check(lvRoot.GetInt('m37') = 37);
+
+    lvTaken := lvRoot.ExtractName('m17');
+    try
+      Check(lvTaken.AsInt = 17);
+    finally
+      lvTaken.Free;
+    end;
+
+    CheckEquals(lcMembers - 1, lvRoot.Count);
+    CheckFalse(lvRoot.Contains('m17'), 'the extracted member is gone');
+    for i := 0 to lcMembers - 1 do
+      if i <> 17 then
+        Check(lvRoot.GetInt('m' + IntToStr(i)) = i,
+          'm' + IntToStr(i) + ' must still be found');
+    // and the order the members were added in is unchanged
+    CheckEquals('m0', lvRoot.Names[0]);
+    CheckEquals('m16', lvRoot.Names[16]);
+    CheckEquals('m18', lvRoot.Names[17], 'the tail moved down by one');
+  finally
+    lvRoot.Free;
+  end;
+end;
+
+procedure TBpJsonTests.TestSetArraySetObjectAndAddFloat;
+var
+  lvRoot, lvList: TbpJsonValue;
+begin
+  lvRoot := TbpJsonValue.CreateObject;
+  try
+    lvList := lvRoot.SetArray('list');
+    lvList.AddFloat(1.5);
+    lvList.AddFloat(-0.25);
+    lvRoot.SetObject('nested').SetStr('who', 'me');
+    lvRoot.SetFloat('ratio', 0.5);
+
+    CheckEquals('{"list":[1.5,-0.25],"nested":{"who":"me"},"ratio":0.5}',
+      lvRoot.ToJson);
+    CheckEquals(3, lvRoot.Count);
+    CheckEquals('list', lvRoot.Names[0]);
+    CheckEquals('nested', lvRoot.Names[1]);
+    CheckEquals('ratio', lvRoot.Names[2]);
+    // SetArray on a name that exists replaces it with a fresh empty container
+    CheckEquals(0, lvRoot.SetArray('list').Count);
+    CheckEquals(3, lvRoot.Count, 'and does not add a second member');
+  finally
+    lvRoot.Free;
   end;
 end;
 
