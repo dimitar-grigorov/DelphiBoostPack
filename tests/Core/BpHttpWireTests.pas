@@ -74,6 +74,7 @@ type
     procedure TestRelativeLocationIsResolved;
     procedure TestThreeHopChain;
     procedure TestPostBecomesGetOn301;
+    procedure TestPostBecomesGetOn302;
     procedure Test307KeepsMethodAndBody;
     procedure Test308KeepsMethodAndBody;
     procedure Test303TurnsPutIntoGet;
@@ -721,6 +722,23 @@ begin
   CheckFalse(lvSecond.HasHeader('Content-Type'), 'Content-Type described the body');
   CheckEquals('', lvSecond.HeaderValue('Content-Length'),
     'Content-Length described the body');
+end;
+
+procedure TBpHttpRedirectWireTests.TestPostBecomesGetOn302;
+var
+  lvSecond: TbpRecordedRequest;
+begin
+  // a Content-Type set on the client, not per request, is the harder case
+  FClient.AddHeader('Content-Type', 'application/json');
+  FServer.Enqueue(BpMockRedirect(302, '/moved'));
+  FServer.Enqueue(BpMockOk('done'));
+  FClient.Post(Url('/old'), '{"a":1}');
+  NextRequest;
+  lvSecond := NextRequest;
+  CheckEquals('GET', lvSecond.Method);
+  CheckEquals('', string(lvSecond.Body));
+  CheckFalse(lvSecond.HasHeader('Content-Type'),
+    'a persistent Content-Type described the body that is now gone');
 end;
 
 procedure TBpHttpRedirectWireTests.Test307KeepsMethodAndBody;
