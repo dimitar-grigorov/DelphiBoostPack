@@ -52,6 +52,7 @@ type
     procedure TestNoContentReplyHasNoBody;
     procedure TestNotModifiedReplyHasNoBody;
     procedure TestNoResponseAtAllIsAnError;
+    procedure TestMaxResponseBytesStopsABigBody;
   end;
 
   // only a 2xx may touch the destination, and no path may leave a temp file
@@ -529,6 +530,27 @@ begin
   CheckEquals('one-two-three-four-five', string(lvResponse.Body),
     'every chunk must be reassembled');
   CheckEquals(-1, lvResponse.ContentLength, 'a chunked reply has no length');
+end;
+
+// a buffered body is the one place a hostile endpoint can exhaust memory
+procedure TBpHttpBodyWireTests.TestMaxResponseBytesStopsABigBody;
+begin
+  FServer.Enqueue(BpMockOk(BpRepeated($41, 40000)));
+  FClient.MaxResponseBytes := 1024;
+  try
+    FClient.Get(Url('/huge.bin'));
+    Fail('expected EbpHttpClient past the ceiling');
+  except
+    on EbpHttpClientCancelled do
+      Fail('a ceiling is not a cancellation');
+    on EbpHttpClient do
+      ; // expected
+  end;
+
+  // and the default, no ceiling, still takes the same body whole
+  FServer.Enqueue(BpMockOk(BpRepeated($41, 40000)));
+  FClient.MaxResponseBytes := 0;
+  CheckEquals(40000, Length(FClient.Get(Url('/huge.bin')).Body));
 end;
 
 procedure TBpHttpBodyWireTests.TestEmptyBodyIsFine;
