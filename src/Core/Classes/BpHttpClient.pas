@@ -1138,7 +1138,6 @@ var
   lvPort: Integer;
   lvSecure, lvOwnsRequest: Boolean;
   lvCleanupId: Integer;
-  lvExpected: Int64;
   lvBlock: string;
 begin
   aRedirectTo := '';
@@ -1187,18 +1186,17 @@ begin
         if FFollowRedirects then
           aRedirectTo := BpHttpRedirectTarget(aUrl, Result.Headers, Result.StatusCode);
 
-        // the else drains a redirect body, which keeps the connection pooled
-        if (aDest <> nil) and (aRedirectTo = '') then
+        // WinInet honours a Content-Length even on a 304, so a reply that
+        // cannot carry a body has to be left unread, not read to its end
+        if BpHttpResponseHasBody(aMethod, Result.StatusCode) then
         begin
-          // a bodyless reply must not trip the completeness guard below
-          if BpHttpResponseHasBody(aMethod, Result.StatusCode) then
-            lvExpected := Result.ContentLength
+          // the else drains a redirect body, which keeps the connection pooled
+          if (aDest <> nil) and (aRedirectTo = '') then
+            ReadBodyToStream(lvRequest, aDest, Result.ContentLength,
+              aProgress, aToken)
           else
-            lvExpected := -1;
-          ReadBodyToStream(lvRequest, aDest, lvExpected, aProgress, aToken);
-        end
-        else
-          Result.Body := ReadResponseBody(lvRequest, aToken);
+            Result.Body := ReadResponseBody(lvRequest, aToken);
+        end;
       except
         // a failure caused by Cancel surfaces as the typed cancellation
         on E: EbpHttpClient do
