@@ -8,9 +8,9 @@ What each unit gives you and where it bites. The [README](../README.md) is the t
 
 **Strings** · [TbpStringBuilder](#tbpstringbuilder) · [BpStrUtils](#bpstrutils)
 
-**Hashing** · [BpSHA256](#bpsha256) · [BpMD5](#bpmd5) · [BpHMACSHA256](#bphmacsha256) · [BpPasswordHash](#bppasswordhash) · [BpBase64](#bpbase64) · [BpHashBobJenkins](#bphashbobjenkins)
+**Hashing and encoding** · [BpSHA256](#bpsha256) · [BpMD5](#bpmd5) · [BpHMACSHA256](#bphmacsha256) · [BpPasswordHash](#bppasswordhash) · [BpBase64](#bpbase64) · [BpEncoding](#bpencoding) · [BpHashBobJenkins](#bphashbobjenkins)
 
-**Windows and odds** · [TbpCredentials](#tbpcredentials) · [TbpObjectComparer](#tbpobjectcomparer) · [BpKeyFold](#bpkeyfold) · [BpVariantUtils](#bpvariantutils) · [BpSysUtils](#bpsysutils) · [StopWatch](#stopwatch)
+**Windows and odds** · [TbpCredentials](#tbpcredentials) · [TbpObjectComparer](#tbpobjectcomparer) · [BpKeyFold](#bpkeyfold) · [BpPathUtils](#bppathutils) · [BpVariantUtils](#bpvariantutils) · [BpSysUtils](#bpsysutils) · [StopWatch](#stopwatch)
 
 ---
 
@@ -294,6 +294,19 @@ lvHeader := Base64EncodeUtf8(lvUser + ':' + lvPassword);
 
 Encoding is a single allocation. The decoder eats either alphabet, forgives missing padding and skips whitespace, so MIME-wrapped input just works; anything else raises `EbpBase64`, including data after a pad. The `Utf8` trio takes and returns `WideString` and always puts UTF-8 on the wire, so the same text gives the same Base64 on Delphi 7 and on Delphi 12, surrogate pairs included.
 
+### [BpEncoding](../src/Core/Units/BpEncoding.pas)
+
+Bytes to text through the Windows code page tables, which is all Delphi 7 has.
+
+```pascal
+lvText := BpUtf8ToWide(lvBytes);        // '' unless every byte is valid UTF-8
+lvText := BpUtf8OrAnsiToWide(lvBytes);  // UTF-8, or the system page if it cannot be
+lvPage := BpUtf8OrAnsiCodePage(lvBytes);
+lvText := BpDecodeBytes(lvBytes, CP_UTF8);
+```
+
+`BpUtf8ToWide` is all-or-nothing: a lone continuation byte, an overlong encoding or a truncated sequence give `''` rather than a string of U+FFFD. `BpDecodeBytes` is the lossy one, for when that is what you want. `BpUtf8OrAnsiToWide` handles a stream of unknown encoding, such as a file body out of `git show`; decode fragments through `BpUtf8OrAnsiCodePage` of the whole stream, or two halves can disagree about what they are. A BOM is a character here, not a marker.
+
 ### [BpHashBobJenkins](../src/Core/Classes/BpHashBobJenkins.pas)
 
 Bob Jenkins lookup3, producing the same values as the RTL's `BobJenkinsHash` and the reference C. Fast, well distributed and non-cryptographic: a bucket index, not a fingerprint. `Update` chains by re-seeding with the previous hash, as the RTL does, so a chunked result is not the one-shot hash of the concatenation; use `GetHashValue` over a contiguous buffer when you need that value.
@@ -330,6 +343,23 @@ Each difference carries the property path and the old and new values, ready for 
 One ordinal relation for string keys, so a hash table and a binary search cannot disagree: `BpKeyHash`, `BpKeyEquals` and `BpKeyCompare` all read the same folded characters, with `*Buf` variants for a slice with no `Copy`. The fold is upper casing through a table built once, in place of `AnsiUpperCase`, which allocates on every call.
 
 It equals `AnsiSameText` on every single-byte pair of the active code page, which the suite checks exhaustively. It is not the collation: `AnsiCompareText` orders words linguistically, this orders bytes. `BpKeyFoldUsable` is False only on a DBCS code page before Unicode, where everything falls back to the RTL.
+
+### [BpPathUtils](../src/Core/Units/BpPathUtils.pas)
+
+One relation for Windows paths, so "are these the same path" and "is this one under that one" have a single answer instead of one per call site.
+
+```pascal
+if BpPathSame(lvA, lvB) then ...             // separators, trailing slash, case
+if BpPathIsUnder(lvFile, lvRoot) then ...    // strict: an equal path is not under
+lvTail := BpPathRelativeTo(lvFile, lvRoot);  // 'Sub/Unit.pas', '' when outside
+lvWire := BpPathToSlash(lvPath);             // and BpPathToBackslash back again
+lvFull := BpPathCombine(lvBase, lvRel);      // a rooted second argument wins
+lvKind := BpPathClassify(lvPath, lvRootLen); // pkDisk, pkUnc, pkVerbatimUnc, ...
+```
+
+Case folds through [BpKeyFold](#bpkeyfold), never `SameText`, which is ASCII only before Delphi 2009 and so compares a Cyrillic path case-sensitively. Textual throughout: nothing resolves `.` or `..`, which keeps the relation callable inside a lock, and callers are expected to have expanded already.
+
+`BpPathClassify` is the backbone: which of the nine Windows shapes a path is and where its root ends, so nothing open-codes a prefix test. It is why `\\?\C:\x` survives `BpPathNormalize` intact, `/` being an ordinary filename character inside a verbatim path. `BpPathCanonicalCase` alone reads the disk, and upper-cases the volume designator `FindFirstFile` cannot echo back. Reserved names, a trailing dot or space and `MAX_PATH` are out of scope.
 
 ### [BpVariantUtils](../src/Core/Units/BpVariantUtils.pas)
 

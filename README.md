@@ -13,7 +13,7 @@ HTTP, JSON, hash dictionaries, SHA-256, background tasks. Pure Pascal source, no
 
 Nothing to install, two ways in:
 
-- **Modular.** Put `src\Core\Classes`, `src\Core\Units` and `src\Core\Interfaces` on your library path, or copy the units you use. A few want a companion: the dictionaries want `BpVariantUtils` and `BpKeyFold`, `TbpStringList` wants `BpKeyFold`, `BpJson` wants `BpStringBuilder`, `BpHttpClient` and the hashes want `BpBase64`, and everything that touches `TBytes` wants `BpCompat`.
+- **Modular.** Put `src\Core\Classes`, `src\Core\Units` and `src\Core\Interfaces` on your library path, or copy the units you use. A few want a companion: the dictionaries want `BpVariantUtils` and `BpKeyFold`, `TbpStringList` wants `BpKeyFold`, `BpJson` wants `BpStringBuilder`, `BpHttpClient` and the hashes want `BpBase64`, `BpPathUtils` wants `BpKeyFold`, and everything that touches `TBytes` wants `BpCompat`.
 - **One file.** Take a bundle from [dist/](dist/) instead. Each is self-contained, so do not also use the modular units it embeds.
 
 An HTTPS call and a JSON parse, on a 2007 compiler, with nothing else installed:
@@ -83,6 +83,7 @@ Full descriptions and examples in the [feature guide](docs/FEATURES.md).
 | [BpHMACSHA256](docs/FEATURES.md#bphmacsha256) | request signing and webhook verification (RFC 2104) |
 | [BpPasswordHash](docs/FEATURES.md#bppasswordhash) | PBKDF2-HMAC-SHA256 with CSPRNG salt, 600k iterations and a self-describing record |
 | [BpBase64](docs/FEATURES.md#bpbase64) | Base64 and Base64url; the decoder forgives padding and whitespace, and a UTF-8 set for text |
+| [BpEncoding](docs/FEATURES.md#bpencoding) | strict UTF-8 decoding that fails instead of handing back U+FFFD, with a documented fallback |
 | [BpHashBobJenkins](docs/FEATURES.md#bphashbobjenkins) | lookup3, interoperable with the RTL's `BobJenkinsHash` |
 
 **Windows and odds and ends**
@@ -92,6 +93,7 @@ Full descriptions and examples in the [feature guide](docs/FEATURES.md).
 | [TbpCredentials](docs/FEATURES.md#tbpcredentials) | secrets in the Windows Credential Manager, keyring style, instead of plaintext in an INI |
 | [TbpObjectComparer](docs/FEATURES.md#tbpobjectcomparer) | diff two objects by RTTI and get the changed properties, collections included |
 | [BpKeyFold](docs/FEATURES.md#bpkeyfold) | case folding for hash keys with no allocation per lookup, and correct outside ASCII |
+| [BpPathUtils](docs/FEATURES.md#bppathutils) | one path relation instead of one per call site, and the Windows shapes hand-rolled helpers get wrong |
 | [BpVariantUtils](docs/FEATURES.md#bpvariantutils) / [BpSysUtils](docs/FEATURES.md#bpsysutils) / [StopWatch](docs/FEATURES.md#stopwatch) | strict Variant conversions, old-compiler shims, a `QueryPerformanceCounter` stopwatch |
 
 ## One file instead of ten
