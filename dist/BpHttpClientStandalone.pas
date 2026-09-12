@@ -5,7 +5,7 @@ unit BpHttpClientStandalone;
 //   src\Core\Units\BpCompat.pas
 //   src\Core\Units\BpBase64.pas
 //   src\Core\Classes\BpHttpClient.pas
-// Source commit 0331b82, generated 2026-09-12 by tools\Amalgamate.ps1.
+// Source commit 48f8793, generated 2026-09-12 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
 // One bundle per project: two that share a helper declare it twice.
@@ -1229,6 +1229,11 @@ begin
 
   // always ours to follow: WinInet replays the header block, secrets included
   lvFlags := lvFlags or INTERNET_FLAG_NO_AUTO_REDIRECT;
+
+  // WinInet's cookie jar is the logged-on user's, shared with the browser and
+  // keyed by host alone, so it would attach the user's cookies to our requests
+  // and carry them straight past the credential strip a redirect does
+  lvFlags := lvFlags or INTERNET_FLAG_NO_COOKIES;
 
   Result := HttpOpenRequest(
     aConnection,

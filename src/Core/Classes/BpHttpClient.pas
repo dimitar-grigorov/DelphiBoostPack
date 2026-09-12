@@ -899,6 +899,11 @@ begin
   // always ours to follow: WinInet replays the header block, secrets included
   lvFlags := lvFlags or INTERNET_FLAG_NO_AUTO_REDIRECT;
 
+  // WinInet's cookie jar is the logged-on user's, shared with the browser and
+  // keyed by host alone, so it would attach the user's cookies to our requests
+  // and carry them straight past the credential strip a redirect does
+  lvFlags := lvFlags or INTERNET_FLAG_NO_COOKIES;
+
   Result := HttpOpenRequest(
     aConnection,
     PChar(aMethod),
