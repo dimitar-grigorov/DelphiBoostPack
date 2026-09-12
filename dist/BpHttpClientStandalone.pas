@@ -5,7 +5,7 @@ unit BpHttpClientStandalone;
 //   src\Core\Units\BpCompat.pas
 //   src\Core\Units\BpBase64.pas
 //   src\Core\Classes\BpHttpClient.pas
-// Source commit 48f8793, generated 2026-09-12 by tools\Amalgamate.ps1.
+// Source commit 72f9df3, generated 2026-09-12 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
 // One bundle per project: two that share a helper declare it twice.
@@ -210,7 +210,7 @@ type
     function Download(const aUrl: string; aDest: TStream;
       aProgress: TbpHttpProgressEvent = nil; aToken: TbpCancellationToken = nil;
       const aHeaders: string = ''; const aMethod: string = 'GET'): TbpHttpResponse;
-    // the file survives only on a 2xx; deleted on error, cancel or non-2xx
+    // a 2xx renames a sibling temp file over the destination, nothing else does
     function DownloadToFile(const aUrl, aFileName: string;
       aProgress: TbpHttpProgressEvent = nil; aToken: TbpCancellationToken = nil;
       const aHeaders: string = ''): TbpHttpResponse;
@@ -1230,9 +1230,7 @@ begin
   // always ours to follow: WinInet replays the header block, secrets included
   lvFlags := lvFlags or INTERNET_FLAG_NO_AUTO_REDIRECT;
 
-  // WinInet's cookie jar is the logged-on user's, shared with the browser and
-  // keyed by host alone, so it would attach the user's cookies to our requests
-  // and carry them straight past the credential strip a redirect does
+  // that jar is the user's own, keyed by host, and outlives every strip we do
   lvFlags := lvFlags or INTERNET_FLAG_NO_COOKIES;
 
   Result := HttpOpenRequest(
@@ -1506,8 +1504,7 @@ begin
         if aWithCredentials then
           ApplyAuthentication(lvRequest);
         lvBlock := BuildHeaders(aHeaders, aWithCredentials);
-        // a persistent Content-Type described the dropped body just as much as
-        // a per-request one, so the strip belongs on the whole block
+        // a persistent Content-Type described the dropped body just as much
         if aDropContentHeaders then
           lvBlock := BpHttpStripContentHeaders(lvBlock);
         // decoded bytes outnumber Content-Length, so not where it is checked
@@ -1531,8 +1528,7 @@ begin
         if FFollowRedirects and (FMaxRedirects > 0) then
           aRedirectTo := BpHttpRedirectTarget(aUrl, Result.Headers, Result.StatusCode);
 
-        // WinInet honours a Content-Length even on a 304, so a reply that
-        // cannot carry a body has to be left unread, not read to its end
+        // WinInet honours Content-Length even on a 304, so never read one
         if BpHttpResponseHasBody(aMethod, Result.StatusCode) then
         begin
           // the else drains a redirect body, which keeps the connection pooled
@@ -1679,23 +1675,63 @@ begin
     aToken);
 end;
 
+// beside the destination, so the rename stays on one volume; Windows names it
+function BpTempFileNear(const aFileName: string): string;
+var
+  lvDir: string;
+  lvErr: DWORD;
+  lvBuffer: array[0..MAX_PATH] of Char;
+begin
+  lvDir := ExtractFilePath(ExpandFileName(aFileName));
+  if GetTempFileName(PChar(lvDir), 'bp', 0, lvBuffer) = 0 then
+  begin
+    lvErr := GetLastError;
+    raise EbpHttpClient.CreateFmt(
+      'Cannot create a temporary file in %s: Windows error %d', [lvDir, lvErr]);
+  end;
+  Result := lvBuffer;
+end;
+
+// one step on the same volume, so the destination is never briefly missing
+procedure BpReplaceFile(const aTemp, aFileName: string);
+var
+  lvErr: DWORD;
+begin
+  if MoveFileEx(PChar(aTemp), PChar(aFileName), MOVEFILE_REPLACE_EXISTING) then
+    Exit;
+  lvErr := GetLastError;
+  raise EbpHttpClient.CreateFmt(
+    'Cannot replace %s with the downloaded file: Windows error %d',
+    [aFileName, lvErr]);
+end;
+
+// a typo in the url used to cost the caller the file that was already there
 function TbpHttpClient.DownloadToFile(const aUrl, aFileName: string;
   aProgress: TbpHttpProgressEvent; aToken: TbpCancellationToken;
   const aHeaders: string): TbpHttpResponse;
 var
   lvFile: TFileStream;
-  lvKeep: Boolean;
+  lvTemp: string;
+  lvDone: Boolean;
 begin
-  lvKeep := False;
-  lvFile := TFileStream.Create(aFileName, fmCreate);
+  lvDone := False;
+  lvTemp := BpTempFileNear(aFileName);
   try
-    Result := Download(aUrl, lvFile, aProgress, aToken, aHeaders);
-    lvKeep := BpHttpResponseIsSuccess(Result);
+    lvFile := TFileStream.Create(lvTemp, fmCreate);
+    try
+      Result := Download(aUrl, lvFile, aProgress, aToken, aHeaders);
+    finally
+      lvFile.Free;
+    end;
+    if BpHttpResponseIsSuccess(Result) then
+    begin
+      BpReplaceFile(lvTemp, aFileName);
+      lvDone := True;
+    end;
   finally
-    lvFile.Free;
-    // never leave a partial or error-page file behind
-    if not lvKeep then
-      SysUtils.DeleteFile(aFileName);
+    // every other path, a failed rename included, leaves no temp file behind
+    if not lvDone then
+      SysUtils.DeleteFile(lvTemp);
   end;
 end;
 

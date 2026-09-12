@@ -13,8 +13,7 @@ uses
   BpMockHttpServer;
 
 type
-  // server plus client, torn down whatever the test did. No published methods
-  // live here: RTTI would hand them to every descendant suite as well
+  // no published method here: RTTI would hand it to every descendant suite
   TBpWireTestCase = class(TTestCase)
   protected
     FServer: TbpMockHttpServer;
@@ -63,6 +62,24 @@ type
     procedure TestNoResponseAtAllIsAnError;
   end;
 
+  // only a 2xx may touch the destination, and no path may leave a temp file
+  TBpHttpDownloadToFileTests = class(TBpWireTestCase)
+  private
+    FDir: string;
+    FDest: string;
+    procedure CheckSurvived(const aWhat: string);
+  protected
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestSuccessReplacesTheFile;
+    procedure TestSuccessCreatesAMissingFile;
+    procedure TestNotFoundLeavesTheFileAlone;
+    procedure TestTruncatedBodyLeavesTheFileAlone;
+    procedure TestCancelLeavesTheFileAlone;
+    procedure TestUnparsableUrlLeavesTheFileAlone;
+  end;
+
   TBpHttpGzipTests = class(TBpWireTestCase)
   published
     procedure TestGzipIsDecoded;
@@ -88,8 +105,7 @@ type
     procedure TestDownloadFollowsARedirect;
   end;
 
-  // the security-critical half: a hop to another origin loses the secrets. Two
-  // servers, because two ports on 127.0.0.1 are already two origins
+  // two servers, because two ports on 127.0.0.1 are already two origins
   TBpHttpRedirectCredentialTests = class(TBpWireTestCase)
   private
     FOther: TbpMockHttpServer;
@@ -174,6 +190,70 @@ function Repeated(aByte: Byte; aCount: Integer): AnsiString;
 begin
   SetLength(Result, aCount);
   FillChar(Result[1], aCount, aByte);
+end;
+
+function ReadWholeFile(const aFileName: string): AnsiString;
+var
+  lvStream: TFileStream;
+begin
+  lvStream := TFileStream.Create(aFileName, fmOpenRead or fmShareDenyNone);
+  try
+    SetLength(Result, lvStream.Size);
+    if Result <> '' then
+      lvStream.ReadBuffer(Result[1], Length(Result));
+  finally
+    lvStream.Free;
+  end;
+end;
+
+procedure WriteWholeFile(const aFileName: string; const aBody: AnsiString);
+var
+  lvStream: TFileStream;
+begin
+  lvStream := TFileStream.Create(aFileName, fmCreate);
+  try
+    if aBody <> '' then
+      lvStream.WriteBuffer(aBody[1], Length(aBody));
+  finally
+    lvStream.Free;
+  end;
+end;
+
+// a scratch directory of its own turns "no temp file left behind" into a count
+function CountFiles(const aDir: string): Integer;
+var
+  lvSearch: TSearchRec;
+begin
+  Result := 0;
+  if FindFirst(IncludeTrailingPathDelimiter(aDir) + '*', faAnyFile,
+    lvSearch) <> 0 then
+    Exit;
+  try
+    repeat
+      if (lvSearch.Attr and faDirectory) = 0 then
+        Inc(Result);
+    until FindNext(lvSearch) <> 0;
+  finally
+    SysUtils.FindClose(lvSearch);
+  end;
+end;
+
+procedure DeleteTree(const aDir: string);
+var
+  lvSearch: TSearchRec;
+  lvPath: string;
+begin
+  lvPath := IncludeTrailingPathDelimiter(aDir);
+  if FindFirst(lvPath + '*', faAnyFile, lvSearch) = 0 then
+  try
+    repeat
+      if (lvSearch.Attr and faDirectory) = 0 then
+        SysUtils.DeleteFile(lvPath + lvSearch.Name);
+    until FindNext(lvSearch) <> 0;
+  finally
+    SysUtils.FindClose(lvSearch);
+  end;
+  RemoveDir(aDir);
 end;
 
 // how many header lines the value could have produced, counted on raw bytes
@@ -471,8 +551,7 @@ begin
     lvSecond.HeaderValue('Cookie'));
 end;
 
-// one Authorization line, whichever was set last: two would let the server
-// pick the one the caller did not mean
+// two lines would let the server pick the one the caller did not mean
 procedure TBpHttpHeaderWireTests.TestExplicitAuthorizationReplacesTheBearer;
 var
   lvRequest: TbpRecordedRequest;
@@ -649,6 +728,118 @@ begin
       ; // expected
   end;
   CheckEquals(1, FServer.RequestCount, 'the request did reach the server');
+end;
+
+{ TBpHttpDownloadToFileTests }
+
+procedure TBpHttpDownloadToFileTests.SetUp;
+begin
+  inherited;
+  FDir := TempFilePath(Format('bp_wire_%d_%d', [GetCurrentProcessId, GetTickCount]));
+  ForceDirectories(FDir);
+  FDest := IncludeTrailingPathDelimiter(FDir) + 'payload.bin';
+  WriteWholeFile(FDest, 'ORIGINAL');
+end;
+
+procedure TBpHttpDownloadToFileTests.TearDown;
+begin
+  DeleteTree(FDir);
+  inherited;
+end;
+
+procedure TBpHttpDownloadToFileTests.CheckSurvived(const aWhat: string);
+begin
+  CheckTrue(FileExists(FDest), aWhat + ': the file was removed');
+  CheckEquals('ORIGINAL', string(ReadWholeFile(FDest)),
+    aWhat + ': the file was rewritten');
+  CheckEquals(1, CountFiles(FDir), aWhat + ': a temp file was left behind');
+end;
+
+procedure TBpHttpDownloadToFileTests.TestSuccessReplacesTheFile;
+begin
+  FServer.Enqueue(BpMockOk('REPLACED'));
+  CheckEquals(200, FClient.DownloadToFile(Url('/f.bin'), FDest).StatusCode);
+  CheckEquals('REPLACED', string(ReadWholeFile(FDest)));
+  CheckEquals(1, CountFiles(FDir), 'no temp file may survive a success');
+end;
+
+procedure TBpHttpDownloadToFileTests.TestSuccessCreatesAMissingFile;
+begin
+  SysUtils.DeleteFile(FDest);
+  FServer.Enqueue(BpMockOk('BRAND NEW'));
+  CheckEquals(200, FClient.DownloadToFile(Url('/f.bin'), FDest).StatusCode);
+  CheckEquals('BRAND NEW', string(ReadWholeFile(FDest)));
+  CheckEquals(1, CountFiles(FDir));
+end;
+
+procedure TBpHttpDownloadToFileTests.TestNotFoundLeavesTheFileAlone;
+begin
+  FServer.Enqueue(BpMockStatus(404, '<html>not here</html>'));
+  CheckEquals(404, FClient.DownloadToFile(Url('/gone.bin'), FDest).StatusCode);
+  CheckSurvived('404');
+end;
+
+procedure TBpHttpDownloadToFileTests.TestTruncatedBodyLeavesTheFileAlone;
+var
+  lvReply: TbpMockResponse;
+begin
+  lvReply := BpMockOk(Repeated($41, 500));
+  lvReply.ClaimedLength := 1000;
+  lvReply.Effect := mseCloseAtEnd;
+  FServer.Enqueue(lvReply);
+  try
+    FClient.DownloadToFile(Url('/short.bin'), FDest);
+    Fail('a truncated download must not be reported as success');
+  except
+    on EbpHttpClient do
+      ; // expected
+  end;
+  CheckSurvived('truncated body');
+end;
+
+procedure TBpHttpDownloadToFileTests.TestCancelLeavesTheFileAlone;
+var
+  lvReply: TbpMockResponse;
+  lvToken: TbpCancellationToken;
+  lvCanceller: TDelayedCancelThread;
+begin
+  lvReply := BpMockOk(Repeated($42, 65536));
+  lvReply.ClaimedLength := 10485760;
+  lvReply.Effect := mseStall;
+  FServer.Enqueue(lvReply);
+
+  FClient.ReceiveTimeout := 25000;
+  lvToken := TbpCancellationToken.Create;
+  try
+    lvCanceller := TDelayedCancelThread.Create(lvToken, 300);
+    try
+      try
+        FClient.DownloadToFile(Url('/slow.bin'), FDest, nil, lvToken);
+        Fail('expected EbpHttpClientCancelled');
+      except
+        on EbpHttpClientCancelled do
+          ; // expected
+      end;
+    finally
+      lvCanceller.WaitFor;
+      lvCanceller.Free;
+    end;
+  finally
+    lvToken.Free;
+  end;
+  CheckSurvived('cancel');
+end;
+
+procedure TBpHttpDownloadToFileTests.TestUnparsableUrlLeavesTheFileAlone;
+begin
+  try
+    FClient.DownloadToFile('not a url at all', FDest);
+    Fail('expected EbpHttpClient for an unparsable url');
+  except
+    on EbpHttpClient do
+      ; // expected
+  end;
+  CheckSurvived('unparsable url');
 end;
 
 { TBpHttpGzipTests }
@@ -913,8 +1104,7 @@ begin
   inherited;
 end;
 
-// https on the same host is the one exception KeepsCredentials allows; the mock
-// serves no TLS, so that case stays in the offline TestKeepsCredentials
+// the http to https exception needs TLS, so it stays in TestKeepsCredentials
 procedure TBpHttpRedirectCredentialTests.TestCrossOriginRedirectDropsEverySecret;
 var
   lvSecond: TbpRecordedRequest;
@@ -967,8 +1157,7 @@ begin
   FErrorFired := False;
 end;
 
-// announces ten megabytes, sends a burst, then holds the socket open and quiet,
-// so a cancel lands while WinInet is genuinely blocked in a read
+// a burst then silence, so a cancel lands while WinInet is blocked in a read
 procedure TBpHttpCancelWireTests.EnqueueSlowReply;
 var
   lvReply: TbpMockResponse;
@@ -1070,8 +1259,7 @@ begin
     lvTask.OnError := HandleError;
     lvTask.Start;
 
-    // the token closes the WinInet handle, so the abort is prompt even from
-    // inside a blocked read
+    // the token closes the handle, so even a blocked read aborts promptly
     lvDeadline := GetTickCount + 15000;
     while (lvTask.Received = 0) and not lvTask.IsFinished and
       (GetTickCount < lvDeadline) do
@@ -1165,6 +1353,7 @@ initialization
   RegisterTest(TBpHttpVerbTests.Suite);
   RegisterTest(TBpHttpHeaderWireTests.Suite);
   RegisterTest(TBpHttpBodyWireTests.Suite);
+  RegisterTest(TBpHttpDownloadToFileTests.Suite);
   RegisterTest(TBpHttpGzipTests.Suite);
   RegisterTest(TBpHttpRedirectWireTests.Suite);
   RegisterTest(TBpHttpRedirectCredentialTests.Suite);
