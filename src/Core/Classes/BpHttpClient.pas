@@ -82,6 +82,7 @@ type
       aSecure: Boolean): HINTERNET;
     procedure ApplyTimeouts(aHandle: HINTERNET);
     procedure ApplyAuthentication(aRequest: HINTERNET);
+    function UrlBasicAuth(const aUrl: string): string;
     procedure ApplyDecoding(aRequest: HINTERNET);
     procedure SendHttpRequest(aRequest: HINTERNET; const aHeaders: string;
       const aBody: AnsiString);
@@ -557,6 +558,33 @@ begin
     Result := ''
   else
     SetString(Result, aText, aLen);
+end;
+
+// curl, requests, axios and .NET all read user:pass@host as Basic auth
+function TbpHttpClient.UrlBasicAuth(const aUrl: string): string;
+var
+  lvComponents: TURLComponents;
+  lvUser, lvPassword: AnsiString;
+  lvCopy: string;
+begin
+  Result := '';
+  // asked for the userinfo, InternetCrackUrl unescapes the buffer in place, so
+  // it never gets the caller's string, and the parts come back already decoded
+  lvCopy := Copy(aUrl, 1, Length(aUrl));
+  ZeroMemory(@lvComponents, SizeOf(lvComponents));
+  lvComponents.dwStructSize := SizeOf(lvComponents);
+  // a nil buffer with a non-zero length asks for pointers into the url itself
+  lvComponents.dwUserNameLength := 1;
+  lvComponents.dwPasswordLength := 1;
+  if not InternetCrackUrl(PChar(lvCopy), Length(lvCopy), 0, lvComponents) then
+    Exit;
+  lvUser := CrackedPart(lvComponents.lpszUserName,
+    lvComponents.dwUserNameLength);
+  if lvUser = '' then
+    Exit;
+  lvPassword := CrackedPart(lvComponents.lpszPassword,
+    lvComponents.dwPasswordLength);
+  Result := 'Basic ' + Base64Encode(lvUser + ':' + lvPassword);
 end;
 
 function TbpHttpClient.ParseUrl(const aUrl: string; out aServerName,
@@ -1110,7 +1138,7 @@ function TbpHttpClient.PerformRequest(const aUrl, aMethod, aHeaders: string;
   const aBody: AnsiString; aDest: TStream; aProgress: TbpHttpProgressEvent;
   aToken: TbpCancellationToken): TbpHttpResponse;
 var
-  lvUrl, lvMethod, lvNext: string;
+  lvUrl, lvMethod, lvNext, lvHeaders, lvAuth: string;
   lvBody: AnsiString;
   lvCredentials, lvDroppedBody: Boolean;
   i: Integer;
@@ -1118,11 +1146,20 @@ begin
   lvUrl := aUrl;
   lvMethod := aMethod;
   lvBody := aBody;
+  lvHeaders := aHeaders;
   lvCredentials := True;
   lvDroppedBody := False;
+  // an Authorization the caller set wins; a foreign origin sees neither, because
+  // this line is a request header and BuildHeaders strips those off origin
+  if BpHttpHeaderValue(BuildHeaders(aHeaders), 'Authorization') = '' then
+  begin
+    lvAuth := UrlBasicAuth(aUrl);
+    if lvAuth <> '' then
+      lvHeaders := 'Authorization: ' + lvAuth + #13#10 + lvHeaders;
+  end;
   for i := 0 to FMaxRedirects do
   begin
-    Result := PerformHop(lvUrl, lvMethod, aHeaders, lvBody, lvCredentials,
+    Result := PerformHop(lvUrl, lvMethod, lvHeaders, lvBody, lvCredentials,
       lvDroppedBody, aDest, aProgress, aToken, lvNext);
     if lvNext = '' then
       Exit;
