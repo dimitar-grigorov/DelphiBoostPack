@@ -1628,6 +1628,7 @@ begin
     Exit;
   lvPassword := CrackedPart(lvComponents.lpszPassword,
     lvComponents.dwPasswordLength);
+  // percent-decoding already produced the UTF-8 bytes RFC 7617 wants, so no transcode
   Result := 'Basic ' + Base64Encode(lvUser + ':' + lvPassword);
 end;
 
