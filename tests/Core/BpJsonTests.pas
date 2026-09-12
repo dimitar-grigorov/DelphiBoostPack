@@ -66,6 +66,7 @@ type
     procedure TestTryParseReturnsFalse;
     procedure TestLookupOnANonObject;
     procedure TestFindPathOversizedIndex;
+    procedure TestExponentPastDoubleRange;
     // a wide object crosses the member count where a hash index takes over
     procedure TestWideObjectFindsEveryMember;
     procedure TestWideObjectKeepsInsertionOrder;
@@ -425,6 +426,68 @@ begin
   finally
     lvObj.Free;
   end;
+end;
+
+procedure TBpJsonTests.TestExponentPastDoubleRange;
+var
+  lvValue: TbpJsonValue;
+
+  procedure CheckFails(const aJson: string);
+  begin
+    if TbpJsonValue.TryParse(aJson, lvValue) then
+    try
+      Fail(Format('%s parsed as %g instead of failing', [aJson, lvValue.AsFloat]));
+    finally
+      lvValue.Free;
+    end;
+  end;
+
+  procedure CheckZero(const aJson: string);
+  begin
+    CheckTrue(TbpJsonValue.TryParse(aJson, lvValue), aJson + ' must parse');
+    try
+      CheckEquals(0, lvValue.AsFloat, aJson);
+    finally
+      lvValue.Free;
+    end;
+  end;
+
+  procedure CheckFloat(const aJson: string; aValue: Double);
+  begin
+    CheckTrue(TbpJsonValue.TryParse(aJson, lvValue), aJson + ' must parse');
+    try
+      CheckEquals(aValue, lvValue.AsFloat, Abs(aValue) * 1E-12, aJson);
+    finally
+      lvValue.Free;
+    end;
+  end;
+
+begin
+  // past Double range, so there is no value to return and no silent infinity.
+  // Python and JavaScript answer Infinity here; this unit cannot, because
+  // ToJson would then have to write a literal JSON has no spelling for
+  CheckFails('1e400');
+  CheckFails('1e5120');
+  CheckFails('-1e5120');
+  CheckFails('1e99999');
+  CheckFails('1e999999');
+  // a zero mantissa is zero whatever the exponent says
+  CheckZero('0e5120');
+  CheckZero('0e999999');
+  CheckZero('-0e5120');
+  // and an exponent far below range underflows to zero, as every parser does
+  CheckZero('1e-5120');
+  CheckZero('1e-999999');
+  // the edges themselves, which is where the exponent arithmetic is decided
+  CheckFloat('1e308', 1E308);
+  CheckFloat('9e307', 9E307);
+  CheckFails('1e309');
+  CheckFails('1.8e308');
+  // the leading significant digit sets the power, wherever the point sits
+  CheckFloat('0.0001e5', 10);
+  CheckFloat('0.5', 0.5);
+  CheckFloat('1234.5e305', 1.2345E308);
+  CheckFails('1234.5e306');
 end;
 
 procedure TBpJsonTests.TestDuplicateKeyKeepsLast;
