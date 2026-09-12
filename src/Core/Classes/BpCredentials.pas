@@ -25,9 +25,9 @@ type
       out aSecret: WideString): Boolean;
     // True when the entry existed, False when it was not there
     class function DeletePassword(const aService, aUserName: WideString): Boolean;
-    // usernames stored under aService, unsorted; empty array when none
+    // usernames stored directly under aService, unsorted; a nested service is not one
     class function FindUserNames(const aService: WideString): TbpWideStringArray;
-    // removes every entry under aService, returns how many
+    // removes every entry FindUserNames lists, returns how many
     class function DeleteAll(const aService: WideString): Integer;
 
     // a CryptProtectData layer keyed by aEntropy: friction against a same-user reader, not a boundary
@@ -105,6 +105,20 @@ begin
   Result := aService + '/' + aUserName;
 end;
 
+// the '/' belongs to the service path, so a username has to stay a leaf
+function IsLeafName(const aName: WideString): Boolean;
+var
+  i: Integer;
+begin
+  for i := 1 to Length(aName) do
+    if aName[i] = '/' then
+    begin
+      Result := False;
+      Exit;
+    end;
+  Result := True;
+end;
+
 procedure RaiseLastCredError(const aWhat: string);
 var
   lvCode: DWORD;
@@ -134,8 +148,11 @@ var
 begin
   if aService = '' then
     raise EbpCredentials.Create('Service name must not be empty');
+  if not IsLeafName(aUserName) then
+    raise EbpCredentials.Create('User name must not contain ''/'', the service separator');
+  // the limit is on what gets stored, which past SetPasswordProtected is the ciphertext
   if Length(aBlob) > gcCredMaxBlobSize then
-    raise EbpCredentials.CreateFmt('Secret is %d bytes; generic credentials hold at most %d',
+    raise EbpCredentials.CreateFmt('Stored blob is %d bytes; a generic credential holds at most %d',
       [Length(aBlob), gcCredMaxBlobSize]);
   lvTarget := BuildTargetName(aService, aUserName);
   if Length(lvTarget) > gcCredMaxTargetNameLen then
@@ -258,10 +275,13 @@ class function TbpCredentials.FindUserNames(const aService: WideString): TbpWide
 var
   lvCreds: PbpCredentialWArray;
   lvCount: DWORD;
-  lvFilter: WideString;
+  lvFilter, lvUser: WideString;
   i, lvHits: Integer;
 begin
   SetLength(Result, 0);
+  // '/*' would match every service, and DeleteAll removes whatever this lists
+  if aService = '' then
+    Exit;
   lvFilter := aService + '/*';
   if not CredEnumerateW(PWideChar(lvFilter), 0, lvCount, lvCreds) then
   begin
@@ -276,9 +296,14 @@ begin
       if lvCreds^[i]^.CredType = gcCredTypeGeneric then
       begin
         // target is '<service>/<username>'; the username starts past the '/'
-        Result[lvHits] := Copy(WideString(lvCreds^[i]^.TargetName),
+        lvUser := Copy(WideString(lvCreds^[i]^.TargetName),
           Length(aService) + 2, MaxInt);
-        Inc(lvHits);
+        // a remainder carrying its own '/' was stored by a nested service
+        if IsLeafName(lvUser) then
+        begin
+          Result[lvHits] := lvUser;
+          Inc(lvHits);
+        end;
       end;
     SetLength(Result, lvHits);
   finally

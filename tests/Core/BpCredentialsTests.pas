@@ -21,6 +21,7 @@ type
     FService: WideString;
     FCreated: array of TbpCredentialPair;
     procedure Track(const aUser: WideString);
+    procedure TrackAt(const aService, aUser: WideString);
     procedure SetTracked(const aUser, aSecret: WideString);
     procedure CheckWideEquals(const aExpected, aActual: WideString; const aCase: string);
   protected
@@ -35,6 +36,7 @@ type
     procedure TestEmptySecret;
     procedure TestFindUserNames;
     procedure TestDeleteAll;
+    procedure TestNestedServiceIsNotThisOne;
     procedure TestRejectsBadInput;
     procedure TestProtectedRoundTrip;
     procedure TestProtectedWrongEntropy;
@@ -63,14 +65,19 @@ begin
 end;
 
 // remember the pair so TearDown cleans up even when a check fails
-procedure TBpCredentialsTests.Track(const aUser: WideString);
+procedure TBpCredentialsTests.TrackAt(const aService, aUser: WideString);
 var
   lvIdx: Integer;
 begin
   lvIdx := Length(FCreated);
   SetLength(FCreated, lvIdx + 1);
-  FCreated[lvIdx].Service := FService;
+  FCreated[lvIdx].Service := aService;
   FCreated[lvIdx].User := aUser;
+end;
+
+procedure TBpCredentialsTests.Track(const aUser: WideString);
+begin
+  TrackAt(FService, aUser);
 end;
 
 procedure TBpCredentialsTests.SetTracked(const aUser, aSecret: WideString);
@@ -176,6 +183,23 @@ begin
   CheckEquals(0, Length(TbpCredentials.FindUserNames(FService)), 'store is empty');
 end;
 
+procedure TBpCredentialsTests.TestNestedServiceIsNotThisOne;
+var
+  lvNested, lvSibling: WideString;
+begin
+  lvNested := FService + '/Sub';
+  lvSibling := FService + '.Sub';
+  TrackAt(lvNested, 'deep');
+  TbpCredentials.SetPassword(lvNested, 'deep', 'd');
+  TrackAt(lvSibling, 'apart');
+  TbpCredentials.SetPassword(lvSibling, 'apart', 's');
+  SetTracked('alice', 'a');
+  CheckEquals(1, Length(TbpCredentials.FindUserNames(FService)), 'only the leaf is listed');
+  CheckEquals(1, TbpCredentials.DeleteAll(FService), 'only the leaf is deleted');
+  CheckWideEquals('d', TbpCredentials.GetPassword(lvNested, 'deep'), 'nested survives');
+  CheckWideEquals('s', TbpCredentials.GetPassword(lvSibling, 'apart'), 'sibling survives');
+end;
+
 procedure TBpCredentialsTests.TestRejectsBadInput;
 var
   lvBig: WideString;
@@ -187,6 +211,16 @@ begin
     on E: EbpCredentials do
       Check(True);
   end;
+  try
+    TbpCredentials.SetPassword(FService, 'a/b', 'x');
+    Fail('a separator in the user name must raise');
+  except
+    on E: EbpCredentials do
+      Check(True);
+  end;
+  // an empty service must never become a wildcard over the whole vault
+  CheckEquals(0, Length(TbpCredentials.FindUserNames('')), 'empty service lists nothing');
+  CheckEquals(0, TbpCredentials.DeleteAll(''), 'empty service deletes nothing');
   // 2560 byte blob limit for generic credentials; 1281 chars is one over
   SetLength(lvBig, 1281);
   FillChar(PWideChar(lvBig)^, Length(lvBig) * SizeOf(WideChar), Ord('x'));
