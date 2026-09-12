@@ -68,6 +68,8 @@ type
     procedure TestFindPathOversizedIndex;
     procedure TestExponentPastDoubleRange;
     procedure TestBomDoesNotShiftTheReportedColumn;
+    procedure TestStrictnessRejectsWhatTheDocsSayItDoes;
+    procedure TestErrorPositionIsExact;
     procedure TestNegativeZeroKeepsItsSign;
     // a wide object crosses the member count where a hash index takes over
     procedure TestWideObjectFindsEveryMember;
@@ -463,6 +465,87 @@ end;
 function IsNegativeZero(const aValue: Double): Boolean;
 begin
   Result := (aValue = 0) and (PInt64(@aValue)^ <> 0);
+end;
+
+// every rule docs\FEATURES.md claims for the parser, on one document each
+procedure TBpJsonTests.TestStrictnessRejectsWhatTheDocsSayItDoes;
+var
+  lvValue: TbpJsonValue;
+
+  procedure CheckRejected(const aJson, aWhy: string);
+  begin
+    if TbpJsonValue.TryParse(aJson, lvValue) then
+    try
+      Fail(Format('%s was accepted; %s', [aJson, aWhy]));
+    finally
+      lvValue.Free;
+    end;
+  end;
+
+begin
+  // numbers
+  CheckRejected('01', 'a leading zero means another notation');
+  CheckRejected('-01', 'the sign does not excuse a leading zero');
+  CheckRejected('1.', 'a decimal point needs a digit after it');
+  CheckRejected('.1', 'and one before it');
+  CheckRejected('+1', 'JSON has no leading plus');
+  CheckRejected('1e', 'an exponent needs digits');
+  CheckRejected('1e+', 'a sign is not a digit');
+  CheckRejected('--1', 'one sign only');
+  CheckRejected('1.2.3', 'one decimal point only');
+  CheckRejected('0x10', 'JSON has no hex literal');
+  CheckRejected('1 2', 'two values are not one document');
+  // the non-finite spellings JavaScript accepts and JSON does not
+  CheckRejected('NaN', 'JSON has no NaN');
+  CheckRejected('Infinity', 'nor an Infinity');
+  CheckRejected('-Infinity', 'nor a signed one');
+  // literals are lower case and exact
+  CheckRejected('True', 'literals are lower case');
+  CheckRejected('NULL', 'including null');
+  CheckRejected('nul', 'and they are not prefixes');
+  CheckRejected('nulll', 'nor prefixes of something longer');
+  CheckRejected('undefined', 'JSON has no undefined');
+  // strings
+  CheckRejected('''single''', 'JSON strings are double quoted');
+  CheckRejected('"unterminated', 'a string has to close');
+  CheckRejected('"a' + #9 + 'b"', 'a raw tab is a control character');
+  CheckRejected('"\x41"', 'x is not an escape');
+  CheckRejected('"\u12"', 'a \u escape takes four hex digits');
+  CheckRejected('"\uZZZZ"', 'and they have to be hex');
+  // structure
+  CheckRejected('{''a'':1}', 'a member name is a double quoted string');
+  CheckRejected('{a:1}', 'and it is quoted');
+  CheckRejected('{,}', 'a comma needs a member on each side');
+  CheckRejected('[,]', 'and an element');
+  CheckRejected('[1 2]', 'elements are comma separated');
+  CheckRejected('[1', 'an array has to close');
+  CheckRejected('{"a":1', 'and so does an object');
+  CheckRejected('', 'an empty document is not a value');
+  CheckRejected('   ', 'nor is whitespace');
+end;
+
+// the line and column BpJsonFail counts are what a user is told to look at
+procedure TBpJsonTests.TestErrorPositionIsExact;
+
+  procedure CheckPosition(const aJson: string; aLine, aPos: Integer);
+  var
+    lvMessage, lvWanted: string;
+  begin
+    lvMessage := ParseErrorMessage(aJson);
+    lvWanted := Format('at line %d, position %d', [aLine, aPos]);
+    Check(Pos(lvWanted, lvMessage) > 0,
+      Format('expected %s, got: %s', [lvWanted, lvMessage]));
+  end;
+
+begin
+  CheckPosition('{"a":}', 1, 6);
+  CheckPosition('  x', 1, 3);
+  // a newline starts the count again, and CR carries no column of its own
+  CheckPosition('{'#10'"a":'#10'x}', 3, 1);
+  CheckPosition('{'#13#10'"a":'#13#10'x}', 3, 1);
+  CheckPosition('['#10'1,'#10'  }'#10']', 3, 3);
+  // a string spans lines only as escapes, so the column counts them as written
+  CheckPosition('{'#10'  "a": "one",'#10'  "b": x'#10'}', 3, 8);
 end;
 
 procedure TBpJsonTests.TestNegativeZeroKeepsItsSign;
