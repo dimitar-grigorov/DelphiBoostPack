@@ -28,6 +28,7 @@ type
     procedure TestCompareCollectionsWithDifferentEnumProps;
     procedure TestCompareCollectionsWithMultipleDifferences;
     procedure TestCompareCollectionsWithItemsInDifferentOrder;
+    procedure TestDuplicateIdsPairUpInOrder;
     //Index based collection tests
     procedure TestCompareCollectionsWithSameIndexNoUniqueId;
     //procedure TestCompareCollectionsWithDifferentLengthsNoUniqueId;
@@ -485,6 +486,37 @@ begin
 
     Diffs := TbpObjectComparer.CompareObjects(Obj1, Obj2);
     CheckEquals(0, Length(Diffs), 'No differences should be found if order is not considered');
+  finally
+    Obj1.Free;
+    Obj2.Free;
+  end;
+end;
+
+// the second item with a repeated id used to match the first one again, leaving the real twin unmatched
+procedure TestTBpObjectComparer.TestDuplicateIdsPairUpInOrder;
+var
+  Obj1, Obj2: TTestClassWithCollectionUnique;
+  Diffs: TPropDifferences;
+begin
+  Obj1 := TTestClassWithCollectionUnique.Create;
+  Obj2 := TTestClassWithCollectionUnique.Create;
+  try
+    Obj1.MyCollection.Add.Name := 'A';
+    Obj1.MyCollection.Add.Name := 'B';
+    Obj2.MyCollection.Add.Name := 'A';
+    Obj2.MyCollection.Add.Name := 'B';
+
+    Diffs := TbpObjectComparer.CompareObjects(Obj1, Obj2);
+    CheckEquals(0, Length(Diffs), 'two items sharing an id are still the same two items');
+
+    Obj2.MyCollection[1].Name := 'C';
+    Diffs := TbpObjectComparer.CompareObjects(Obj1, Obj2);
+    CheckEquals(1, Length(Diffs), 'the twins pair up in order');
+    CheckEquals('MyCollection[1].Name', Diffs[0].OldPropPath, 'old path');
+    CheckEquals('MyCollection[1].Name', Diffs[0].NewPropPath, 'new path');
+    CheckEquals('B', VarToStr(Diffs[0].OldValue), 'old value');
+    CheckEquals('C', VarToStr(Diffs[0].NewValue), 'new value');
+    CheckEquals('0', Diffs[0].Idx, 'the shared id');
   finally
     Obj1.Free;
     Obj2.Free;
