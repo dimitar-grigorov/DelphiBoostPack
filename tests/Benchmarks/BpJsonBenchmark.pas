@@ -16,6 +16,7 @@ type
   private
     FFlat: string;
     FSmall: string;
+    FDeepBad: string;
   public
     procedure SetUp; override;
   published
@@ -23,6 +24,7 @@ type
     procedure TestLookupInFlatObject;
     procedure TestParseManySmallObjects;
     procedure TestBuildFlatObject;
+    procedure TestFailADeeplyNestedDocument;
   end;
 
 implementation
@@ -31,6 +33,8 @@ const
   gcFlatMembers = 20000;  // one object, which is where a linear scan squares
   gcSmallObjects = 20000; // four members each, the shape of a real document
   gcRuns = 5;             // one reading is worth nothing on a boosting CPU
+  gcDeepLevels = 500;     // just inside the parser's depth limit
+  gcFailCount = 200;      // one failed parse is too quick to time
 
 function MemberName(aIndex: Integer): string;
 begin
@@ -66,6 +70,9 @@ begin
     end;
     lvSb.Append(']');
     FSmall := lvSb.ToString;
+
+    // unwinding this costs whatever each nesting level charges
+    FDeepBad := StringOfChar('[', gcDeepLevels) + 'x';
   finally
     lvSb.Free;
   end;
@@ -156,7 +163,28 @@ begin
     [gcFlatMembers, MedianTime, SampleCount]);
 end;
 
+procedure TBpJsonBenchmark.TestFailADeeplyNestedDocument;
+var
+  lvValue: TbpJsonValue;
+  i, j: Integer;
+begin
+  for i := 1 to gcRuns do
+  begin
+    StartBenchmark;
+    for j := 1 to gcFailCount do
+      if TbpJsonValue.TryParse(FDeepBad, lvValue) then
+      begin
+        lvValue.Free;
+        Fail('the document is malformed');
+      end;
+    StopBenchmark;
+  end;
+  LogStatusFmt('Fail a %d level malformed document %d times - %.3f ms median of %d',
+    [gcDeepLevels, gcFailCount, MedianTime, SampleCount]);
+end;
+
 initialization
   RegisterTest(TBpJsonBenchmark.Suite);
+
 
 end.

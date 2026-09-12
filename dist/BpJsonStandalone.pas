@@ -497,8 +497,16 @@ type
   TbpJsonReader = record
     Start: PChar;
     Cur: PChar;
+    Limit: PChar;   // one past the last character, so an embedded #0 is data
     Depth: Integer;
+    // containers still being filled, indexed by Depth - 1; the single catch in
+    // Parse frees them, so no nesting level pays for a re-raise of its own
+    Pending: array of TbpJsonValue;
   end;
+
+// reserves this level's slot before anything on it can raise
+procedure BpJsonEnter(var aReader: TbpJsonReader); forward;
+procedure BpJsonFreePending(var aReader: TbpJsonReader); forward;
 
 procedure BpJsonFail(const aReader: TbpJsonReader; const aMsg: string);
 var
@@ -520,6 +528,29 @@ begin
     Inc(lvP);
   end;
   raise EbpJson.CreateFmt('%s at line %d, position %d', [aMsg, lvLine, lvPos]);
+end;
+
+procedure BpJsonEnter(var aReader: TbpJsonReader);
+begin
+  // grow before Depth moves, so Depth never indexes past the array
+  if aReader.Depth >= Length(aReader.Pending) then
+    SetLength(aReader.Pending, aReader.Depth + 32);
+  // a sibling that finished left its pointer here, and it is attached already
+  aReader.Pending[aReader.Depth] := nil;
+  Inc(aReader.Depth);
+  if aReader.Depth > gcBpJsonMaxDepth then
+    BpJsonFail(aReader, 'JSON nested too deeply');
+end;
+
+procedure BpJsonFreePending(var aReader: TbpJsonReader);
+var
+  lvIdx: Integer;
+begin
+  for lvIdx := aReader.Depth - 1 downto 0 do
+  begin
+    aReader.Pending[lvIdx].Free;
+    aReader.Pending[lvIdx] := nil;
+  end;
 end;
 
 procedure BpJsonSkipWhite(var aReader: TbpJsonReader);
@@ -965,70 +996,58 @@ var
 begin
   // aReader.Cur is on the '{'
   Inc(aReader.Cur);
-  Inc(aReader.Depth);
-  if aReader.Depth > gcBpJsonMaxDepth then
-    BpJsonFail(aReader, 'JSON nested too deeply');
+  BpJsonEnter(aReader);
   Result := TbpJsonValue.CreateObject;
-  try
-    BpJsonSkipWhite(aReader);
-    if aReader.Cur^ = '}' then
-      Inc(aReader.Cur)
-    else
-      while True do
-      begin
-        BpJsonSkipWhite(aReader);
-        if aReader.Cur^ <> '"' then
-          BpJsonFail(aReader, 'Member name expected');
-        lvName := BpJsonParseString(aReader);
-        BpJsonSkipWhite(aReader);
-        if aReader.Cur^ <> ':' then
-          BpJsonFail(aReader, '":" expected');
-        Inc(aReader.Cur);
-        Result.InternalPut(lvName, BpJsonParseValue(aReader));
-        BpJsonSkipWhite(aReader);
-        case aReader.Cur^ of
-          ',': Inc(aReader.Cur);
-          '}': begin Inc(aReader.Cur); Break; end;
-        else
-          BpJsonFail(aReader, '"," or "}" expected');
-        end;
+  aReader.Pending[aReader.Depth - 1] := Result;
+  BpJsonSkipWhite(aReader);
+  if aReader.Cur^ = '}' then
+    Inc(aReader.Cur)
+  else
+    while True do
+    begin
+      BpJsonSkipWhite(aReader);
+      if aReader.Cur^ <> '"' then
+        BpJsonFail(aReader, 'Member name expected');
+      lvName := BpJsonParseString(aReader);
+      BpJsonSkipWhite(aReader);
+      if aReader.Cur^ <> ':' then
+        BpJsonFail(aReader, '":" expected');
+      Inc(aReader.Cur);
+      Result.InternalPut(lvName, BpJsonParseValue(aReader));
+      BpJsonSkipWhite(aReader);
+      case aReader.Cur^ of
+        ',': Inc(aReader.Cur);
+        '}': begin Inc(aReader.Cur); Break; end;
+      else
+        BpJsonFail(aReader, '"," or "}" expected');
       end;
-    Dec(aReader.Depth);
-  except
-    Result.Free;
-    raise;
-  end;
+    end;
+  Dec(aReader.Depth);
 end;
 
 function BpJsonParseArray(var aReader: TbpJsonReader): TbpJsonValue;
 begin
   // aReader.Cur is on the '['
   Inc(aReader.Cur);
-  Inc(aReader.Depth);
-  if aReader.Depth > gcBpJsonMaxDepth then
-    BpJsonFail(aReader, 'JSON nested too deeply');
+  BpJsonEnter(aReader);
   Result := TbpJsonValue.CreateArray;
-  try
-    BpJsonSkipWhite(aReader);
-    if aReader.Cur^ = ']' then
-      Inc(aReader.Cur)
-    else
-      while True do
-      begin
-        Result.InternalAdd('', BpJsonParseValue(aReader));
-        BpJsonSkipWhite(aReader);
-        case aReader.Cur^ of
-          ',': Inc(aReader.Cur);
-          ']': begin Inc(aReader.Cur); Break; end;
-        else
-          BpJsonFail(aReader, '"," or "]" expected');
-        end;
+  aReader.Pending[aReader.Depth - 1] := Result;
+  BpJsonSkipWhite(aReader);
+  if aReader.Cur^ = ']' then
+    Inc(aReader.Cur)
+  else
+    while True do
+    begin
+      Result.InternalAdd('', BpJsonParseValue(aReader));
+      BpJsonSkipWhite(aReader);
+      case aReader.Cur^ of
+        ',': Inc(aReader.Cur);
+        ']': begin Inc(aReader.Cur); Break; end;
+      else
+        BpJsonFail(aReader, '"," or "]" expected');
       end;
-    Dec(aReader.Depth);
-  except
-    Result.Free;
-    raise;
-  end;
+    end;
+  Dec(aReader.Depth);
 end;
 
 function BpJsonParseValue(var aReader: TbpJsonReader): TbpJsonValue;
@@ -1236,6 +1255,7 @@ var
 begin
   lvReader.Start := PChar(aJson);
   lvReader.Cur := lvReader.Start;
+  lvReader.Limit := lvReader.Start + Length(aJson);
   lvReader.Depth := 0;
   // tolerate a leading BOM
 {$IF CompilerVersion >= 20.0}
@@ -1248,12 +1268,15 @@ begin
 {$IFEND}
   // columns are counted from here, or a BOM would shift every one on line 1
   lvReader.Start := lvReader.Cur;
-  Result := BpJsonParseValue(lvReader);
+  Result := nil;
   try
+    Result := BpJsonParseValue(lvReader);
     BpJsonSkipWhite(lvReader);
-    if lvReader.Cur^ <> #0 then
+    // an embedded #0 is content, not the end, or trailing junk hides behind it
+    if lvReader.Cur < lvReader.Limit then
       BpJsonFail(lvReader, 'Unexpected text after the JSON value');
   except
+    BpJsonFreePending(lvReader);
     Result.Free;
     raise;
   end;
