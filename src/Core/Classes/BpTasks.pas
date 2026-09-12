@@ -8,6 +8,8 @@ unit BpTasks;
 //   FTask.Cancel;  // or FTask.Free: cancels, joins, cleans up
 //
 // Rules
+// - Cancellation is TbpCancellationToken, declared here: the task engine is
+//   the smallest thing both a task and a download can agree on.
 // - Any thread may create or free a task.
 // - Default: events run on the main thread (the one that loaded the module),
 //   which must pump messages. Create(False): events run on the worker.
@@ -24,13 +26,28 @@ uses
 type
   EbpTask = class(Exception);
 
-  // thread-safe, one-shot
-  TbpTaskToken = class
+  TbpCancelCleanupProc = procedure(aData: Pointer);
+
+  // cooperative cancel (C# CancellationToken style); thread-safe, one-shot
+  TbpCancellationToken = class
   private
+    FLock: TRTLCriticalSection;
     FCancelled: Integer;
+    FCleanupProcs: array of TbpCancelCleanupProc;
+    FCleanupData: array of Pointer;
+    FCleanupIds: array of Integer;
+    FNextId: Integer;
+    function IndexOfId(aId: Integer): Integer;
   public
+    constructor Create;
+    destructor Destroy; override;
     procedure Cancel;
     function IsCancellationRequested: Boolean;
+    // cleanup runs inside Cancel; False when already cancelled
+    function RegisterCleanup(aProc: TbpCancelCleanupProc; aData: Pointer;
+      out aId: Integer): Boolean;
+    // True when still pending, False when Cancel already ran it
+    function UnregisterCleanup(aId: Integer): Boolean;
   end;
 
   TbpTaskState = (tskPending, tskRunning, tskSucceeded, tskFailed,
@@ -38,8 +55,10 @@ type
 
   // poll aToken and return early to honour a cancel
   TbpTaskWorkEvent = procedure(aSender: TObject;
-    aToken: TbpTaskToken) of object;
+    aToken: TbpCancellationToken) of object;
   TbpTaskCompleteEvent = procedure(aSender: TObject) of object;
+  // the payload stays in the task: posts coalesce, so samples are dropped
+  TbpTaskProgressEvent = procedure(aSender: TObject) of object;
   TbpTaskErrorEvent = procedure(aSender: TObject;
     const aErrorMessage: string) of object;
 
@@ -47,14 +66,16 @@ type
   TbpTask = class
   private
     FId: Cardinal;               // registry key, never reused in a process
-    FToken: TbpTaskToken;        // owned
+    FToken: TbpCancellationToken;  // owned
     FThread: TThread;            // owned worker, joined in Destroy
     FLock: TRTLCriticalSection;  // guards state, results and FThread
     FMarshalToMainThread: Boolean;
     FState: TbpTaskState;
     FErrorMessage: string;
     FErrorClass: string;
+    FProgressPosted: Integer;     // coalescing flag for progress posts
     FWork: TbpTaskWorkEvent;
+    FOnProgress: TbpTaskProgressEvent;
     FOnComplete: TbpTaskCompleteEvent;
     FOnError: TbpTaskErrorEvent;
     function GetState: TbpTaskState;
@@ -77,10 +98,12 @@ type
     // waits for the work, not for the events
     function WaitFor(aTimeoutMs: DWORD = INFINITE): Boolean;
     function IsFinished: Boolean;
+    // from the worker: run OnProgress on the event thread, at most once per pump
+    procedure ReportProgress;
 
     // configure before Start
     property Work: TbpTaskWorkEvent read FWork write FWork;
-    property Token: TbpTaskToken read FToken;
+    property Token: TbpCancellationToken read FToken;
     property MarshalToMainThread: Boolean read FMarshalToMainThread;
     // 0 before Start
     property WorkerThreadId: Cardinal read GetWorkerThreadId;
@@ -90,6 +113,8 @@ type
     property ErrorMessage: string read GetErrorMessage;
     property ErrorClass: string read GetErrorClass;  // '' when no exception
 
+    // OnProgress reads whatever the work published, so it needs no payload
+    property OnProgress: TbpTaskProgressEvent read FOnProgress write FOnProgress;
     // OnComplete fires on every terminal state, OnError before it on tskFailed
     property OnComplete: TbpTaskCompleteEvent read FOnComplete write FOnComplete;
     property OnError: TbpTaskErrorEvent read FOnError write FOnError;
@@ -111,6 +136,7 @@ implementation
 
 const
   gcWmTaskDone = WM_APP + 1;
+  gcWmTaskProgress = WM_APP + 2;
   gcDispatcherClass = 'TbpTaskDispatcher';
 
 type
@@ -252,6 +278,28 @@ begin
     SysUtils.ShowException(aException, ExceptAddr);
 end;
 
+procedure RunProgress(aTask: TbpTask; aId: Cardinal);
+var
+  lvOnProgress: TbpTaskProgressEvent;
+begin
+  if not BeginDispatch(aId, aTask) then
+    Exit;
+  try
+    // cleared first, so a sample taken during the handler posts again
+    InterlockedExchange(aTask.FProgressPosted, 0);
+    lvOnProgress := aTask.FOnProgress;
+    if Assigned(lvOnProgress) then
+      try
+        lvOnProgress(aTask);
+      except
+        on E: Exception do
+          ReportHandlerException(LiveTask(aId, aTask), E);
+      end;
+  finally
+    EndDispatch(aId);
+  end;
+end;
+
 procedure RunEvents(aTask: TbpTask; aId: Cardinal);
 var
   lvOnError: TbpTaskErrorEvent;
@@ -296,6 +344,11 @@ begin
     RunEvents(TbpTask(aLParam), Cardinal(aWParam));
     Result := 0;
   end
+  else if aMsg = gcWmTaskProgress then
+  begin
+    RunProgress(TbpTask(aLParam), Cardinal(aWParam));
+    Result := 0;
+  end
   else
     Result := DefWindowProc(aWnd, aMsg, aWParam, aLParam);
 end;
@@ -329,17 +382,108 @@ begin
   Windows.UnregisterClass(gcDispatcherClass, HInstance);
 end;
 
-{ TbpTaskToken }
+{ TbpCancellationToken }
 
-procedure TbpTaskToken.Cancel;
+constructor TbpCancellationToken.Create;
 begin
-  InterlockedExchange(FCancelled, 1);
+  inherited Create;
+  InitializeCriticalSection(FLock);
+  FNextId := 1;
 end;
 
-function TbpTaskToken.IsCancellationRequested: Boolean;
+destructor TbpCancellationToken.Destroy;
 begin
-  // aligned 32-bit read is atomic
+  DeleteCriticalSection(FLock);
+  inherited;
+end;
+
+function TbpCancellationToken.IsCancellationRequested: Boolean;
+begin
+  // aligned 32-bit read is atomic; the lock only guards the write side
   Result := FCancelled <> 0;
+end;
+
+function TbpCancellationToken.IndexOfId(aId: Integer): Integer;
+var
+  i: Integer;
+begin
+  Result := -1;
+  for i := 0 to High(FCleanupIds) do
+    if FCleanupIds[i] = aId then
+    begin
+      Result := i;
+      Exit;
+    end;
+end;
+
+procedure TbpCancellationToken.Cancel;
+var
+  i: Integer;
+begin
+  EnterCriticalSection(FLock);
+  try
+    if FCancelled <> 0 then
+      Exit;
+    FCancelled := 1;
+    // run in registration order, then dropped so a later Unregister sees none
+    for i := 0 to High(FCleanupProcs) do
+      FCleanupProcs[i](FCleanupData[i]);
+    SetLength(FCleanupProcs, 0);
+    SetLength(FCleanupData, 0);
+    SetLength(FCleanupIds, 0);
+  finally
+    LeaveCriticalSection(FLock);
+  end;
+end;
+
+function TbpCancellationToken.RegisterCleanup(aProc: TbpCancelCleanupProc;
+  aData: Pointer; out aId: Integer): Boolean;
+var
+  lvCount: Integer;
+begin
+  aId := 0;
+  Result := False;
+  EnterCriticalSection(FLock);
+  try
+    if FCancelled <> 0 then
+      Exit;
+    lvCount := Length(FCleanupProcs);
+    SetLength(FCleanupProcs, lvCount + 1);
+    SetLength(FCleanupData, lvCount + 1);
+    SetLength(FCleanupIds, lvCount + 1);
+    FCleanupProcs[lvCount] := aProc;
+    FCleanupData[lvCount] := aData;
+    FCleanupIds[lvCount] := FNextId;
+    aId := FNextId;
+    Inc(FNextId);
+    Result := True;
+  finally
+    LeaveCriticalSection(FLock);
+  end;
+end;
+
+function TbpCancellationToken.UnregisterCleanup(aId: Integer): Boolean;
+var
+  lvIndex, i: Integer;
+begin
+  EnterCriticalSection(FLock);
+  try
+    lvIndex := IndexOfId(aId);
+    Result := lvIndex >= 0;
+    if not Result then
+      Exit;
+    for i := lvIndex to High(FCleanupProcs) - 1 do
+    begin
+      FCleanupProcs[i] := FCleanupProcs[i + 1];
+      FCleanupData[i] := FCleanupData[i + 1];
+      FCleanupIds[i] := FCleanupIds[i + 1];
+    end;
+    SetLength(FCleanupProcs, Length(FCleanupProcs) - 1);
+    SetLength(FCleanupData, Length(FCleanupData) - 1);
+    SetLength(FCleanupIds, Length(FCleanupIds) - 1);
+  finally
+    LeaveCriticalSection(FLock);
+  end;
 end;
 
 { TbpTask }
@@ -373,7 +517,7 @@ begin
   if aMarshalToMainThread and (gvWnd = 0) then
     raise EbpTask.Create('Task events cannot be marshalled: ' +
       'the dispatcher window does not exist');
-  FToken := TbpTaskToken.Create;
+  FToken := TbpCancellationToken.Create;
   FState := tskPending;
   FMarshalToMainThread := aMarshalToMainThread;
   FId := RegisterTask(Self);
@@ -469,6 +613,14 @@ end;
 procedure TbpTask.Cancel;
 begin
   FToken.Cancel;
+end;
+
+procedure TbpTask.ReportProgress;
+begin
+  if not FMarshalToMainThread then
+    RunProgress(Self, FId)
+  else if InterlockedExchange(FProgressPosted, 1) = 0 then
+    PostMessage(gvWnd, gcWmTaskProgress, WPARAM(FId), LPARAM(Self));
 end;
 
 function TbpTask.WaitFor(aTimeoutMs: DWORD): Boolean;

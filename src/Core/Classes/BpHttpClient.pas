@@ -4,11 +4,16 @@ unit BpHttpClient;
 // OpenSSL DLLs to ship. Cancellable sync verbs, streaming downloads with
 // progress, and an async download task. Not from a Windows service: WinInet
 // is unsupported there, that is what WinHTTP is for. README has examples.
+//
+// House rule: the library is one class per unit, this one is deliberately
+// self-contained. A helper of up to ~300 lines that nothing else needs lives
+// here rather than in a unit of its own; the moment a second unit needs it,
+// it moves out, which is what Base64 and the cancellation token did.
 
 interface
 
 uses
-  Classes, SysUtils, Windows, Messages, WinInet;
+  Classes, SysUtils, Windows, WinInet, BpTasks;
 
 type
   TbpHttpMethod = (hmGet, hmPost, hmPut, hmDelete, hmPatch, hmHead, hmOptions);
@@ -36,29 +41,11 @@ type
     FinalUrl: string;        // where the redirects ended, = the requested url when none
   end;
 
-  TbpCancelCleanupProc = procedure(aData: Pointer);
-
-  // cooperative cancel (C# CancellationToken style); thread-safe, one-shot
-  TbpCancellationToken = class
-  private
-    FLock: TRTLCriticalSection;
-    FCancelled: Integer;
-    FCleanupProcs: array of TbpCancelCleanupProc;
-    FCleanupData: array of Pointer;
-    FCleanupIds: array of Integer;
-    FNextId: Integer;
-    function IndexOfId(aId: Integer): Integer;
-  public
-    constructor Create;
-    destructor Destroy; override;
-    procedure Cancel;
-    function IsCancellationRequested: Boolean;
-    // cleanup runs inside Cancel; False when already cancelled
-    function RegisterCleanup(aProc: TbpCancelCleanupProc; aData: Pointer;
-      out aId: Integer): Boolean;
-    // True when still pending, False when Cancel already ran it
-    function UnregisterCleanup(aId: Integer): Boolean;
-  end;
+{$IFNDEF BPAMALGAMATION}
+  // BpTasks owns these now; `uses BpHttpClient` still reaches them
+  TbpCancelCleanupProc = BpTasks.TbpCancelCleanupProc;
+  TbpCancellationToken = BpTasks.TbpCancellationToken;
+{$ENDIF}
 
   // per-chunk download progress; aTotal -1 = unknown, set aCancel to abort
   TbpHttpProgressEvent = procedure(aSender: TObject; const aReceived,
@@ -200,39 +187,36 @@ type
   // one download on an owned worker thread, C# Task style, one-shot
   TbpHttpDownloadTask = class
   private
+    FTask: TbpTask;                // owned; the thread, the events, the states
     FClient: TbpHttpClient;        // owned; configure via Client before Start
-    FToken: TbpCancellationToken;  // owned
-    FThread: TThread;              // owned worker, joined in Destroy
-    FLock: TRTLCriticalSection;    // guards state, progress pair and results
+    FLock: TRTLCriticalSection;    // guards the progress pair and the results
     FUrl: string;
     FDestFileName: string;
     FDestStream: TStream;          // caller-owned; must outlive the task
     FHeaders: string;
-    FMarshalToMainThread: Boolean;
-    FWnd: HWND;                    // hidden marshaling window, 0 when direct
-    FState: TbpHttpDownloadState;
     FReceived: Int64;
     FTotal: Int64;
-    FProgressPosted: Integer;      // coalescing flag for progress posts
     FResponse: TbpHttpResponse;
-    FErrorMessage: string;
     FErrorCode: DWORD;
     FHttpStatus: Integer;
     FOnProgress: TbpHttpProgressEvent;
     FOnComplete: TbpHttpDownloadCompleteEvent;
     FOnError: TbpHttpDownloadErrorEvent;
     function GetState: TbpHttpDownloadState;
+    function GetMarshalToMainThread: Boolean;
+    function GetToken: TbpCancellationToken;
     function GetReceived: Int64;
     function GetTotal: Int64;
     function GetResponse: TbpHttpResponse;
     function GetErrorMessage: string;
     function GetErrorCode: DWORD;
     function GetHttpStatus: Integer;
-    procedure WndProc(var aMessage: TMessage);
+    procedure DoWork(aSender: TObject; aToken: TbpCancellationToken);
     procedure HandleWorkerProgress(aSender: TObject; const aReceived,
       aTotal: Int64; var aCancel: Boolean);
-    procedure FireCompletionEvents;
-    procedure RunDownload;  // worker thread body
+    procedure DispatchProgress(aSender: TObject);
+    procedure DispatchComplete(aSender: TObject);
+    procedure DispatchError(aSender: TObject; const aErrorMessage: string);
   public
     // create on the thread that should receive the events
     constructor Create(aMarshalToMainThread: Boolean = True);
@@ -251,8 +235,8 @@ type
     property DestStream: TStream read FDestStream write FDestStream;
     property Headers: string read FHeaders write FHeaders;
     property Client: TbpHttpClient read FClient;  // timeouts, auth, proxy...
-    property Token: TbpCancellationToken read FToken;
-    property MarshalToMainThread: Boolean read FMarshalToMainThread;
+    property Token: TbpCancellationToken read GetToken;
+    property MarshalToMainThread: Boolean read GetMarshalToMainThread;
 
     // results, thread-safe at any time; authoritative once IsFinished
     property State: TbpHttpDownloadState read GetState;
@@ -321,8 +305,6 @@ const
   gcDefaultTimeout = 8000;  // milliseconds
   gcDefaultUserAgent = 'DelphiBoostPack/1.0';
   gcRequestContext = 1;  // non-zero, or WinInet skips its status callbacks
-  gcWmTaskProgress = WM_APP + 1;
-  gcWmTaskDone = WM_APP + 2;
 
 procedure AppendHeaderLine(var aHeaders: string; const aLine: string);
 begin
@@ -438,110 +420,6 @@ begin
   inherited Create(aMessage);
   FStatusCode := aStatusCode;
   FWinInetError := aWinInetError;
-end;
-
-{ TbpCancellationToken }
-
-constructor TbpCancellationToken.Create;
-begin
-  inherited Create;
-  InitializeCriticalSection(FLock);
-  FNextId := 1;
-end;
-
-destructor TbpCancellationToken.Destroy;
-begin
-  DeleteCriticalSection(FLock);
-  inherited;
-end;
-
-function TbpCancellationToken.IsCancellationRequested: Boolean;
-begin
-  // aligned 32-bit read is atomic; the lock only guards the write side
-  Result := FCancelled <> 0;
-end;
-
-function TbpCancellationToken.IndexOfId(aId: Integer): Integer;
-var
-  i: Integer;
-begin
-  Result := -1;
-  for i := 0 to High(FCleanupIds) do
-    if FCleanupIds[i] = aId then
-    begin
-      Result := i;
-      Exit;
-    end;
-end;
-
-procedure TbpCancellationToken.Cancel;
-var
-  i: Integer;
-begin
-  EnterCriticalSection(FLock);
-  try
-    if FCancelled <> 0 then
-      Exit;
-    FCancelled := 1;
-    // run in registration order, then dropped so a later Unregister sees none
-    for i := 0 to High(FCleanupProcs) do
-      FCleanupProcs[i](FCleanupData[i]);
-    SetLength(FCleanupProcs, 0);
-    SetLength(FCleanupData, 0);
-    SetLength(FCleanupIds, 0);
-  finally
-    LeaveCriticalSection(FLock);
-  end;
-end;
-
-function TbpCancellationToken.RegisterCleanup(aProc: TbpCancelCleanupProc;
-  aData: Pointer; out aId: Integer): Boolean;
-var
-  lvCount: Integer;
-begin
-  aId := 0;
-  Result := False;
-  EnterCriticalSection(FLock);
-  try
-    if FCancelled <> 0 then
-      Exit;
-    lvCount := Length(FCleanupProcs);
-    SetLength(FCleanupProcs, lvCount + 1);
-    SetLength(FCleanupData, lvCount + 1);
-    SetLength(FCleanupIds, lvCount + 1);
-    FCleanupProcs[lvCount] := aProc;
-    FCleanupData[lvCount] := aData;
-    FCleanupIds[lvCount] := FNextId;
-    aId := FNextId;
-    Inc(FNextId);
-    Result := True;
-  finally
-    LeaveCriticalSection(FLock);
-  end;
-end;
-
-function TbpCancellationToken.UnregisterCleanup(aId: Integer): Boolean;
-var
-  lvIndex, i: Integer;
-begin
-  EnterCriticalSection(FLock);
-  try
-    lvIndex := IndexOfId(aId);
-    Result := lvIndex >= 0;
-    if not Result then
-      Exit;
-    for i := lvIndex to High(FCleanupProcs) - 1 do
-    begin
-      FCleanupProcs[i] := FCleanupProcs[i + 1];
-      FCleanupData[i] := FCleanupData[i + 1];
-      FCleanupIds[i] := FCleanupIds[i + 1];
-    end;
-    SetLength(FCleanupProcs, Length(FCleanupProcs) - 1);
-    SetLength(FCleanupData, Length(FCleanupData) - 1);
-    SetLength(FCleanupIds, Length(FCleanupIds) - 1);
-  finally
-    LeaveCriticalSection(FLock);
-  end;
 end;
 
 { TbpHttpClient }
@@ -1406,64 +1284,53 @@ end;
 
 { TbpHttpDownloadTask }
 
-type
-  // thin shell; the logic lives in TbpHttpDownloadTask.RunDownload
-  TbpDownloadThread = class(TThread)
-  private
-    FTask: TbpHttpDownloadTask;
-  protected
-    procedure Execute; override;
-  public
-    constructor Create(aTask: TbpHttpDownloadTask);
-  end;
-
-constructor TbpDownloadThread.Create(aTask: TbpHttpDownloadTask);
-begin
-  FTask := aTask;
-  FreeOnTerminate := False;  // the task owns and joins the thread
-  inherited Create(False);
-end;
-
-procedure TbpDownloadThread.Execute;
-begin
-  FTask.RunDownload;
-end;
+// TbpTask owns the thread, the marshalling window and the state machine, so
+// what is left here is the download itself and the shape of its events.
 
 constructor TbpHttpDownloadTask.Create(aMarshalToMainThread: Boolean);
 begin
   inherited Create;
   InitializeCriticalSection(FLock);
-  FClient := TbpHttpClient.Create;
-  FToken := TbpCancellationToken.Create;
-  FState := dtsPending;
   FTotal := -1;
-  FMarshalToMainThread := aMarshalToMainThread;
-  if FMarshalToMainThread then
-    FWnd := Classes.AllocateHWnd(WndProc);
+  FClient := TbpHttpClient.Create;
+  try
+    FTask := TbpTask.Create(aMarshalToMainThread);
+  except
+    // this unit promises EbpHttpClient, and a missing dispatcher is its problem
+    on E: EbpTask do
+      raise EbpHttpClient.Create(E.Message);
+  end;
+  FTask.Work := DoWork;
+  FTask.OnProgress := DispatchProgress;
+  FTask.OnComplete := DispatchComplete;
+  FTask.OnError := DispatchError;
 end;
 
 destructor TbpHttpDownloadTask.Destroy;
 begin
-  // abort and join first: the worker touches FClient/FToken/fields
-  FToken.Cancel;
-  if FThread <> nil then
-  begin
-    FThread.WaitFor;
-    FThread.Free;
-  end;
-  if FWnd <> 0 then
-    Classes.DeallocateHWnd(FWnd);  // pending posted messages are discarded
-  FToken.Free;
+  // cancels, joins, and lets no further event start; the worker holds FClient
+  FTask.Free;
   FClient.Free;
   DeleteCriticalSection(FLock);
   inherited;
 end;
 
 function TbpHttpDownloadTask.GetState: TbpHttpDownloadState;
+const
+  lcStates: array[TbpTaskState] of TbpHttpDownloadState = (dtsPending,
+    dtsRunning, dtsSucceeded, dtsFailed, dtsCancelled);
 begin
-  EnterCriticalSection(FLock);
-  Result := FState;
-  LeaveCriticalSection(FLock);
+  Result := lcStates[FTask.State];
+end;
+
+function TbpHttpDownloadTask.GetMarshalToMainThread: Boolean;
+begin
+  Result := FTask.MarshalToMainThread;
+end;
+
+function TbpHttpDownloadTask.GetToken: TbpCancellationToken;
+begin
+  Result := FTask.Token;
 end;
 
 function TbpHttpDownloadTask.GetReceived: Int64;
@@ -1489,9 +1356,7 @@ end;
 
 function TbpHttpDownloadTask.GetErrorMessage: string;
 begin
-  EnterCriticalSection(FLock);
-  Result := FErrorMessage;
-  LeaveCriticalSection(FLock);
+  Result := FTask.ErrorMessage;
 end;
 
 function TbpHttpDownloadTask.GetErrorCode: DWORD;
@@ -1499,6 +1364,10 @@ begin
   EnterCriticalSection(FLock);
   Result := FErrorCode;
   LeaveCriticalSection(FLock);
+  // a cancel before the first byte never reached WinInet, but the caller
+  // checks the same code whenever the download ends cancelled
+  if (Result = 0) and (GetState = dtsCancelled) then
+    Result := gcErrOperationCancelled;
 end;
 
 function TbpHttpDownloadTask.GetHttpStatus: Integer;
@@ -1510,7 +1379,7 @@ end;
 
 function TbpHttpDownloadTask.IsFinished: Boolean;
 begin
-  Result := GetState in [dtsSucceeded, dtsFailed, dtsCancelled];
+  Result := FTask.IsFinished;
 end;
 
 procedure TbpHttpDownloadTask.Start;
@@ -1522,32 +1391,26 @@ begin
   if (FDestFileName <> '') and (FDestStream <> nil) then
     raise EbpHttpClient.Create('Download task has both DestFileName and DestStream; set only one');
 
-  EnterCriticalSection(FLock);
   try
-    if FState <> dtsPending then
+    FTask.Start;
+  except
+    // Work is wired in the constructor, so a second start is the only EbpTask
+    on EbpTask do
       raise EbpHttpClient.Create('Download task already started');
-    FState := dtsRunning;
-  finally
-    LeaveCriticalSection(FLock);
   end;
-
-  FThread := TbpDownloadThread.Create(Self);
 end;
 
 procedure TbpHttpDownloadTask.Cancel;
 begin
-  FToken.Cancel;
+  FTask.Cancel;
 end;
 
 function TbpHttpDownloadTask.WaitFor(aTimeoutMs: DWORD): Boolean;
 begin
-  if FThread = nil then
-    Result := IsFinished  // never started
-  else
-    Result := WaitForSingleObject(FThread.Handle, aTimeoutMs) = WAIT_OBJECT_0;
+  Result := FTask.WaitFor(aTimeoutMs);
 end;
 
-// worker thread: forward directly, or store and post one coalesced note
+// worker thread: publish the pair, then ask for one coalesced note
 procedure TbpHttpDownloadTask.HandleWorkerProgress(aSender: TObject;
   const aReceived, aTotal: Int64; var aCancel: Boolean);
 begin
@@ -1555,121 +1418,78 @@ begin
   FReceived := aReceived;
   FTotal := aTotal;
   LeaveCriticalSection(FLock);
-
-  if FMarshalToMainThread then
-  begin
-    if InterlockedExchange(FProgressPosted, 1) = 0 then
-      PostMessage(FWnd, gcWmTaskProgress, 0, 0);
-  end
-  else if Assigned(FOnProgress) then
-    FOnProgress(Self, aReceived, aTotal, aCancel);
+  if Assigned(FOnProgress) then
+    FTask.ReportProgress;
 end;
 
-// main thread (marshaled mode only)
-procedure TbpHttpDownloadTask.WndProc(var aMessage: TMessage);
+// event thread: a handler that sets aCancel cancels through the token, so a
+// direct-mode and a marshalled download stop the same way
+procedure TbpHttpDownloadTask.DispatchProgress(aSender: TObject);
 var
   lvReceived, lvTotal: Int64;
   lvCancel: Boolean;
 begin
-  case aMessage.Msg of
-    gcWmTaskProgress:
-      begin
-        InterlockedExchange(FProgressPosted, 0);
-        if Assigned(FOnProgress) then
-        begin
-          EnterCriticalSection(FLock);
-          lvReceived := FReceived;
-          lvTotal := FTotal;
-          LeaveCriticalSection(FLock);
-          lvCancel := False;
-          FOnProgress(Self, lvReceived, lvTotal, lvCancel);
-          if lvCancel then
-            Cancel;
-        end;
-      end;
-    gcWmTaskDone:
-      FireCompletionEvents;
-  else
-    aMessage.Result := DefWindowProc(FWnd, aMessage.Msg, aMessage.WParam,
-      aMessage.LParam);
-  end;
+  if not Assigned(FOnProgress) then
+    Exit;
+  EnterCriticalSection(FLock);
+  lvReceived := FReceived;
+  lvTotal := FTotal;
+  LeaveCriticalSection(FLock);
+  lvCancel := False;
+  FOnProgress(Self, lvReceived, lvTotal, lvCancel);
+  if lvCancel then
+    Cancel;
 end;
 
-procedure TbpHttpDownloadTask.FireCompletionEvents;
+// the handler may free this task, so nothing here may touch Self afterwards
+procedure TbpHttpDownloadTask.DispatchComplete(aSender: TObject);
 begin
-  if (GetState = dtsFailed) and Assigned(FOnError) then
-    FOnError(Self, GetErrorMessage);
   if Assigned(FOnComplete) then
     FOnComplete(Self);
 end;
 
-procedure TbpHttpDownloadTask.RunDownload;
+procedure TbpHttpDownloadTask.DispatchError(aSender: TObject;
+  const aErrorMessage: string);
+begin
+  if Assigned(FOnError) then
+    FOnError(Self, aErrorMessage);
+end;
+
+procedure TbpHttpDownloadTask.DoWork(aSender: TObject;
+  aToken: TbpCancellationToken);
 var
   lvResponse: TbpHttpResponse;
-  lvState: TbpHttpDownloadState;
-  lvErrorMessage: string;
-  lvErrorCode: DWORD;
-  lvHttpStatus: Integer;
 begin
-  lvErrorMessage := '';
-  lvErrorCode := 0;
-  lvHttpStatus := 0;
-  // an exception path leaves lvResponse unassigned; keep it defined
-  lvResponse.StatusCode := 0;
-  lvResponse.StatusText := '';
-  lvResponse.Headers := '';
-  lvResponse.Body := '';
-  lvResponse.ContentLength := -1;
   try
     if FDestFileName <> '' then
       lvResponse := FClient.DownloadToFile(FUrl, FDestFileName,
-        HandleWorkerProgress, FToken, FHeaders)
+        HandleWorkerProgress, aToken, FHeaders)
     else
       lvResponse := FClient.Download(FUrl, FDestStream,
-        HandleWorkerProgress, FToken, FHeaders);
-
-    if BpHttpResponseIsSuccess(lvResponse) then
-      lvState := dtsSucceeded
-    else
-    begin
-      lvState := dtsFailed;
-      lvHttpStatus := lvResponse.StatusCode;
-      lvErrorMessage := BpClassifyHttpError(0, lvResponse.StatusCode);
-    end;
+        HandleWorkerProgress, aToken, FHeaders);
   except
-    on E: EbpHttpClientCancelled do
-    begin
-      lvState := dtsCancelled;
-      lvErrorMessage := E.Message;
-      lvErrorCode := E.WinInetError;
-    end;
     on E: EbpHttpClient do
     begin
-      lvState := dtsFailed;
-      lvErrorMessage := E.Message;
-      lvErrorCode := E.WinInetError;
-      lvHttpStatus := E.StatusCode;
-    end;
-    on E: Exception do
-    begin
-      lvState := dtsFailed;
-      lvErrorMessage := E.Message;
+      EnterCriticalSection(FLock);
+      FErrorCode := E.WinInetError;
+      FHttpStatus := E.StatusCode;
+      LeaveCriticalSection(FLock);
+      raise;
     end;
   end;
 
-  // publish results before the state turns terminal, then notify
   EnterCriticalSection(FLock);
   FResponse := lvResponse;
-  FErrorMessage := lvErrorMessage;
-  FErrorCode := lvErrorCode;
-  FHttpStatus := lvHttpStatus;
-  FState := lvState;
   LeaveCriticalSection(FLock);
+  if BpHttpResponseIsSuccess(lvResponse) then
+    Exit;
 
-  if FMarshalToMainThread then
-    PostMessage(FWnd, gcWmTaskDone, 0, 0)
-  else
-    FireCompletionEvents;
+  EnterCriticalSection(FLock);
+  FHttpStatus := lvResponse.StatusCode;
+  LeaveCriticalSection(FLock);
+  // a status the caller did not ask for is a failure, not an exception path
+  raise EbpHttpClient.Create(BpClassifyHttpError(0, lvResponse.StatusCode),
+    lvResponse.StatusCode);
 end;
 
 { hot task factories }
