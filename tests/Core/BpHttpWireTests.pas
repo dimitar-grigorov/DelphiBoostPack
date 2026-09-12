@@ -37,6 +37,9 @@ type
     procedure TestServerCookiesAreNotStored;
     procedure TestExplicitAuthorizationReplacesTheBearer;
     procedure TestBearerReplacesAnExplicitAuthorization;
+    procedure TestUrlCredentialsBecomeBasicAuth;
+    procedure TestUrlCredentialsArePercentDecoded;
+    procedure TestExplicitAuthorizationBeatsTheUrl;
   end;
 
   TBpHttpBodyWireTests = class(TBpWireTestCase)
@@ -103,6 +106,7 @@ type
     procedure TearDown; override;
   published
     procedure TestCrossOriginRedirectDropsEverySecret;
+    procedure TestUrlCredentialsDoNotCrossOrigins;
     procedure TestSameOriginRedirectKeepsThem;
   end;
 
@@ -156,6 +160,16 @@ var
 procedure CollectTraceLine(aHandle: Pointer; const aLine: string);
 begin
   gvTraceLog := gvTraceLog + aLine + #13#10;
+end;
+
+// the mock server hands out http://127.0.0.1:port/path, and a test needs the
+// userinfo between the scheme and the host
+function WithUserInfo(const aUrl, aUserInfo: string): string;
+const
+  lcScheme = 'http://';
+begin
+  Result := lcScheme + aUserInfo + '@' + Copy(aUrl, Length(lcScheme) + 1,
+    Length(aUrl));
 end;
 
 function BytesToAnsi(const aBytes: array of Byte): AnsiString;
@@ -382,6 +396,49 @@ begin
   CheckEquals(1, lvRequest.HeaderCount('Authorization'));
   // RFC 7617 base64 of user:pass
   CheckEquals('Basic dXNlcjpwYXNz', lvRequest.HeaderValue('Authorization'));
+end;
+
+// curl, requests, axios and .NET all send user:pass@host as Basic auth
+procedure TBpHttpHeaderWireTests.TestUrlCredentialsBecomeBasicAuth;
+var
+  lvRequest: TbpRecordedRequest;
+begin
+  FServer.Enqueue(BpMockOk('ok'));
+  FClient.Get(WithUserInfo(Url('/a'), 'user:pass'));
+  lvRequest := NextRequest;
+  CheckEquals(1, lvRequest.HeaderCount('Authorization'));
+  CheckEquals('Basic dXNlcjpwYXNz', lvRequest.HeaderValue('Authorization'));
+  CheckEquals('/a', lvRequest.Path, 'the userinfo is not part of the resource');
+end;
+
+procedure TBpHttpHeaderWireTests.TestUrlCredentialsArePercentDecoded;
+var
+  lvRequest: TbpRecordedRequest;
+begin
+  FServer.Enqueue(BpMockOk('ok'));
+  // an email as the user id is the case that forces the escaping
+  FClient.Get(WithUserInfo(Url('/a'), 'us%40er:p%3Aw'));
+  lvRequest := NextRequest;
+  CheckEquals('Basic dXNAZXI6cDp3', lvRequest.HeaderValue('Authorization'));
+
+  // %2540 is an escaped percent sign, so it must decode exactly once
+  FServer.Enqueue(BpMockOk('ok'));
+  FClient.Get(WithUserInfo(Url('/b'), '%2540:pass'));
+  lvRequest := NextRequest;
+  CheckEquals('Basic JTQwOnBhc3M=', lvRequest.HeaderValue('Authorization'));
+end;
+
+procedure TBpHttpHeaderWireTests.TestExplicitAuthorizationBeatsTheUrl;
+var
+  lvRequest: TbpRecordedRequest;
+begin
+  FClient.SetBasicAuth('real', 'secret');
+  FServer.Enqueue(BpMockOk('ok'));
+  FClient.Get(WithUserInfo(Url('/a'), 'user:pass'));
+  lvRequest := NextRequest;
+  CheckEquals(1, lvRequest.HeaderCount('Authorization'));
+  CheckEquals('Basic cmVhbDpzZWNyZXQ=', lvRequest.HeaderValue('Authorization'),
+    'what the caller set wins over what the url carried');
 end;
 
 procedure TBpHttpHeaderWireTests.TestPerRequestHeaderReplacesPersistent;
@@ -1007,6 +1064,21 @@ begin
     'no persistent header of ours follows to another origin');
   CheckEquals(0, CountOccurrences(lvSecond.RawHead, 'secret-token'));
   CheckEquals(0, CountOccurrences(lvSecond.RawHead, 'persistent-key'));
+end;
+
+procedure TBpHttpRedirectCredentialTests.TestUrlCredentialsDoNotCrossOrigins;
+var
+  lvSecond: TbpRecordedRequest;
+begin
+  FServer.Enqueue(BpMockRedirect(302, FOther.Url('/landing')));
+  FOther.Enqueue(BpMockOk('ok'));
+  FClient.Get(WithUserInfo(Url('/start'), 'user:pass'));
+
+  lvSecond := FOther.TakeRequest;
+  Check(lvSecond <> nil, 'the other origin never saw the hop');
+  CheckFalse(lvSecond.HasHeader('Authorization'),
+    'credentials from the url are credentials like any other');
+  CheckEquals(0, CountOccurrences(lvSecond.RawHead, 'dXNlcjpwYXNz'));
 end;
 
 procedure TBpHttpRedirectCredentialTests.TestSameOriginRedirectKeepsThem;
