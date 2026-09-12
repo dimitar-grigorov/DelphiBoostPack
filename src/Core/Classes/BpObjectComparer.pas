@@ -46,11 +46,6 @@ type
 
 type
   TbpObjectComparer = class
-  private
-    class procedure AppendDifference(var aDiffs: TPropDifferences; const aDiff: IPropDifference);
-    class procedure AppendDifferences(var aTargetDiffs: TPropDifferences; const aSourceDiffs: TPropDifferences);
-    class function InternalCompareProperties(aOld, aNew: TPersistent; const aOldPropPath, aNewPropPath: string; const aIdx: string = ''): TPropDifferences;
-    class procedure CompareCollectionItems(aOldColl, aNewColl: TCollection; const aOldPropPath, aNewPropPath: string; var aDiffs: TPropDifferences);
   public
     class function CompareObjects(aOld, aNew: TPersistent): TPropDifferences;
     class function CompareObjectsAsString(aOld, aNew: TPersistent): string;
@@ -60,7 +55,14 @@ type
 implementation
 
 uses
-  TypInfo, StrUtils, UniqueIdIntf, Math;
+  TypInfo, StrUtils, UniqueIdIntf, BpStrDictionary;
+
+type
+  // Diffs grows by doubling and is trimmed to Count once, not on every append
+  TCompareState = record
+    Diffs: TPropDifferences;
+    Count: Integer;
+  end;
 
 constructor TPropDifference.Create(const aOldPropPath, aNewPropPath: string; const aOldValue,
   aNewValue: Variant; const aIdx: string);
@@ -114,21 +116,24 @@ begin
   end;
 end;
 
-class procedure TbpObjectComparer.AppendDifference(var aDiffs: TPropDifferences; const aDiff: IPropDifference);
+procedure AddDiff(var aState: TCompareState; const aDiff: IPropDifference);
 begin
-  SetLength(aDiffs, Length(aDiffs) + 1);
-  aDiffs[High(aDiffs)] := aDiff;
+  if aState.Count = Length(aState.Diffs) then
+    SetLength(aState.Diffs, 8 + aState.Count * 2);
+  aState.Diffs[aState.Count] := aDiff;
+  Inc(aState.Count);
 end;
 
-class procedure TbpObjectComparer.AppendDifferences(var aTargetDiffs: TPropDifferences; const aSourceDiffs: TPropDifferences);
-var
-  i: Integer;
+function ItemPath(const aPath: string; aIndex: Integer): string;
 begin
-  for i := Low(aSourceDiffs) to High(aSourceDiffs) do
-    AppendDifference(aTargetDiffs, aSourceDiffs[i]);
+  Result := Format('%s[%d]', [aPath, aIndex]);
 end;
 
-class function TbpObjectComparer.InternalCompareProperties(aOld, aNew: TPersistent; const aOldPropPath, aNewPropPath: string; const aIdx: string = ''): TPropDifferences;
+procedure CompareCollections(aOld, aNew: TCollection; const aOldPath, aNewPath: string;
+  var aState: TCompareState); forward;
+
+procedure CompareProps(aOld, aNew: TPersistent; const aOldPath, aNewPath, aIdx: string;
+  var aState: TCompareState);
 var
   lvPropList: PPropList;
   lvPropCount, i: Integer;
@@ -138,7 +143,6 @@ var
   lvOldWide, lvNewWide: WideString;
   lvOldObj, lvNewObj: TObject;
 begin
-  SetLength(Result, 0);
   lvPropCount := GetPropList(aOld.ClassInfo, tkProperties, nil);
   GetMem(lvPropList, lvPropCount * SizeOf(Pointer));
   try
@@ -146,11 +150,8 @@ begin
     for i := 0 to lvPropCount - 1 do
     begin
       lvPropInfo := lvPropList^[i];
-      lvOldPropPath := IfThen(aOldPropPath <> '', aOldPropPath + '.', '') + string(lvPropInfo^.Name);
-      if (aNewPropPath = EmptyStr) then
-        lvNewPropPath := lvOldPropPath
-      else
-        lvNewPropPath := aNewPropPath + '.' + string(lvPropInfo^.Name);
+      lvOldPropPath := IfThen(aOldPath <> '', aOldPath + '.', '') + string(lvPropInfo^.Name);
+      lvNewPropPath := IfThen(aNewPath <> '', aNewPath + '.', '') + string(lvPropInfo^.Name);
 
       case lvPropInfo^.PropType^.Kind of
         // tkUString exists from Delphi 2009 on; without it every string property is skipped
@@ -180,126 +181,108 @@ begin
             lvOldObj := GetObjectProp(aOld, lvPropInfo);
             lvNewObj := GetObjectProp(aNew, lvPropInfo);
             if (lvOldObj is TCollection) and (lvNewObj is TCollection) then
-              CompareCollectionItems(TCollection(lvOldObj), TCollection(lvNewObj),
-                lvOldPropPath, lvNewPropPath, Result)
+              CompareCollections(TCollection(lvOldObj), TCollection(lvNewObj),
+                lvOldPropPath, lvNewPropPath, aState)
             // one side nil is a real difference, not a reason to dereference nil
             else if (lvOldObj is TCollection) then
-              AppendDifference(Result, TPropDifference.Create(lvOldPropPath,
+              AddDiff(aState, TPropDifference.Create(lvOldPropPath,
                 lvNewPropPath, 'Exists in old', 'Missing in new', aIdx))
             else if (lvNewObj is TCollection) then
-              AppendDifference(Result, TPropDifference.Create(lvOldPropPath,
+              AddDiff(aState, TPropDifference.Create(lvOldPropPath,
                 lvNewPropPath, 'Missing in old', 'Exists in new', aIdx));
-            Continue; // any difference here was appended above, not below
+            Continue;
           end;
       else
         Continue; // unhandled property kinds are ignored, not diffed
       end;
 
       if VarsDiffer(lvOldValue, lvNewValue) then
-        AppendDifference(Result, TPropDifference.Create(lvOldPropPath, lvNewPropPath, lvOldValue, lvNewValue, aIdx));
+        AddDiff(aState, TPropDifference.Create(lvOldPropPath, lvNewPropPath, lvOldValue, lvNewValue, aIdx));
     end;
   finally
     FreeMem(lvPropList);
   end;
 end;
 
-class procedure TbpObjectComparer.CompareCollectionItems(aOldColl, aNewColl: TCollection;
-  const aOldPropPath, aNewPropPath: string; var aDiffs: TPropDifferences);
+procedure CompareCollections(aOld, aNew: TCollection; const aOldPath, aNewPath: string;
+  var aState: TCompareState);
 var
-  I, lvFoundItemIdx: Integer;
-  lvItem1, lvItem2: TPersistent;
-  lvUniqueIdIntf: IUniqueId;
-  lvUniqueId: string;
-  lvProcessedItems: TStringList;
-
-  function _GetPropIdx(const aProp: string; const aIdx: Integer): string;
-  begin
-    Result := Format('%s[%d]', [aProp, aIdx]);
-  end;
-
-  function _FindItemByUniqueId(aCol: TCollection; const aUniqueId: string; out outItemIndex: Integer): TPersistent;
-  var
-    J: Integer;
-    lvItem: TPersistent;
-    lvTestUniqueIdIntf: IUniqueId;
-  begin
-    Result := nil;
-    outItemIndex := -1;
-    for J := 0 to aCol.Count - 1 do
-    begin
-      lvItem := aCol.Items[J] as TPersistent;
-      if Supports(lvItem, IUniqueId, lvTestUniqueIdIntf) then
-      begin
-        if lvTestUniqueIdIntf.GetUniqueId = aUniqueId then
-        begin
-          Result := lvItem;
-          outItemIndex := J;
-          Break;
-        end;
-      end;
-    end;
-  end;
-
+  i, lvNewIdx: Integer;
+  lvOldItem: TCollectionItem;
+  lvIdIntf: IUniqueId;
+  lvId: string;
+  lvById: TbpStrDictionary;       // id to the lowest new index still carrying it unmatched
+  lvNextSameId: array of Integer; // chains the new indices that share an id, so duplicates pair up in order
+  lvMatched: array of Boolean;
 begin
-  if (aOldColl.Count <> aNewColl.Count) then
-    AppendDifference(aDiffs, TPropDifference.Create(aOldPropPath + '.Count', aOldColl.Count, aNewColl.Count));
+  if aOld.Count <> aNew.Count then
+    AddDiff(aState, TPropDifference.Create(aOldPath + '.Count', aNewPath + '.Count', aOld.Count, aNew.Count));
 
-  lvProcessedItems := TStringList.Create; // new-collection indices already matched, so leftovers can be reported below
+  SetLength(lvMatched, aNew.Count);
+  SetLength(lvNextSameId, aNew.Count);
+  lvById := nil;
   try
-    for I := 0 to aOldColl.Count - 1 do
-    begin
-      lvItem1 := aOldColl.Items[I] as TPersistent;
-      if Supports(lvItem1, IUniqueId, lvUniqueIdIntf) then
+    for i := aNew.Count - 1 downto 0 do
+      if Supports(aNew.Items[i], IUniqueId, lvIdIntf) then
       begin
-        lvUniqueId := lvUniqueIdIntf.GetUniqueId;
-        lvItem2 := _FindItemByUniqueId(aNewColl, lvUniqueId, lvFoundItemIdx);
-        if Assigned(lvItem2) then
-        begin
-          AppendDifferences(aDiffs, InternalCompareProperties(lvItem1, lvItem2,
-            _GetPropIdx(aOldPropPath, I),
-            _GetPropIdx(aNewPropPath, lvFoundItemIdx), lvUniqueId));
-          lvProcessedItems.Add(IntToStr(lvFoundItemIdx));
-        end
-        else
-        begin
-          AppendDifference(aDiffs, TPropDifference.Create(_GetPropIdx(aOldPropPath, I),
-            _GetPropIdx(aOldPropPath, I), 'Exists in old', 'Missing in new', lvUniqueId));
-        end;
-      end
-      else  // index based comparison
-      begin
-        if (I < aNewColl.Count) then
-        begin
-          lvItem2 := aNewColl.Items[I] as TPersistent;
-          AppendDifferences(aDiffs, InternalCompareProperties(lvItem1, lvItem2,
-            _GetPropIdx(aOldPropPath, I),
-            _GetPropIdx(aNewPropPath, I), IntToStr(I)));
-          lvProcessedItems.Add(IntToStr(I));
-        end
-        else
-        begin
-          AppendDifference(aDiffs, TPropDifference.Create(_GetPropIdx(aOldPropPath, I),
-            _GetPropIdx(aOldPropPath, I), 'Exists in old', 'Missing in new', IntToStr(I)));
-        end;
+        if lvById = nil then
+          lvById := TbpStrDictionary.Create;
+        lvId := lvIdIntf.GetUniqueId;
+        lvNextSameId[i] := lvById.GetIntDef(lvId, -1);
+        lvById[lvId] := i;
       end;
+
+    for i := 0 to aOld.Count - 1 do
+    begin
+      lvOldItem := aOld.Items[i];
+      if Supports(lvOldItem, IUniqueId, lvIdIntf) then
+      begin
+        lvId := lvIdIntf.GetUniqueId;
+        if lvById <> nil then
+          lvNewIdx := lvById.GetIntDef(lvId, -1)
+        else
+          lvNewIdx := -1;
+        if lvNewIdx >= 0 then
+          lvById[lvId] := lvNextSameId[lvNewIdx];
+      end
+      else
+      begin
+        lvId := IntToStr(i);
+        // by position, unless an id item of a mixed collection already took that slot
+        if (i < aNew.Count) and not lvMatched[i] then
+          lvNewIdx := i
+        else
+          lvNewIdx := -1;
+      end;
+
+      if lvNewIdx >= 0 then
+      begin
+        lvMatched[lvNewIdx] := True;
+        CompareProps(lvOldItem, aNew.Items[lvNewIdx], ItemPath(aOldPath, i),
+          ItemPath(aNewPath, lvNewIdx), lvId, aState);
+      end
+      else
+        AddDiff(aState, TPropDifference.Create(ItemPath(aOldPath, i), ItemPath(aOldPath, i),
+          'Exists in old', 'Missing in new', lvId));
     end;
 
-    for I := 0 to aNewColl.Count - 1 do
-    begin
-      if lvProcessedItems.IndexOf(IntToStr(I)) = -1 then
-      begin
-        AppendDifference(aDiffs, TPropDifference.Create(_GetPropIdx(aNewPropPath, I),
-          _GetPropIdx(aNewPropPath, I), 'Missing in old', 'Exists in new', IntToStr(I)));
-      end;
-    end;
+    for i := 0 to aNew.Count - 1 do
+      if not lvMatched[i] then
+        AddDiff(aState, TPropDifference.Create(ItemPath(aNewPath, i), ItemPath(aNewPath, i),
+          'Missing in old', 'Exists in new', IntToStr(i)));
   finally
-    lvProcessedItems.Free;
+    lvById.Free;
   end;
 end;
 
 class function TbpObjectComparer.CompareObjects(aOld, aNew: TPersistent): TPropDifferences;
+var
+  lvState: TCompareState;
 begin
-  Result := InternalCompareProperties(aOld, aNew, '', '');
+  lvState.Count := 0;
+  CompareProps(aOld, aNew, '', '', '', lvState);
+  SetLength(lvState.Diffs, lvState.Count);
+  Result := lvState.Diffs;
 end;
 
 class function TbpObjectComparer.CompareObjectsAsString(aOld, aNew: TPersistent): string;
@@ -349,6 +332,4 @@ begin
   Result := lvResult;
 end;
 
-
 end.
-
