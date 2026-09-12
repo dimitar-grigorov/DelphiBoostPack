@@ -1,6 +1,6 @@
 # Tests
 
-DUnit suite for DelphiBoostPack. One project, [DelphiBoostPackTests.dpr](DelphiBoostPackTests.dpr), builds every test into a single runner. Built from the IDE you get the GUI runner; the `.cmd` scripts define `CONSOLE_TESTRUNNER` so the exe runs on the console and returns exit code 1 on any red test, which is what CI gates on. Memory leaks are reported on shutdown.
+DUnit suite for DelphiBoostPack. One project, [DelphiBoostPackTests.dpr](DelphiBoostPackTests.dpr), builds every test into a single runner. Built from the IDE you get the GUI runner; the `.cmd` scripts define `CONSOLE_TESTRUNNER` so the exe runs on the console and returns exit code 1 on any red test, which is what CI gates on. A leaked block fails the run too: the RTL reports leaks with a modal dialog nobody is there to click, so the console runner turns that off and [Core/BpLeakGate.pas](Core/BpLeakGate.pas) prints the leak and sets the exit code instead.
 
 ## Running
 
