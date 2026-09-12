@@ -72,6 +72,9 @@ type
 
 // JSON reader/writer for Delphi 7/2007+ (RFC 8259). TbpJsonValue is the whole
 // tree, so freeing the root frees it all; FindPath walks 'data.items[0].name'.
+// A value built with CreateXxx or Clone is yours until Add or SetValue takes it
+// over, and Extract hands it back. A container refuses nil, a value that already
+// belongs somewhere, and any attach that would make a cycle.
 // The parser is strict: leading zeros, trailing commas and junk all fail.
 // Below Delphi 2009 a string holds UTF-8 bytes, in and out, so a \u escape and
 // the raw character it names give the same result.
@@ -105,6 +108,7 @@ type
     FItems: array of TbpJsonValue;  // array elements or object member values
     FNames: array of string;        // object member names, parallel to FItems
     FIndex: PbpJsonNameIndex;       // nil until the member count earns a hash
+    FParent: TbpJsonValue;          // nil while the value is free-standing
     FCount: Integer;
     function GetItem(aIndex: Integer): TbpJsonValue;
     function GetName(aIndex: Integer): string;
@@ -114,6 +118,7 @@ type
     procedure RechainNames(aBucketCount: Integer);
     procedure LinkName(aIndex: Integer);
     procedure DropNameIndex;
+    procedure CheckAttachable(aValue: TbpJsonValue);
     procedure InternalAdd(const aName: string; aChild: TbpJsonValue);
     procedure InternalPut(const aName: string; aChild: TbpJsonValue);
     function MemberOrFail(const aName: string): TbpJsonValue;
@@ -154,6 +159,13 @@ type
     property Names[aIndex: Integer]: string read GetName;
     procedure Delete(aIndex: Integer);
     procedure Clear;
+
+    // Add and SetValue take the value over, but only when the call succeeds;
+    // a refused one leaves it with the caller. Extract hands ownership back.
+    procedure Add(aValue: TbpJsonValue);
+    procedure SetValue(const aName: string; aValue: TbpJsonValue);
+    function Extract(aIndex: Integer): TbpJsonValue;
+    function ExtractName(const aName: string): TbpJsonValue;  // nil when absent
 
     // array building; AddArray and AddObject return the new empty container
     procedure AddNull;
@@ -1479,6 +1491,7 @@ begin
       SetLength(FNames, lvCap);
   end;
   FItems[FCount] := aChild;
+  aChild.FParent := Self;
   if FKind = bjkObject then
     FNames[FCount] := aName;
   Inc(FCount);
@@ -1495,6 +1508,7 @@ begin
   begin
     FItems[lvIdx].Free;
     FItems[lvIdx] := aChild;
+    aChild.FParent := Self;
   end
   else
     InternalAdd(aName, aChild);
@@ -1538,6 +1552,62 @@ begin
   SetLength(FItems, 0);
   SetLength(FNames, 0);
   DropNameIndex;
+end;
+
+procedure TbpJsonValue.CheckAttachable(aValue: TbpJsonValue);
+var
+  lvUp: TbpJsonValue;
+begin
+  if aValue = nil then
+    raise EbpJson.Create('Cannot attach nil; AddNull and SetNull make a JSON null');
+  if aValue.FParent <> nil then
+    raise EbpJson.Create(
+      'Value already belongs to a container; Extract or Clone it first');
+  // a cycle is endless recursion in ToJson and a double free in Destroy
+  lvUp := Self;
+  while lvUp <> nil do
+  begin
+    if lvUp = aValue then
+      raise EbpJson.Create('Cannot attach a value inside itself');
+    lvUp := lvUp.FParent;
+  end;
+end;
+
+procedure TbpJsonValue.Add(aValue: TbpJsonValue);
+begin
+  RequireKind(bjkArray);
+  CheckAttachable(aValue);
+  InternalAdd('', aValue);
+end;
+
+procedure TbpJsonValue.SetValue(const aName: string; aValue: TbpJsonValue);
+begin
+  RequireKind(bjkObject);
+  CheckAttachable(aValue);
+  // last one wins and keeps its place, exactly as SetStr does
+  InternalPut(aName, aValue);
+end;
+
+function TbpJsonValue.Extract(aIndex: Integer): TbpJsonValue;
+begin
+  Result := GetItem(aIndex);
+  Result.FParent := nil;
+  // Delete frees what it removes, and Free on nil is a no-op
+  FItems[aIndex] := nil;
+  Delete(aIndex);
+end;
+
+function TbpJsonValue.ExtractName(const aName: string): TbpJsonValue;
+var
+  lvIdx: Integer;
+begin
+  // nil rather than a raise, the way Find answers for a missing member
+  Result := nil;
+  if FKind <> bjkObject then
+    Exit;
+  lvIdx := IndexOfName(aName);
+  if lvIdx >= 0 then
+    Result := Extract(lvIdx);
 end;
 
 procedure TbpJsonValue.AddNull;
