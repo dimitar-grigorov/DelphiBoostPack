@@ -3,7 +3,7 @@ unit BpObjectComparerCollectionClasses;
 interface
 
 uses
-  Classes, UniqueIdIntf, InterfacedCollectionItem;
+  Windows, Classes, UniqueIdIntf, InterfacedCollectionItem;
 
 type
   TMyEnumCol = (meValueOne, meValueTwo);
@@ -87,6 +87,23 @@ type
     destructor Destroy; override;
   published
     property MyCollection: TSimpleTestCollection read FMyCollection write FMyCollection;
+  end;
+
+  // a reference counted owner of interfaced items, so a test can see who keeps it alive
+  TRefCountedOwner = class(TPersistent, IInterface)
+  private
+    FRefCount: Integer;
+    FDestroyed: PBoolean;
+    FItems: TOwnedCollection;
+  protected
+    function QueryInterface(const IID: TGUID; out Obj): HResult; stdcall;
+    function _AddRef: Integer; stdcall;
+    function _Release: Integer; stdcall;
+  public
+    constructor Create(aDestroyed: PBoolean);
+    destructor Destroy; override;
+    property Items: TOwnedCollection read FItems;
+    property RefCount: Integer read FRefCount;
   end;
 
   // Back publishes the item's own collection, so a walk that follows it never ends
@@ -190,6 +207,40 @@ destructor TTestClassWithCollection.Destroy;
 begin
   FMyCollection.Free;
   inherited Destroy;
+end;
+
+constructor TRefCountedOwner.Create(aDestroyed: PBoolean);
+begin
+  inherited Create;
+  FDestroyed := aDestroyed;
+  FItems := TOwnedCollection.Create(Self, TSimpleTestItemUnique);
+end;
+
+destructor TRefCountedOwner.Destroy;
+begin
+  FItems.Free;
+  FDestroyed^ := True;
+  inherited Destroy;
+end;
+
+function TRefCountedOwner.QueryInterface(const IID: TGUID; out Obj): HResult;
+begin
+  if GetInterface(IID, Obj) then
+    Result := S_OK
+  else
+    Result := E_NOINTERFACE;
+end;
+
+function TRefCountedOwner._AddRef: Integer;
+begin
+  Result := InterlockedIncrement(FRefCount);
+end;
+
+function TRefCountedOwner._Release: Integer;
+begin
+  Result := InterlockedDecrement(FRefCount);
+  if Result = 0 then
+    Destroy;
 end;
 
 function TSelfRefItem.GetBack: TCollection;
