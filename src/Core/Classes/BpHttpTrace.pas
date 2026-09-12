@@ -19,6 +19,7 @@ type
   public
     // one sink per process, last Attach wins; False means WinInet refused it
     class function Attach(aClient: TbpHttpClient; aProc: TbpHttpTraceProc): Boolean;
+    // returns only once no thread is inside the sink, so it is safe to free then
     class procedure Detach(aClient: TbpHttpClient);
 
     // '' for the statuses a wire trace skips
@@ -45,6 +46,8 @@ const
 
 var
   gvTraceProc: TbpHttpTraceProc = nil;
+  // held across the sink call, so Detach can wait the callback out
+  gvSinkLock: TRTLCriticalSection;
 
 procedure TraceStatusCallback(aInternet: HINTERNET; aContext, aStatus: DWORD;
   aInfo: Pointer; aInfoLen: DWORD); stdcall;
@@ -52,16 +55,21 @@ var
   lvProc: TbpHttpTraceProc;
   lvLine: string;
 begin
-  lvProc := gvTraceProc;  // one read: Detach can run at any time
-  if not Assigned(lvProc) then
-    Exit;
-  lvLine := TbpHttpTrace.StatusText(aStatus, aInfo, aInfoLen);
-  if lvLine = '' then
-    Exit;
-  // a diagnostic must never unwind through wininet and abort the request
+  EnterCriticalSection(gvSinkLock);
   try
-    lvProc(Pointer(aInternet), lvLine);
-  except
+    lvProc := gvTraceProc;  // read under the lock, so Detach cannot race it
+    if not Assigned(lvProc) then
+      Exit;
+    lvLine := TbpHttpTrace.StatusText(aStatus, aInfo, aInfoLen);
+    if lvLine = '' then
+      Exit;
+    // a diagnostic must never unwind through wininet and abort the request
+    try
+      lvProc(Pointer(aInternet), lvLine);
+    except
+    end;
+  finally
+    LeaveCriticalSection(gvSinkLock);
   end;
 end;
 
@@ -74,19 +82,30 @@ var
 begin
   // opening the session can raise, which must not disturb a live trace
   lvSession := aClient.SessionHandle;
-  gvTraceProc := aProc;
+  EnterCriticalSection(gvSinkLock);
+  try
+    gvTraceProc := aProc;
+  finally
+    LeaveCriticalSection(gvSinkLock);
+  end;
   // the sentinel is -1 widened to a pointer, not a callback address
   Result := Pointer(InternetSetStatusCallbackA(lvSession,
     PFNInternetStatusCallback(@TraceStatusCallback))) <>
     Pointer(TbpUIntPtr(INTERNET_INVALID_STATUS_CALLBACK));
   // a failed attach must not leave the sink globally armed
   if not Result then
-    gvTraceProc := nil;
+    Detach(aClient);
 end;
 
 class procedure TbpHttpTrace.Detach(aClient: TbpHttpClient);
 begin
-  gvTraceProc := nil;
+  // the lock is a barrier: a thread already inside the sink has left by now
+  EnterCriticalSection(gvSinkLock);
+  try
+    gvTraceProc := nil;
+  finally
+    LeaveCriticalSection(gvSinkLock);
+  end;
   // no session means nothing to detach from; opening one here would raise
   if aClient.SessionActive then
     InternetSetStatusCallbackA(aClient.SessionHandle, nil);
@@ -191,5 +210,11 @@ begin
   if lvAt > 0 then
     Delete(Result, lvStart, lvAt - lvStart + 1);
 end;
+
+initialization
+  InitializeCriticalSection(gvSinkLock);
+
+finalization
+  DeleteCriticalSection(gvSinkLock);
 
 end.

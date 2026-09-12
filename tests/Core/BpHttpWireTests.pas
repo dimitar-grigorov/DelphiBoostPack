@@ -131,6 +131,7 @@ type
     procedure TestSyncRequestCancelMidFlight;
     procedure TestAsyncCancelMidFlight;
     procedure TestTraceSinkSeesTheWire;
+    procedure TestDetachWaitsForASinkInFlight;
     procedure TestReceiveTimeoutFiresOnAStall;
   end;
 
@@ -156,13 +157,53 @@ const
     $77, $C5, $00, $B5, $95, $B8, $F8, $0E, $01, $00, $00
   );
 
+type
+  // a request the test thread can call Detach across
+  TbpTraceGetThread = class(TThread)
+  private
+    FClient: TbpHttpClient;
+    FUrl: string;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(aClient: TbpHttpClient; const aUrl: string);
+  end;
+
 var
   // the trace sink is a bare procedure, so its log has to be unit level
   gvTraceLog: string;
+  gvSinkHoldMs: Cardinal = 0;
+  gvSinkEntered: Boolean = False;
+  gvSinkLeft: Boolean = False;
 
 procedure CollectTraceLine(aHandle: Pointer; const aLine: string);
 begin
   gvTraceLog := gvTraceLog + aLine + #13#10;
+end;
+
+// holds the very first callback, so Detach has something to wait out
+procedure HoldingTraceLine(aHandle: Pointer; const aLine: string);
+begin
+  if (gvSinkHoldMs = 0) or gvSinkEntered then
+    Exit;
+  gvSinkEntered := True;
+  Sleep(gvSinkHoldMs);
+  gvSinkLeft := True;
+end;
+
+constructor TbpTraceGetThread.Create(aClient: TbpHttpClient; const aUrl: string);
+begin
+  FClient := aClient;
+  FUrl := aUrl;
+  inherited Create(False);
+end;
+
+procedure TbpTraceGetThread.Execute;
+begin
+  try
+    FClient.Get(FUrl);
+  except
+  end;
 end;
 
 // the userinfo goes between the scheme and the host the mock server hands out
@@ -1329,6 +1370,41 @@ begin
   finally
     lvStream.Free;
   end;
+end;
+
+// freeing a sink the moment Detach returns must not race a thread inside it
+procedure TBpHttpCancelWireTests.TestDetachWaitsForASinkInFlight;
+var
+  lvWorker: TbpTraceGetThread;
+  lvEntered, lvLeftBeforeDetachReturned, lvFinished: Boolean;
+begin
+  FServer.Enqueue(BpMockOk('warm'));
+  FServer.Enqueue(BpMockOk('held'));
+  FClient.Get(Url('/warm'));  // open the session before another thread uses it
+  gvSinkEntered := False;
+  gvSinkLeft := False;
+  gvSinkHoldMs := 300;
+  CheckTrue(TbpHttpTrace.Attach(FClient, HoldingTraceLine), 'attach');
+  lvEntered := False;
+  lvLeftBeforeDetachReturned := False;
+  lvWorker := TbpTraceGetThread.Create(FClient, Url('/held'));
+  // every check waits until after the cleanup, so nothing throws past the Free
+  try
+    lvEntered := BpWaitForFlag(gvSinkEntered, 5000);
+    if lvEntered then
+    begin
+      TbpHttpTrace.Detach(FClient);
+      lvLeftBeforeDetachReturned := gvSinkLeft;
+    end;
+    lvFinished := WaitForSingleObject(lvWorker.Handle, 10000) = WAIT_OBJECT_0;
+  finally
+    gvSinkHoldMs := 0;
+    TbpHttpTrace.Detach(FClient);
+    lvWorker.Free;
+  end;
+  CheckTrue(lvEntered, 'no callback reached the sink');
+  CheckTrue(lvLeftBeforeDetachReturned, 'Detach returned with a thread still in the sink');
+  CheckTrue(lvFinished, 'the worker request finished');
 end;
 
 procedure TBpHttpCancelWireTests.TestReceiveTimeoutFiresOnAStall;
