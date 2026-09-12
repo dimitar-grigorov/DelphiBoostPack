@@ -40,7 +40,7 @@ Pure, offline, deterministic, fast. Every `Bp*Tests.pas` in [Core/](Core) except
 On by default, registered only when `NO_INTEGRATION` is not defined:
 
 - **credential store** (`TBpCredentialsTests` in [Core/BpCredentialsTests.pas](Core/BpCredentialsTests.pas)) - writes to the real Windows Credential Manager under a unique `DelphiBoostPack.Test.<pid>.<tick>` service name and deletes everything it created in `TearDown`.
-- **loopback server** (`TBpHttpDownloadCancelTests` in [Core/BpHttpDownloadTests.pas](Core/BpHttpDownloadTests.pas)) - spins up a tiny HTTP server on `127.0.0.1` that sends a burst and then dribbles, so cancellation happens while WinInet is genuinely blocked in a read. Deterministic, no external network, but it binds a port and starts threads, which is why it counts as integration rather than unit.
+- **mock server** ([Core/BpMockHttpServer.pas](Core/BpMockHttpServer.pas)) - a scriptable HTTP server on `127.0.0.1`, modelled on okhttp's MockWebServer: enqueue canned replies, run the client, then assert on the requests it recorded. A `TbpMockResponse` can answer chunked, announce more than it sends, stall, or refuse to answer at all, which is how [Core/BpHttpWireTests.pas](Core/BpHttpWireTests.pas) reaches the redirect, credential, framing and cancellation paths. Deterministic and offline, but it binds a port and starts threads, which is why it counts as integration rather than unit.
 - **live endpoints** (`TBpHttpDownloadOnlineTests`) - runs against stable public URLs. Each test probes for connectivity first and reports `SKIPPED` instead of failing when there is no network, so the suite stays green offline.
 
 Pass `/nointeg` for an offline, socket-free run (handy in locked-down CI or when a firewall would block the loopback bind).
