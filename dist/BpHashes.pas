@@ -238,7 +238,6 @@ implementation
 // --------------- begin BpBase64.pas implementation ----------------
 
 const
-  gcBase64Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
   gcBase64UrlChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
   // reverse table markers
   gcInvalid = -1;
@@ -246,29 +245,15 @@ const
   gcPadding = -3;
   gcNoBadChars = $00000008; // MB_ERR_INVALID_CHARS, missing in D2007's Windows.pas
 
-var
-  gvDecodeTable: array[0..255] of ShortInt;
+// bp:mirror base64-encode
+// Copied, not shared: tools\CheckMirrors.js fails if the copies stop matching.
+const
+  gcBase64Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
-procedure InitDecodeTable;
-var
-  i: Integer;
-begin
-  for i := 0 to 255 do
-    gvDecodeTable[i] := gcInvalid;
-  for i := 1 to 64 do
-    gvDecodeTable[Ord(gcBase64Chars[i])] := i - 1;
-  // url-safe alphabet decodes with the same table
-  gvDecodeTable[Ord('-')] := 62;
-  gvDecodeTable[Ord('_')] := 63;
-  gvDecodeTable[9] := gcWhitespace;
-  gvDecodeTable[10] := gcWhitespace;
-  gvDecodeTable[13] := gcWhitespace;
-  gvDecodeTable[32] := gcWhitespace;
-  gvDecodeTable[Ord('=')] := gcPadding;
-end;
-
-function EncodeBuffer(aSource: PByte; aSize: Integer; const aAlphabet: string;
-  aPadded: Boolean): string;
+// RFC 4648. aSize past (MaxInt div 4) * 3 wraps the length arithmetic below,
+// which each copy guards in its own vocabulary before calling in here.
+function Base64EncodeBuffer(aSource: PByte; aSize: Integer;
+  const aAlphabet: string; aPadded: Boolean): string;
 var
   lvDest: PChar;
   lvB0, lvB1, lvB2: Byte;
@@ -277,9 +262,6 @@ begin
   Result := '';
   if aSize <= 0 then
     Exit;
-  // 3 bytes in, 4 out: past this the length arithmetic below would wrap
-  if aSize > (MaxInt div 4) * 3 then
-    raise EbpBase64.Create('Input too large to Base64-encode');
   lvFull := aSize div 3;
   lvRest := aSize mod 3;
   lvOutLen := lvFull * 4;
@@ -324,6 +306,36 @@ begin
     if aPadded then
       lvDest[3] := '=';
   end;
+end;
+// bp:mirror-end
+
+var
+  gvDecodeTable: array[0..255] of ShortInt;
+
+procedure InitDecodeTable;
+var
+  i: Integer;
+begin
+  for i := 0 to 255 do
+    gvDecodeTable[i] := gcInvalid;
+  for i := 1 to 64 do
+    gvDecodeTable[Ord(gcBase64Chars[i])] := i - 1;
+  // url-safe alphabet decodes with the same table
+  gvDecodeTable[Ord('-')] := 62;
+  gvDecodeTable[Ord('_')] := 63;
+  gvDecodeTable[9] := gcWhitespace;
+  gvDecodeTable[10] := gcWhitespace;
+  gvDecodeTable[13] := gcWhitespace;
+  gvDecodeTable[32] := gcWhitespace;
+  gvDecodeTable[Ord('=')] := gcPadding;
+end;
+
+function EncodeBuffer(aSource: PByte; aSize: Integer; const aAlphabet: string;
+  aPadded: Boolean): string;
+begin
+  if aSize > (MaxInt div 4) * 3 then
+    raise EbpBase64.Create('Input too large to Base64-encode');
+  Result := Base64EncodeBuffer(aSource, aSize, aAlphabet, aPadded);
 end;
 
 function Base64Encode(const aData; aSize: Integer): string;
