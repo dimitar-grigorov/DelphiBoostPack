@@ -1572,10 +1572,11 @@ begin
     lvList := lvRoot.SetArray('list');
     lvList.AddFloat(1.5);
     lvList.AddFloat(-0.25);
+    lvList.AddArray.AddStr('deep');
     lvRoot.SetObject('nested').SetStr('who', 'me');
     lvRoot.SetFloat('ratio', 0.5);
 
-    CheckEquals('{"list":[1.5,-0.25],"nested":{"who":"me"},"ratio":0.5}',
+    CheckEquals('{"list":[1.5,-0.25,["deep"]],"nested":{"who":"me"},"ratio":0.5}',
       lvRoot.ToJson);
     CheckEquals(3, lvRoot.Count);
     CheckEquals('list', lvRoot.Names[0]);
