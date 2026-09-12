@@ -39,7 +39,9 @@ type
     procedure TestStringEscapesRoundTrip;
     procedure TestUnicodeEscape;
     procedure TestUnicodeEscapeMatchesTheRawCharacter;
+{$IF CompilerVersion >= 20.0}
     procedure TestSurrogatePair;
+{$IFEND}
     procedure TestTypedAccessors;
     procedure TestTryAndDefAccessors;
     procedure TestKindMismatchRaises;
@@ -314,10 +316,10 @@ begin
   end;
 end;
 
-procedure TBpJsonTests.TestSurrogatePair;
-// U+1F600 as the surrogate pair D83D DE00; a supplementary-plane char needs
-// a Unicode string, so this round-trip only holds on Delphi 2009 and later
 {$IF CompilerVersion >= 20.0}
+// U+1F600 as the surrogate pair D83D DE00; a supplementary-plane char needs a
+// Unicode string, so this round-trip only holds on Delphi 2009 and later
+procedure TBpJsonTests.TestSurrogatePair;
 var
   lvValue: TbpJsonValue;
 begin
@@ -329,10 +331,8 @@ begin
   finally
     lvValue.Free;
   end;
-{$ELSE}
-begin
-{$IFEND}
 end;
+{$IFEND}
 
 procedure TBpJsonTests.TestTypedAccessors;
 var

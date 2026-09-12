@@ -37,7 +37,9 @@ type
     procedure TestRejectedCharacters;
     procedure TestUrlAlphabetDecodesToTheRightBytes;
     procedure TestUrlEncodeUntypedOverload;
+{$IF SizeOf(Char) > 1}
     procedure TestDecodeRejectsWideCharacter;
+{$IFEND}
     procedure TestEncodeRejectsOversizedInput;
     procedure TestUtf8RoundTrip;
     procedure TestDecodeUtf8RejectsBadBytes;
@@ -324,13 +326,13 @@ begin
   CheckEquals('Zg', Base64UrlEncode(lvBuf, 1));
 end;
 
+{$IF SizeOf(Char) > 1}
 procedure TBpBase64Tests.TestDecodeRejectsWideCharacter;
 begin
-{$IF SizeOf(Char) > 1}
   // above U+00FF there is no table entry to look up, so it must not index it
   CheckDecodeRaises('Zm9v' + WideChar($0410), 'a Cyrillic character');
-{$IFEND}
 end;
+{$IFEND}
 
 procedure TBpBase64Tests.TestEncodeRejectsOversizedInput;
 var
