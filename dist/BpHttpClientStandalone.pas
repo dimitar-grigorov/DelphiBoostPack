@@ -734,6 +734,9 @@ begin
   Result := '';
   if Length(aBytes) = 0 then
     Exit;
+  // BpEncoding decodes the same, inline here so the bundle needs no extra unit
+  //   SetString(lvRaw, PAnsiChar(@aBytes[0]), Length(aBytes));
+  //   Result := BpUtf8ToWide(lvRaw);
   // gcNoBadChars: bad UTF-8 fails instead of turning into U+FFFD
   lvLen := MultiByteToWideChar(CP_UTF8, gcNoBadChars, PAnsiChar(@aBytes[0]),
     Length(aBytes), nil, 0);
@@ -2625,6 +2628,8 @@ begin
   Result := '';
   if aResponse.Body = '' then
     Exit;
+  // BpEncoding decodes the same, inline here so the bundle needs no extra unit
+  //   Result := BpDecodeBytes(aResponse.Body, CP_UTF8);
   // convert straight from the raw bytes so no ANSI codepage round trip happens
   lvLen := MultiByteToWideChar(CP_UTF8, 0, PAnsiChar(aResponse.Body),
     Length(aResponse.Body), nil, 0);

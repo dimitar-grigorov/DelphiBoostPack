@@ -1586,6 +1586,8 @@ begin
   Result := '';
   if aResponse.Body = '' then
     Exit;
+  // BpEncoding decodes the same, inline here so the bundle needs no extra unit
+  //   Result := BpDecodeBytes(aResponse.Body, CP_UTF8);
   // convert straight from the raw bytes so no ANSI codepage round trip happens
   lvLen := MultiByteToWideChar(CP_UTF8, 0, PAnsiChar(aResponse.Body),
     Length(aResponse.Body), nil, 0);
