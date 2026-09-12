@@ -5,7 +5,7 @@ unit BpHttpClientStandalone;
 //   src\Core\Units\BpCompat.pas
 //   src\Core\Units\BpBase64.pas
 //   src\Core\Classes\BpHttpClient.pas
-// Source commit 7175746, generated 2026-09-12 by tools\Amalgamate.ps1.
+// Source commit 1d6ac05, generated 2026-09-12 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
 // One bundle per project: two that share a helper declare it twice.
@@ -241,7 +241,7 @@ type
     property UserAgent: string read FUserAgent write SetUserAgent;
     property Username: AnsiString read FUsername write FUsername;
     property Password: AnsiString read FPassword write FPassword;
-    // sent as 'Authorization: Bearer <token>' when not empty
+    // sent as 'Authorization: Bearer <token>'; replaces any Authorization set
     property BearerToken: string read FBearerToken write SetBearerToken;
     property ConnectTimeout: DWORD read FConnectTimeout write SetConnectTimeout;
     property SendTimeout: DWORD read FSendTimeout write SetSendTimeout;
@@ -933,12 +933,17 @@ begin
   BpCheckHeaderName(aName);
   BpCheckHeaderPart(aValue, 'value');
   FHeaders.Values[aName] := aValue;
+  // Authorization has one writer at a time, or the block goes out with two
+  if SameText(aName, 'Authorization') then
+    FBearerToken := '';
 end;
 
 procedure TbpHttpClient.SetBearerToken(const aValue: string);
 begin
   BpCheckHeaderPart(aValue, 'value');
   FBearerToken := aValue;
+  if aValue <> '' then
+    FHeaders.Values['Authorization'] := '';
 end;
 
 procedure TbpHttpClient.ClearHeaders;
@@ -955,7 +960,6 @@ begin
     if (aUser[i] = ':') or (Ord(aUser[i]) < 32) then
       raise EbpHttpClient.Create(
         'Basic auth user must not contain a colon or a control character');
-  FBearerToken := '';
   // RFC 7617 says UTF-8, and the ANSI page would differ from machine to machine
   AddHeader('Authorization', 'Basic ' +
     Base64EncodeUtf8(aUser + ':' + aPassword));

@@ -51,7 +51,7 @@ A 404 is a response, not an exception. Only transport failures raise `EbpHttpCli
 
 **Compression.** The buffered verbs send `Accept-Encoding: gzip, deflate` and let WinInet decode the reply, from Vista on. Downloads do not, because the decoded bytes would no longer match `Content-Length` and that is the check a truncated file is caught by.
 
-**Headers.** `AddHeader` replaces a name already set and removes it on an empty value. A name must be a non-empty RFC 7230 token; `BearerToken` and `UserAgent` reject CR and LF; `SetBasicAuth` rejects a colon in the user-id. Per-request headers merge on top.
+**Headers.** `AddHeader` replaces a name already set and removes it on an empty value, and `Authorization` has one writer at a time: `AddHeader`, `BearerToken` and `SetBasicAuth` each replace whatever the others left. A name must be a non-empty RFC 7230 token; `BearerToken` and `UserAgent` reject CR and LF; `SetBasicAuth` rejects a colon in the user-id. Per-request headers merge on top.
 
 **Redirects.** Followed by the client, not by WinInet, which replays the header block on every hop with no way to edit it. A hop to another origin, so any change of scheme, host or port, loses the persistent headers plus `Authorization`, `Cookie` and `Proxy-Authorization`, and never gets them back. The one exception `requests` also makes: the same host upgraded from `http` to `https` keeps them. Method per [WHATWG fetch](https://fetch.spec.whatwg.org/#http-redirect-fetch): 303 to GET unless HEAD, 301 and 302 only a POST, 307 and 308 unchanged; a downgraded method drops the body and its `Content-*` headers. `FollowRedirects := False` returns the 3xx instead.
 
