@@ -56,6 +56,7 @@ type
     procedure TestShortBodyLeavesNoFile;
     procedure TestHeadReplyHasNoBodyAndNoError;
     procedure TestNoContentReplyHasNoBody;
+    procedure TestNotModifiedReplyHasNoBody;
     procedure TestNoResponseAtAllIsAnError;
   end;
 
@@ -553,6 +554,24 @@ begin
   lvStream := TMemoryStream.Create;
   try
     CheckEquals(204, FClient.Download(Url('/none'), lvStream).StatusCode);
+    CheckEquals(0, lvStream.Size);
+  finally
+    lvStream.Free;
+  end;
+end;
+
+procedure TBpHttpBodyWireTests.TestNotModifiedReplyHasNoBody;
+var
+  lvReply: TbpMockResponse;
+  lvStream: TMemoryStream;
+begin
+  lvReply := BpMockStatus(304);
+  lvReply.ClaimedLength := 4096;  // a 304 repeats the length it would have sent
+  lvReply.Effect := mseStall;     // and then never sends it, as the RFC requires
+  FServer.Enqueue(lvReply);
+  lvStream := TMemoryStream.Create;
+  try
+    CheckEquals(304, FClient.Download(Url('/cached'), lvStream).StatusCode);
     CheckEquals(0, lvStream.Size);
   finally
     lvStream.Free;

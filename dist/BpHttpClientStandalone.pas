@@ -5,7 +5,7 @@ unit BpHttpClientStandalone;
 //   src\Core\Units\BpCompat.pas
 //   src\Core\Units\BpBase64.pas
 //   src\Core\Classes\BpHttpClient.pas
-// Source commit 1a90620, generated 2026-09-12 by tools\Amalgamate.ps1.
+// Source commit a9fbeb6, generated 2026-09-12 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
 // One bundle per project: two that share a helper declare it twice.
@@ -1469,7 +1469,6 @@ var
   lvPort: Integer;
   lvSecure, lvOwnsRequest: Boolean;
   lvCleanupId: Integer;
-  lvExpected: Int64;
   lvBlock: string;
 begin
   aRedirectTo := '';
@@ -1518,18 +1517,17 @@ begin
         if FFollowRedirects then
           aRedirectTo := BpHttpRedirectTarget(aUrl, Result.Headers, Result.StatusCode);
 
-        // the else drains a redirect body, which keeps the connection pooled
-        if (aDest <> nil) and (aRedirectTo = '') then
+        // WinInet honours a Content-Length even on a 304, so a reply that
+        // cannot carry a body has to be left unread, not read to its end
+        if BpHttpResponseHasBody(aMethod, Result.StatusCode) then
         begin
-          // a bodyless reply must not trip the completeness guard below
-          if BpHttpResponseHasBody(aMethod, Result.StatusCode) then
-            lvExpected := Result.ContentLength
+          // the else drains a redirect body, which keeps the connection pooled
+          if (aDest <> nil) and (aRedirectTo = '') then
+            ReadBodyToStream(lvRequest, aDest, Result.ContentLength,
+              aProgress, aToken)
           else
-            lvExpected := -1;
-          ReadBodyToStream(lvRequest, aDest, lvExpected, aProgress, aToken);
-        end
-        else
-          Result.Body := ReadResponseBody(lvRequest, aToken);
+            Result.Body := ReadResponseBody(lvRequest, aToken);
+        end;
       except
         // a failure caused by Cancel surfaces as the typed cancellation
         on E: EbpHttpClient do
