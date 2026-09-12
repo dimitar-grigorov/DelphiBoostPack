@@ -182,7 +182,7 @@ begin
         {$IF Declared(tkUString)}
         tkUString,
         {$IFEND}
-        tkInteger, tkEnumeration, tkFloat, tkString, tkSet, tkLString, tkWString, tkVariant:
+        tkInteger, tkInt64, tkEnumeration, tkFloat, tkString, tkSet, tkLString, tkWString, tkVariant:
           begin
             lvOldValue := GetPropValue(aOld, string(lvPropInfo^.Name));
             lvNewValue := GetPropValue(aNew, string(lvPropInfo^.Name));

@@ -28,6 +28,7 @@ type
     procedure TestMismatchedClassesRaise;
     procedure TestChangedItemClassIsOneDifference;
     procedure TestCompareWideCharProperties;
+    procedure TestCompareInt64Properties;
     procedure TestCompareObjectsAsString;
 
     procedure TestCompareWithSameCollectionData;
@@ -214,6 +215,33 @@ begin
     CheckEquals('WideCharProp', Diffs[0].OldPropPath, 'property path');
   finally
     Obj1.Free;
+    Obj2.Free;
+  end;
+end;
+
+// tkInt64 was missing from the handled kinds, so an Int64 property was never compared
+procedure TestTBpObjectComparer.TestCompareInt64Properties;
+var
+  Obj2: TTestClassA;
+  Diffs: TPropDifferences;
+  OldValue, NewValue: Int64;
+begin
+  Obj2 := TTestClassA.Create;
+  try
+    FObjA.Int64Prop := $100000000;
+    Obj2.Int64Prop := $100000000;
+    Diffs := TbpObjectComparer.CompareObjects(FObjA, Obj2);
+    CheckEquals(0, Length(Diffs), 'equal values');
+
+    Obj2.Int64Prop := $200000000;
+    Diffs := TbpObjectComparer.CompareObjects(FObjA, Obj2);
+    CheckEquals(1, Length(Diffs), 'the values differ above the low 32 bits only');
+    CheckEquals('Int64Prop', Diffs[0].OldPropPath, 'property path');
+    OldValue := Diffs[0].OldValue;
+    NewValue := Diffs[0].NewValue;
+    CheckEquals($100000000, OldValue, 'old value');
+    CheckEquals($200000000, NewValue, 'new value');
+  finally
     Obj2.Free;
   end;
 end;

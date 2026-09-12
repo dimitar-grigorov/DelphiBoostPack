@@ -11,9 +11,11 @@ type
   TTestClassA = class(TPersistent)
   private
     FIntegerProp: Integer;
+    FInt64Prop: Int64;
     FStringProp: string;
   published
     property IntegerProp: Integer read FIntegerProp write FIntegerProp;
+    property Int64Prop: Int64 read FInt64Prop write FInt64Prop;
     property StringProp: string read FStringProp write FStringProp;
   end;
 
