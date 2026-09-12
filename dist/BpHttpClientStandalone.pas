@@ -5,7 +5,7 @@ unit BpHttpClientStandalone;
 //   src\Core\Units\BpCompat.pas
 //   src\Core\Units\BpBase64.pas
 //   src\Core\Classes\BpHttpClient.pas
-// Source commit 1d6ac05, generated 2026-09-12 by tools\Amalgamate.ps1.
+// Source commit 0331b82, generated 2026-09-12 by tools\Amalgamate.ps1.
 // Fix bugs in the modular units, then regenerate with:
 //   pwsh -NoProfile -File tools\Amalgamate.ps1
 // One bundle per project: two that share a helper declare it twice.
@@ -170,9 +170,9 @@ type
       aToken: TbpCancellationToken);
     // one request, no redirect of its own; aRedirectTo names the next hop
     function PerformHop(const aUrl, aMethod, aHeaders: string;
-      const aBody: AnsiString; aWithCredentials: Boolean; aDest: TStream;
-      aProgress: TbpHttpProgressEvent; aToken: TbpCancellationToken;
-      out aRedirectTo: string): TbpHttpResponse;
+      const aBody: AnsiString; aWithCredentials, aDropContentHeaders: Boolean;
+      aDest: TStream; aProgress: TbpHttpProgressEvent;
+      aToken: TbpCancellationToken; out aRedirectTo: string): TbpHttpResponse;
     // the one request every verb and download goes through; nil aDest buffers
     function PerformRequest(const aUrl, aMethod, aHeaders: string;
       const aBody: AnsiString; aDest: TStream; aProgress: TbpHttpProgressEvent;
@@ -1464,9 +1464,9 @@ begin
 end;
 
 function TbpHttpClient.PerformHop(const aUrl, aMethod, aHeaders: string;
-  const aBody: AnsiString; aWithCredentials: Boolean; aDest: TStream;
-  aProgress: TbpHttpProgressEvent; aToken: TbpCancellationToken;
-  out aRedirectTo: string): TbpHttpResponse;
+  const aBody: AnsiString; aWithCredentials, aDropContentHeaders: Boolean;
+  aDest: TStream; aProgress: TbpHttpProgressEvent;
+  aToken: TbpCancellationToken; out aRedirectTo: string): TbpHttpResponse;
 var
   lvConnection, lvRequest: HINTERNET;
   lvServerName, lvResource: string;
@@ -1501,6 +1501,10 @@ begin
         if aWithCredentials then
           ApplyAuthentication(lvRequest);
         lvBlock := BuildHeaders(aHeaders, aWithCredentials);
+        // a persistent Content-Type described the dropped body just as much as
+        // a per-request one, so the strip belongs on the whole block
+        if aDropContentHeaders then
+          lvBlock := BpHttpStripContentHeaders(lvBlock);
         // decoded bytes outnumber Content-Length, so not where it is checked
         if FAutoDecompress and (aDest = nil) then
         begin
@@ -1558,20 +1562,20 @@ function TbpHttpClient.PerformRequest(const aUrl, aMethod, aHeaders: string;
   const aBody: AnsiString; aDest: TStream; aProgress: TbpHttpProgressEvent;
   aToken: TbpCancellationToken): TbpHttpResponse;
 var
-  lvUrl, lvMethod, lvNext, lvHeaders: string;
+  lvUrl, lvMethod, lvNext: string;
   lvBody: AnsiString;
-  lvCredentials: Boolean;
+  lvCredentials, lvDroppedBody: Boolean;
   i: Integer;
 begin
   lvUrl := aUrl;
   lvMethod := aMethod;
   lvBody := aBody;
-  lvHeaders := aHeaders;
   lvCredentials := True;
+  lvDroppedBody := False;
   for i := 0 to FMaxRedirects do
   begin
-    Result := PerformHop(lvUrl, lvMethod, lvHeaders, lvBody, lvCredentials,
-      aDest, aProgress, aToken, lvNext);
+    Result := PerformHop(lvUrl, lvMethod, aHeaders, lvBody, lvCredentials,
+      lvDroppedBody, aDest, aProgress, aToken, lvNext);
     if lvNext = '' then
       Exit;
     lvMethod := BpHttpRedirectMethod(Result.StatusCode, lvMethod);
@@ -1579,7 +1583,7 @@ begin
     if lvMethod <> aMethod then
     begin
       lvBody := '';
-      lvHeaders := BpHttpStripContentHeaders(lvHeaders);
+      lvDroppedBody := True;
     end;
     lvUrl := lvNext;
     // once off the origin they were set for, credentials never come back
