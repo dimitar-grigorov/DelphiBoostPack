@@ -31,6 +31,8 @@ type
     destructor Destroy; override;
     // resets to a fresh hash; Final calls it automatically
     procedure Init;
+    // copies a hash in progress, so a shared prefix is compressed only once
+    procedure Assign(aSource: TbpSHA256);
     procedure Update(const aData; aSize: Integer); overload;
     procedure Update(const aBytes: TBytes); overload;
     procedure Update(const aText: AnsiString); overload;
@@ -147,6 +149,14 @@ begin
   Inc(FHash[5], lvF);
   Inc(FHash[6], lvG);
   Inc(FHash[7], lvH);
+end;
+
+procedure TbpSHA256.Assign(aSource: TbpSHA256);
+begin
+  FHash := aSource.FHash;
+  FLenBits := aSource.FLenBits;
+  FBuffer := aSource.FBuffer;
+  FIndex := aSource.FIndex;
 end;
 
 procedure TbpSHA256.Update(const aData; aSize: Integer);
