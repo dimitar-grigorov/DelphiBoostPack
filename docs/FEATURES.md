@@ -347,7 +347,7 @@ if BpTryVarToInt(lvField, lvCount) then ...      // False for '42', True for 42
 
 ### [StopWatch](../src/Core/Units/StopWatch.pas)
 
-A `QueryPerformanceCounter` stopwatch with the `TStopwatch` shape, for Delphi 7 to 2007 (also version-guarded, so the RTL class wins later).
+A `QueryPerformanceCounter` stopwatch with the shape Delphi 2009 later gave `TStopwatch`, handed out as `IStopWatch` so there is nothing to free. It compiles on every supported compiler; on Delphi 2009 and up `System.Diagnostics` has a `TStopwatch` of its own, so name the one you mean there.
 
 ```pascal
 lvSw := TStopWatch.StartNew;   // IStopWatch, nothing to free
