@@ -48,7 +48,6 @@ type
 // Delphi 7 and 2007 and over the BMP on a Unicode compiler. A DBCS code page
 // cannot fold a byte at a time and takes the RTL path, which allocates.
 
-// True when the table applies; False only on a DBCS code page before Unicode
 function BpKeyFoldUsable: Boolean;
 
 // one character, upper cased through the table, unchanged when it does not apply
@@ -278,6 +277,7 @@ implementation
 
 // --------------- begin BpKeyFold.pas implementation ---------------
 
+// the hash wraps by definition
 {$Q-}
 
 type

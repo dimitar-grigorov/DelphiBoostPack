@@ -250,7 +250,7 @@ lvHasher.Update(lvBuf, lvRead);                         // or TBytes, or AnsiStr
 lvHasher.Final(lvDigest);                               // Final resets for reuse
 ```
 
-`HashBuffer`, `HashBytes`, `HashStr` and `HashFile` return a `TbpSHA256Digest`, which `DigestToHex` and `DigestToBase64` format.
+`HashBuffer`, `HashBytes`, `HashStr` and `HashFile` return a `TbpSHA256Digest`, which `DigestToHex` formats. For Base64, hand the digest to [BpBase64](#bpbase64).
 
 ### [BpMD5](../src/Core/Classes/BpMD5.pas)
 

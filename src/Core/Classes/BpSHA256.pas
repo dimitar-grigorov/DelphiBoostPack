@@ -2,7 +2,7 @@ unit BpSHA256;
 
 // SHA-256 (FIPS 180-4), pure Pascal, for Delphi 7/2007+. Streaming (Init,
 // Update in chunks, Final) so large files need not fit in memory, plus
-// one-shot class functions for buffer/bytes/string/file, hex or Base64.
+// one-shot class functions for buffer/bytes/string/file, digest or hex.
 // Final resets the state so an instance can be reused for the next message.
 // The string overloads hash raw bytes: UTF8Encode first on Delphi 2009+, or
 // the digest follows the machine's ANSI code page.
@@ -44,13 +44,12 @@ type
     class function HashStrHex(const aText: AnsiString): string;
     class function HashFileHex(const aFileName: string): string;
     class function DigestToHex(const aDigest: TbpSHA256Digest): string;
-    class function DigestToBase64(const aDigest: TbpSHA256Digest): string;
   end;
 
 implementation
 
 uses
-  Classes, BpBase64;
+  Classes;
 
 const
   // FIPS 180-4 round constants: fractional parts of the cube roots of the first 64 primes
@@ -328,11 +327,6 @@ begin
     Result[i * 2 + 1] := gcShaHexDigits[(aDigest[i] shr 4) + 1];
     Result[i * 2 + 2] := gcShaHexDigits[(aDigest[i] and $0F) + 1];
   end;
-end;
-
-class function TbpSHA256.DigestToBase64(const aDigest: TbpSHA256Digest): string;
-begin
-  Result := Base64Encode(aDigest, SizeOf(aDigest));
 end;
 
 end.

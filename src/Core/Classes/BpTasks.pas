@@ -21,7 +21,7 @@ unit BpTasks;
 interface
 
 uses
-  Classes, SysUtils, Windows, Messages;
+  Classes, SysUtils, Windows;
 
 type
   EbpTask = class(Exception);
@@ -132,6 +132,9 @@ function BpRunAsync(aWork: TbpTaskWorkEvent;
 procedure BpSetTaskExceptionHook(aProc: TbpTaskExceptionProc);
 
 implementation
+
+uses
+  Messages;
 
 const
   gcWmTaskDone = WM_APP + 1;

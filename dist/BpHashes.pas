@@ -74,7 +74,7 @@ function Base64DecodeUtf8(const aBase64: string): WideString;
 
 // SHA-256 (FIPS 180-4), pure Pascal, for Delphi 7/2007+. Streaming (Init,
 // Update in chunks, Final) so large files need not fit in memory, plus
-// one-shot class functions for buffer/bytes/string/file, hex or Base64.
+// one-shot class functions for buffer/bytes/string/file, digest or hex.
 // Final resets the state so an instance can be reused for the next message.
 // The string overloads hash raw bytes: UTF8Encode first on Delphi 2009+, or
 // the digest follows the machine's ANSI code page.
@@ -113,7 +113,6 @@ type
     class function HashStrHex(const aText: AnsiString): string;
     class function HashFileHex(const aFileName: string): string;
     class function DigestToHex(const aDigest: TbpSHA256Digest): string;
-    class function DigestToBase64(const aDigest: TbpSHA256Digest): string;
   end;
 {$IFDEF BPAMALG_R}{$R+}{$ELSE}{$R-}{$ENDIF}{$IFDEF BPAMALG_Q}{$Q+}{$ELSE}{$Q-}{$ENDIF}
 // ------------------- end BpSHA256.pas interface -------------------
@@ -121,7 +120,7 @@ type
 // ------------------- begin BpMD5.pas interface --------------------
 
 // MD5 (RFC 1321), pure Pascal, for Delphi 7/2007+. Same interface as
-// BpSHA256: streaming Update plus one-shot class functions, hex or Base64.
+// BpSHA256: streaming Update plus one-shot class functions, digest or hex.
 // Broken for signatures; fine for checksums, ETags and fingerprints.
 // The string overloads hash raw bytes: UTF8Encode first on Delphi 2009+, or
 // the digest follows the machine's ANSI code page.
@@ -157,7 +156,6 @@ type
     class function HashStrHex(const aText: AnsiString): string;
     class function HashFileHex(const aFileName: string): string;
     class function DigestToHex(const aDigest: TbpMD5Digest): string;
-    class function DigestToBase64(const aDigest: TbpMD5Digest): string;
   end;
 {$IFDEF BPAMALG_R}{$R+}{$ELSE}{$R-}{$ENDIF}{$IFDEF BPAMALG_Q}{$Q+}{$ELSE}{$Q-}{$ENDIF}
 // -------------------- end BpMD5.pas interface ---------------------
@@ -205,8 +203,6 @@ type
 //   if BpVerifyPassword('hunter2', lvStored) then ...
 // Takes bytes, not text: on Delphi 2009+ pass AnsiString(UTF8Encode(lvPassword)),
 // or the ANSI conversion makes the hash lossy and locale-dependent.
-
-  // TBytes on Delphi 7
 
 const
   // OWASP recommendation for PBKDF2-HMAC-SHA256 as of 2023+
@@ -802,11 +798,6 @@ begin
     Result[i * 2 + 2] := gcShaHexDigits[(aDigest[i] and $0F) + 1];
   end;
 end;
-
-class function TbpSHA256.DigestToBase64(const aDigest: TbpSHA256Digest): string;
-begin
-  Result := Base64Encode(aDigest, SizeOf(aDigest));
-end;
 {$IFDEF BPAMALG_R}{$R+}{$ELSE}{$R-}{$ENDIF}{$IFDEF BPAMALG_Q}{$Q+}{$ELSE}{$Q-}{$ENDIF}
 // ---------------- end BpSHA256.pas implementation -----------------
 
@@ -1070,15 +1061,12 @@ begin
     Result[i * 2 + 2] := gcMd5HexDigits[(aDigest[i] and $0F) + 1];
   end;
 end;
-
-class function TbpMD5.DigestToBase64(const aDigest: TbpMD5Digest): string;
-begin
-  Result := Base64Encode(aDigest, SizeOf(aDigest));
-end;
 {$IFDEF BPAMALG_R}{$R+}{$ELSE}{$R-}{$ENDIF}{$IFDEF BPAMALG_Q}{$Q+}{$ELSE}{$Q-}{$ENDIF}
 // ------------------ end BpMD5.pas implementation ------------------
 
 // ------------- begin BpHMACSHA256.pas implementation --------------
+
+  // a MAC travels Base64 in most protocols, a digest does not
 
 procedure TbpHMACSHA256.SetKey(const aKey; aKeySize: Integer);
 var
@@ -1219,12 +1207,17 @@ begin
 end;
 
 class function TbpHMACSHA256.ComputeBase64(const aKey, aText: AnsiString): string;
+var
+  lvDigest: TbpSHA256Digest;
 begin
-  Result := TbpSHA256.DigestToBase64(Compute(aKey, aText));
+  lvDigest := Compute(aKey, aText);
+  Result := Base64Encode(lvDigest, SizeOf(lvDigest));
 end;
 // -------------- end BpHMACSHA256.pas implementation ---------------
 
 // ------------ begin BpPasswordHash.pas implementation -------------
+
+  // TBytes on Delphi 7
 
 const
   gcBpPasswordHashScheme = 'pbkdf2-sha256';

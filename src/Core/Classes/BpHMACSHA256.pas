@@ -36,6 +36,9 @@ type
 
 implementation
 
+uses
+  BpBase64;  // a MAC travels Base64 in most protocols, a digest does not
+
 procedure TbpHMACSHA256.SetKey(const aKey; aKeySize: Integer);
 var
   lvHashedKey: TbpSHA256Digest;
@@ -175,8 +178,11 @@ begin
 end;
 
 class function TbpHMACSHA256.ComputeBase64(const aKey, aText: AnsiString): string;
+var
+  lvDigest: TbpSHA256Digest;
 begin
-  Result := TbpSHA256.DigestToBase64(Compute(aKey, aText));
+  lvDigest := Compute(aKey, aText);
+  Result := Base64Encode(lvDigest, SizeOf(lvDigest));
 end;
 
 end.

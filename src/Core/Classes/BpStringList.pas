@@ -9,7 +9,7 @@ unit BpStringList;
 interface
 
 uses
-  SysUtils, Classes, RTLConsts, BpKeyFold;
+  SysUtils, Classes;
 
 type
   TbpStringList = class;
@@ -101,6 +101,9 @@ type
   end;
 
 implementation
+
+uses
+  RTLConsts, BpKeyFold;
 
 const
   gcBpNoName = -2;         // NameNext of a row with no separator: not in any chain

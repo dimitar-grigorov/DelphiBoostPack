@@ -8,9 +8,6 @@ unit BpKeyFold;
 
 interface
 
-uses
-  Windows, SysUtils;
-
 // True when the table applies; False only on a DBCS code page before Unicode
 function BpKeyFoldUsable: Boolean;
 
@@ -39,6 +36,9 @@ function BpFoldedSame(const aA, aB: string): Boolean;
 function BpFoldInto(const aKey: string; var aBuf; aBufChars: Integer): Integer;
 
 implementation
+
+uses
+  Windows, SysUtils;
 
 // the hash wraps by definition
 {$Q-}

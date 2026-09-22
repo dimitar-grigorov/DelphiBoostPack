@@ -1,7 +1,7 @@
 unit BpMD5;
 
 // MD5 (RFC 1321), pure Pascal, for Delphi 7/2007+. Same interface as
-// BpSHA256: streaming Update plus one-shot class functions, hex or Base64.
+// BpSHA256: streaming Update plus one-shot class functions, digest or hex.
 // Broken for signatures; fine for checksums, ETags and fingerprints.
 // The string overloads hash raw bytes: UTF8Encode first on Delphi 2009+, or
 // the digest follows the machine's ANSI code page.
@@ -40,13 +40,12 @@ type
     class function HashStrHex(const aText: AnsiString): string;
     class function HashFileHex(const aFileName: string): string;
     class function DigestToHex(const aDigest: TbpMD5Digest): string;
-    class function DigestToBase64(const aDigest: TbpMD5Digest): string;
   end;
 
 implementation
 
 uses
-  Classes, BpBase64;
+  Classes;
 
 const
   // RFC 1321 sine table: T[i] = floor(2^32 * abs(sin(i + 1)))
@@ -303,11 +302,6 @@ begin
     Result[i * 2 + 1] := gcMd5HexDigits[(aDigest[i] shr 4) + 1];
     Result[i * 2 + 2] := gcMd5HexDigits[(aDigest[i] and $0F) + 1];
   end;
-end;
-
-class function TbpMD5.DigestToBase64(const aDigest: TbpMD5Digest): string;
-begin
-  Result := Base64Encode(aDigest, SizeOf(aDigest));
 end;
 
 end.

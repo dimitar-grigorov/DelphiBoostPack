@@ -11,7 +11,7 @@ unit BpPasswordHash;
 interface
 
 uses
-  SysUtils, BpSHA256, BpHMACSHA256, BpCompat;  // TBytes on Delphi 7
+  SysUtils;
 
 const
   // OWASP recommendation for PBKDF2-HMAC-SHA256 as of 2023+
@@ -45,7 +45,7 @@ function BpVerifyPassword(const aPassword: AnsiString; const aStored: string): B
 implementation
 
 uses
-  Windows, BpBase64;
+  BpSHA256, BpHMACSHA256, BpCompat, Windows, BpBase64;  // TBytes on Delphi 7
 
 const
   gcBpPasswordHashScheme = 'pbkdf2-sha256';

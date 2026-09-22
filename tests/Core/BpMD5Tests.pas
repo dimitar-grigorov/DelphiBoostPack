@@ -20,14 +20,13 @@ type
     procedure TestHashBuffer;
     procedure TestUpdateBytesStreaming;
     procedure TestHashFile;
-    procedure TestDigestToBase64;
     procedure TestCryptoApiCrossCheck;
   end;
 
 implementation
 
 uses
-  BpBase64, BpCryptoApiHash;
+  BpCryptoApiHash;
 
 procedure TBpMD5Tests.CheckHashStr(const aExpectedHex: string; const aText: AnsiString);
 begin
@@ -221,23 +220,6 @@ begin
     on E: EFOpenError do
       Check(True);
   end;
-end;
-
-procedure TBpMD5Tests.TestDigestToBase64;
-var
-  lvDigest: TbpMD5Digest;
-  lvBase64: string;
-  lvBytes: TBytes;
-  i: Integer;
-begin
-  lvDigest := TbpMD5.HashStr('abc');
-  lvBase64 := TbpMD5.DigestToBase64(lvDigest);
-  // 16 bytes encode to 24 chars with padding
-  CheckEquals(24, Length(lvBase64));
-  lvBytes := Base64Decode(lvBase64);
-  CheckEquals(16, Length(lvBytes));
-  for i := 0 to 15 do
-    CheckEquals(lvDigest[i], lvBytes[i], Format('byte %d', [i]));
 end;
 
 procedure TBpMD5Tests.TestCryptoApiCrossCheck;
