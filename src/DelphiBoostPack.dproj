@@ -57,7 +57,6 @@
     <DCCReference Include="Core\Classes\BpStringBuilder.pas" />
     <DCCReference Include="Core\Classes\BpTasks.pas" />
     <DCCReference Include="Core\Classes\InterfacedCollectionItem.pas" />
-    <DCCReference Include="Core\Interfaces\UniqueIdIntf.pas" />
     <DCCReference Include="Core\Units\BpBase64.pas" />
     <DCCReference Include="Core\Units\BpDateUtils.pas" />
     <DCCReference Include="Core\Units\BpStrUtils.pas" />

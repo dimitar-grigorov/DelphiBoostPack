@@ -19,6 +19,8 @@ type
     procedure CompareDifferentClasses;
     procedure CompareAsStringNewNil;
     procedure CompareNegativeTolerance;
+    // a zero renders as '' so the empty placeholder shows, anything else carries the property name
+    function MarkedValue(const aProp: string; const aValue: Variant): string;
   protected
     procedure SetUp; override;
     procedure TearDown; override;
@@ -71,6 +73,10 @@ type
     procedure TestStripIndexFromProperty_NestedBrackets;
     procedure TestStripIndexFromProperty_OnlyBrackets;
     procedure TestStripIndexFromProperty_BracketsAtEdges;
+
+    procedure TestDiffEntriesFollowTheFieldList;
+    procedure TestDiffEntriesValueCallback;
+    procedure TestDiffEntriesIgnoreTheItemIndex;
   end;
 
   TestTInterfacedCollectionItem = class(TTestCase)
@@ -976,6 +982,104 @@ var
 begin
   lvResult := TbpObjectComparer.StripIndexFromProperty('[Start]Property[End]');
   CheckEquals('Property', lvResult);
+end;
+
+function TestTBpObjectComparer.MarkedValue(const aProp: string; const aValue: Variant): string;
+begin
+  if VarToStr(aValue) = '0' then
+    Result := ''
+  else
+    Result := aProp + '#' + VarToStr(aValue);
+end;
+
+procedure TestTBpObjectComparer.TestDiffEntriesFollowTheFieldList;
+var
+  Obj2: TTestClassA;
+  Diffs: TPropDifferences;
+  Entries: TbpDiffEntries;
+begin
+  Obj2 := TTestClassA.Create;
+  try
+    FObjA.IntegerProp := 1;
+    FObjA.Int64Prop := 5;
+    FObjA.StringProp := 'a';
+    Obj2.IntegerProp := 2;
+    Obj2.Int64Prop := 6;
+    Diffs := TbpObjectComparer.CompareObjects(FObjA, Obj2);
+    CheckEquals(3, Length(Diffs), 'three properties changed');
+
+    Entries := TbpObjectComparer.DiffEntries(Diffs, ['StringProp', 'Name', 'IntegerProp', 'Count'], '(empty)');
+    CheckEquals(2, Length(Entries), 'Int64Prop is not listed');
+    CheckEquals('StringProp', Entries[0].Prop, 'the list order, not the RTTI order');
+    CheckEquals('(empty)', Entries[0].NewText, 'the placeholder');
+    CheckEquals('IntegerProp', Entries[1].Diff.OldPropPath, 'the difference itself');
+    CheckEquals('Name: a -> (empty); Count: 1 -> 2',
+      TbpObjectComparer.FormatDiffs(Entries, '%0:s: %1:s -> %2:s', '; '), 'one line');
+    CheckEquals('Name:a Count:1', TbpObjectComparer.FormatDiffs(Entries, '%0:s:%1:s', ' '), 'the old column');
+    CheckEquals('Name:(empty) Count:2', TbpObjectComparer.FormatDiffs(Entries, '%0:s:%2:s', ' '),
+      'the new column');
+
+    Entries := TbpObjectComparer.DiffEntries(Diffs, ['IntegerProp', 'int_prop', 'Missing', 'missing']);
+    CheckEquals('int_prop = :IntegerProp', TbpObjectComparer.FormatDiffs(Entries, '%0:s = :%4:s', ', '),
+      'the SET list of an update that writes only what changed');
+    CheckEquals('', TbpObjectComparer.FormatDiffs(TbpObjectComparer.DiffEntries(Diffs, ['Missing', 'X']),
+      '%0:s', ' '), 'nothing listed changed');
+  finally
+    Obj2.Free;
+  end;
+end;
+
+procedure TestTBpObjectComparer.TestDiffEntriesValueCallback;
+var
+  Obj2: TTestClassA;
+  Entries: TbpDiffEntries;
+begin
+  Obj2 := TTestClassA.Create;
+  try
+    Obj2.IntegerProp := 2;
+    Entries := TbpObjectComparer.DiffEntries(TbpObjectComparer.CompareObjects(FObjA, Obj2),
+      ['integerProp', 'Count'], '-', MarkedValue);
+    CheckEquals(1, Length(Entries), 'one entry');
+    CheckEquals('-', Entries[0].OldText, 'the callback''s empty result takes the placeholder');
+    CheckEquals('integerProp#2', Entries[0].NewText, 'the callback sees the listed name');
+  finally
+    Obj2.Free;
+  end;
+end;
+
+procedure TestTBpObjectComparer.TestDiffEntriesIgnoreTheItemIndex;
+var
+  Obj1, Obj2: TTestClassWithCollectionUnique;
+  Entries: TbpDiffEntries;
+begin
+  Obj1 := TTestClassWithCollectionUnique.Create;
+  Obj2 := TTestClassWithCollectionUnique.Create;
+  try
+    with Obj1.MyCollection.Add do
+    begin
+      ID := 77;
+      Name := 'Item1';
+    end;
+    with Obj1.MyCollection.Add do
+      ID := 33;
+    with Obj2.MyCollection.Add do
+      ID := 33;
+    with Obj2.MyCollection.Add do
+    begin
+      ID := 77;
+      Name := 'Renamed';
+    end;
+
+    Entries := TbpObjectComparer.DiffEntries(TbpObjectComparer.CompareObjects(Obj1, Obj2),
+      ['mycollection.NAME', 'Item', 'MyCollection.ID', 'Id']);
+    CheckEquals(1, Length(Entries), 'found without the index and whatever the case, the id is unchanged');
+    CheckEquals('MyCollection[1].Name', Entries[0].Diff.NewPropPath, 'the moved item');
+    CheckEquals('Item 77: Item1 -> Renamed', TbpObjectComparer.FormatDiffs(Entries,
+      '%0:s %3:s: %1:s -> %2:s', '; '), 'the item id in the text');
+  finally
+    Obj1.Free;
+    Obj2.Free;
+  end;
 end;
 
 // the item used to hold a counted reference to its owner, a cycle no outside release could break

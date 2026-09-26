@@ -8,7 +8,6 @@ uses
   BpIntList in 'Core\Classes\BpIntList.pas',
   BpInt64List in 'Core\Classes\BpInt64List.pas',
   BpObjectComparer in 'Core\Classes\BpObjectComparer.pas',
-  UniqueIdIntf in 'Core\Interfaces\UniqueIdIntf.pas',
   InterfacedCollectionItem in 'Core\Classes\InterfacedCollectionItem.pas',
   BpHashBobJenkins in 'Core\Classes\BpHashBobJenkins.pas',
   BpStrDictionary in 'Core\Classes\BpStrDictionary.pas',

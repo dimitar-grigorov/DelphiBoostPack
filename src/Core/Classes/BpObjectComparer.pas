@@ -8,6 +8,12 @@ uses
   Classes, SysUtils, Variants;
 
 type
+  // a collection item with this is matched by id, not index; declared beside its only reader
+  IUniqueId = interface
+    ['{3C43BE0B-C5A3-4C7E-949C-E15DF5E082A4}']
+    function GetUniqueId: string;
+  end;
+
   IPropDifference = interface
     ['{A8F6F896-B688-429D-9531-DA9095E3D983}']
     function GetOldPropPath: string;
@@ -33,7 +39,6 @@ type
     FIdx: string;
   public
     constructor Create(const aPropPath: string; const aOldValue, aNewValue: Variant); overload;
-    // used for collection item differences
     constructor Create(const aOldPropPath, aNewPropPath: string; const aOldValue, aNewValue: Variant; const aIdx: string = ''); overload;
     function GetOldPropPath: string;
     function GetNewPropPath: string;
@@ -44,26 +49,42 @@ type
 
   TPropDifferences = array of IPropDifference;
 
-  // raised by CompareObjects for a nil argument or two arguments of different classes
   EbpObjectComparer = class(Exception);
+
+  // renders one value for DiffEntries; aProp is the property as the field list names it
+  TbpDiffValueText = function(const aProp: string; const aValue: Variant): string of object;
+
+  TbpDiffEntry = record
+    Prop: string;
+    Caption: string;
+    OldText: string;
+    NewText: string;
+    Diff: IPropDifference;
+  end;
+
+  TbpDiffEntries = array of TbpDiffEntry;
 
   TbpObjectComparer = class
   public
     class function CompareObjects(aOld, aNew: TPersistent): TPropDifferences; overload;
-    // a tolerance of 0 is exact and dates are always exact; a bare excluded name skips at any depth,
-    // a dotted path from the root ('Lines.ModifiedOn', no item indexes) only there
+    // dates ignore the tolerance; a bare excluded name skips at any depth, a path like 'Lines.Note' only there
     class function CompareObjects(aOld, aNew: TPersistent; aFloatTolerance: Double;
       const aExcludedProps: array of string): TPropDifferences; overload;
     class function CompareObjectsAsString(aOld, aNew: TPersistent): string; overload;
     class function CompareObjectsAsString(aOld, aNew: TPersistent; aFloatTolerance: Double;
       const aExcludedProps: array of string): string; overload;
     class function StripIndexFromProperty(const aProp: string): string;
+    // aFields pairs a path without item indexes ('Lines.Amount') with a caption, in the output's order
+    class function DiffEntries(const aDiffs: TPropDifferences; const aFields: array of string;
+      const aEmpty: string = ''; aOnValue: TbpDiffValueText = nil): TbpDiffEntries;
+    // aTemplate formats caption, old, new, item id and property, as in '%0:s: %1:s -> %2:s'
+    class function FormatDiffs(const aEntries: TbpDiffEntries; const aTemplate, aSeparator: string): string;
   end;
 
 implementation
 
 uses
-  TypInfo, StrUtils, UniqueIdIntf, BpStrDictionary;
+  TypInfo, StrUtils, BpStrDictionary;
 
 type
   // Diffs grows by doubling and is trimmed to Count once, not on every append
@@ -92,73 +113,50 @@ begin
   Create(aPropPath, aPropPath, aOldValue, aNewValue);
 end;
 
-function TPropDifference.GetOldPropPath: string;
+procedure ComparePair(aOld, aNew: TObject; const aOldPath, aNewPath, aIdx: string;
+  var aState: TCompareState); forward;
+
+procedure CompareCollections(aOld, aNew: TCollection; const aOldPath, aNewPath: string;
+  var aState: TCompareState); forward;
+
+procedure CompareProps(aOld, aNew: TObject; const aOldPath, aNewPath, aIdx: string;
+  var aState: TCompareState); forward;
+
+class function TbpObjectComparer.CompareObjects(aOld, aNew: TPersistent): TPropDifferences;
 begin
-  Result := FOldPropPath;
+  Result := CompareObjects(aOld, aNew, 0, []);
 end;
 
-function TPropDifference.GetNewPropPath: string;
-begin
-  Result := FNewPropPath;
-end;
-
-function TPropDifference.GetOldValue: Variant;
-begin
-  Result := FOldValue;
-end;
-
-function TPropDifference.GetNewValue: Variant;
-begin
-  Result := FNewValue;
-end;
-
-function TPropDifference.GetIdx: string;
-begin
-  Result := FIdx;
-end;
-
-// a pair the RTL cannot convert is a difference, not EVariantTypeCastError
-function VarsDiffer(const aOld, aNew: Variant): Boolean;
-begin
-  try
-    Result := aOld <> aNew;
-  except
-    on EVariantError do
-      Result := True;
-  end;
-end;
-
-// a tolerance on a date would hide a change of up to that many days
-function IsDateTimeType(aTypeInfo: PTypeInfo): Boolean;
+class function TbpObjectComparer.CompareObjects(aOld, aNew: TPersistent; aFloatTolerance: Double;
+  const aExcludedProps: array of string): TPropDifferences;
 var
-  lvName: string;
-begin
-  lvName := string(aTypeInfo^.Name);
-  Result := SameText(lvName, 'TDateTime') or SameText(lvName, 'TDate') or SameText(lvName, 'TTime');
-end;
-
-function FloatsDiffer(const aOld, aNew, aTolerance: Extended): Boolean;
-begin
-  // the equality test first keeps Inf - Inf, an invalid operation, out of the subtraction
-  Result := (aOld <> aNew) and (Abs(aOld - aNew) > aTolerance);
-end;
-
-// property names are identifiers, so the match ignores case
-function InList(const aList: array of string; const aValue: string): Boolean;
-var
+  lvState: TCompareState;
   i: Integer;
 begin
-  Result := True;
-  for i := 0 to High(aList) do
-    if SameText(aList[i], aValue) then
-      Exit;
-  Result := False;
-end;
-
-function IsExcluded(const aState: TCompareState; const aName, aPath: string): Boolean;
-begin
-  Result := InList(aState.Excluded, aName) or
-    (aState.ExcludesPaths and InList(aState.Excluded, TbpObjectComparer.StripIndexFromProperty(aPath)));
+  if (aOld = nil) or (aNew = nil) then
+    raise EbpObjectComparer.Create('Cannot compare a nil object');
+  if aOld.ClassType <> aNew.ClassType then
+    raise EbpObjectComparer.CreateFmt('Cannot compare a %s with a %s', [aOld.ClassName, aNew.ClassName]);
+  if aFloatTolerance < 0 then
+    raise EbpObjectComparer.Create('The float tolerance cannot be negative');
+  lvState.Count := 0;
+  lvState.FloatTolerance := aFloatTolerance;
+  lvState.ExcludesPaths := False;
+  SetLength(lvState.Excluded, Length(aExcludedProps));
+  for i := 0 to High(aExcludedProps) do
+  begin
+    lvState.Excluded[i] := aExcludedProps[i];
+    if Pos('.', aExcludedProps[i]) > 0 then
+      lvState.ExcludesPaths := True;
+  end;
+  lvState.Path := TList.Create;
+  try
+    ComparePair(aOld, aNew, '', '', '', lvState);
+  finally
+    lvState.Path.Free;
+  end;
+  SetLength(lvState.Diffs, lvState.Count);
+  Result := lvState.Diffs;
 end;
 
 procedure AddDiff(var aState: TCompareState; const aDiff: IPropDifference);
@@ -169,27 +167,17 @@ begin
   Inc(aState.Count);
 end;
 
-function ItemPath(const aPath: string; aIndex: Integer): string;
-begin
-  Result := Format('%s[%d]', [aPath, aIndex]);
-end;
-
-procedure CompareCollections(aOld, aNew: TCollection; const aOldPath, aNewPath: string;
-  var aState: TCompareState); forward;
-
-procedure CompareProps(aOld, aNew: TObject; const aOldPath, aNewPath, aIdx: string;
-  var aState: TCompareState); forward;
-
-function ComponentName(aComponent: TComponent): string;
-begin
-  Result := aComponent.Name;
-  if Result = '' then
-    Result := aComponent.ClassName;
-end;
-
 // nil and a changed class are differences at the object's own path; only equal classes are walked
 procedure ComparePair(aOld, aNew: TObject; const aOldPath, aNewPath, aIdx: string;
   var aState: TCompareState);
+
+  function _ComponentName(aComponent: TComponent): string;
+  begin
+    Result := aComponent.Name;
+    if Result = '' then
+      Result := aComponent.ClassName;
+  end;
+
 begin
   if aNew = nil then
   begin
@@ -205,7 +193,7 @@ begin
     // a reference, as in streaming: identity is the value, the name is what the log can show
     if aOld <> aNew then
       AddDiff(aState, TPropDifference.Create(aOldPath, aNewPath,
-        ComponentName(TComponent(aOld)), ComponentName(TComponent(aNew)), aIdx));
+        _ComponentName(TComponent(aOld)), _ComponentName(TComponent(aNew)), aIdx));
   end
   else if aState.Path.IndexOf(aOld) < 0 then
   begin
@@ -223,6 +211,50 @@ end;
 
 procedure CompareProps(aOld, aNew: TObject; const aOldPath, aNewPath, aIdx: string;
   var aState: TCompareState);
+
+  function _VarsDiffer(const aOldValue, aNewValue: Variant): Boolean;
+  begin
+    // a pair the RTL cannot convert is a difference, not EVariantTypeCastError
+    try
+      Result := aOldValue <> aNewValue;
+    except
+      on EVariantError do
+        Result := True;
+    end;
+  end;
+
+  function _IsDateTimeType(aTypeInfo: PTypeInfo): Boolean;
+  var
+    lvName: string;
+  begin
+    // a tolerance on a date would hide a change of up to that many days
+    lvName := string(aTypeInfo^.Name);
+    Result := SameText(lvName, 'TDateTime') or SameText(lvName, 'TDate') or SameText(lvName, 'TTime');
+  end;
+
+  function _FloatsDiffer(const aOldValue, aNewValue, aTolerance: Extended): Boolean;
+  begin
+    // the equality test first keeps Inf - Inf, an invalid operation, out of the subtraction
+    Result := (aOldValue <> aNewValue) and (Abs(aOldValue - aNewValue) > aTolerance);
+  end;
+
+  function _InList(const aList: array of string; const aValue: string): Boolean;
+  var
+    i: Integer;
+  begin
+    Result := True;
+    for i := 0 to High(aList) do
+      if SameText(aList[i], aValue) then
+        Exit;
+    Result := False;
+  end;
+
+  function _IsExcluded(const aName, aPath: string): Boolean;
+  begin
+    Result := _InList(aState.Excluded, aName) or
+      (aState.ExcludesPaths and _InList(aState.Excluded, TbpObjectComparer.StripIndexFromProperty(aPath)));
+  end;
+
 var
   lvPropList: PPropList;
   lvPropCount, i: Integer;
@@ -241,7 +273,7 @@ begin
       lvPropInfo := lvPropList^[i];
       lvOldPropPath := IfThen(aOldPath <> '', aOldPath + '.', '') + string(lvPropInfo^.Name);
       lvNewPropPath := IfThen(aNewPath <> '', aNewPath + '.', '') + string(lvPropInfo^.Name);
-      if IsExcluded(aState, string(lvPropInfo^.Name), lvOldPropPath) then
+      if _IsExcluded(string(lvPropInfo^.Name), lvOldPropPath) then
         Continue;
 
       case lvPropInfo^.PropType^.Kind of
@@ -274,15 +306,15 @@ begin
             Continue;
           end;
       else
-        Continue; // unhandled property kinds are ignored, not diffed
+        Continue;
       end;
 
       if (lvPropInfo^.PropType^.Kind = tkFloat) and (aState.FloatTolerance > 0) and
-        not IsDateTimeType(lvPropInfo^.PropType^) then
-        lvDiffers := FloatsDiffer(GetFloatProp(aOld, lvPropInfo), GetFloatProp(aNew, lvPropInfo),
+        not _IsDateTimeType(lvPropInfo^.PropType^) then
+        lvDiffers := _FloatsDiffer(GetFloatProp(aOld, lvPropInfo), GetFloatProp(aNew, lvPropInfo),
           aState.FloatTolerance)
       else
-        lvDiffers := VarsDiffer(lvOldValue, lvNewValue);
+        lvDiffers := _VarsDiffer(lvOldValue, lvNewValue);
       if lvDiffers then
         AddDiff(aState, TPropDifference.Create(lvOldPropPath, lvNewPropPath, lvOldValue, lvNewValue, aIdx));
     end;
@@ -293,6 +325,12 @@ end;
 
 procedure CompareCollections(aOld, aNew: TCollection; const aOldPath, aNewPath: string;
   var aState: TCompareState);
+
+  function _ItemPath(const aPath: string; aIndex: Integer): string;
+  begin
+    Result := Format('%s[%d]', [aPath, aIndex]);
+  end;
+
 var
   i, lvNewIdx: Integer;
   lvOldItem: TCollectionItem;
@@ -345,58 +383,21 @@ begin
       if lvNewIdx >= 0 then
       begin
         lvMatched[lvNewIdx] := True;
-        ComparePair(lvOldItem, aNew.Items[lvNewIdx], ItemPath(aOldPath, i),
-          ItemPath(aNewPath, lvNewIdx), lvId, aState);
+        ComparePair(lvOldItem, aNew.Items[lvNewIdx], _ItemPath(aOldPath, i),
+          _ItemPath(aNewPath, lvNewIdx), lvId, aState);
       end
       else
-        AddDiff(aState, TPropDifference.Create(ItemPath(aOldPath, i), ItemPath(aOldPath, i),
+        AddDiff(aState, TPropDifference.Create(_ItemPath(aOldPath, i), _ItemPath(aOldPath, i),
           'Exists in old', 'Missing in new', lvId));
     end;
 
     for i := 0 to aNew.Count - 1 do
       if not lvMatched[i] then
-        AddDiff(aState, TPropDifference.Create(ItemPath(aNewPath, i), ItemPath(aNewPath, i),
+        AddDiff(aState, TPropDifference.Create(_ItemPath(aNewPath, i), _ItemPath(aNewPath, i),
           'Missing in old', 'Exists in new', IntToStr(i)));
   finally
     lvById.Free;
   end;
-end;
-
-class function TbpObjectComparer.CompareObjects(aOld, aNew: TPersistent): TPropDifferences;
-begin
-  Result := CompareObjects(aOld, aNew, 0, []);
-end;
-
-class function TbpObjectComparer.CompareObjects(aOld, aNew: TPersistent; aFloatTolerance: Double;
-  const aExcludedProps: array of string): TPropDifferences;
-var
-  lvState: TCompareState;
-  i: Integer;
-begin
-  if (aOld = nil) or (aNew = nil) then
-    raise EbpObjectComparer.Create('Cannot compare a nil object');
-  if aOld.ClassType <> aNew.ClassType then
-    raise EbpObjectComparer.CreateFmt('Cannot compare a %s with a %s', [aOld.ClassName, aNew.ClassName]);
-  if aFloatTolerance < 0 then
-    raise EbpObjectComparer.Create('The float tolerance cannot be negative');
-  lvState.Count := 0;
-  lvState.FloatTolerance := aFloatTolerance;
-  lvState.ExcludesPaths := False;
-  SetLength(lvState.Excluded, Length(aExcludedProps));
-  for i := 0 to High(aExcludedProps) do
-  begin
-    lvState.Excluded[i] := aExcludedProps[i];
-    if Pos('.', aExcludedProps[i]) > 0 then
-      lvState.ExcludesPaths := True;
-  end;
-  lvState.Path := TList.Create;
-  try
-    ComparePair(aOld, aNew, '', '', '', lvState);
-  finally
-    lvState.Path.Free;
-  end;
-  SetLength(lvState.Diffs, lvState.Count);
-  Result := lvState.Diffs;
 end;
 
 class function TbpObjectComparer.CompareObjectsAsString(aOld, aNew: TPersistent): string;
@@ -452,6 +453,92 @@ begin
     end;
   end;
   SetLength(Result, lvLen);
+end;
+
+class function TbpObjectComparer.DiffEntries(const aDiffs: TPropDifferences;
+  const aFields: array of string; const aEmpty: string; aOnValue: TbpDiffValueText): TbpDiffEntries;
+
+  function _ValueText(const aProp: string; const aValue: Variant): string;
+  begin
+    // an empty rendering takes the placeholder, the callback's own '' included
+    if Assigned(aOnValue) then
+      Result := aOnValue(aProp, aValue)
+    else
+      Result := VarToStr(aValue);
+    if Result = '' then
+      Result := aEmpty;
+  end;
+
+var
+  lvPaths: array of string;
+  I, J, lvCount: Integer;
+begin
+  if Odd(Length(aFields)) then
+    raise EbpObjectComparer.Create('Every property in the field list needs a caption');
+  SetLength(lvPaths, Length(aDiffs));
+  for J := 0 to High(aDiffs) do
+    lvPaths[J] := StripIndexFromProperty(aDiffs[J].OldPropPath);
+  // Result can arrive holding the caller's old array, which the writes below must not touch
+  Result := nil;
+  lvCount := 0;
+  I := 0;
+  while I < High(aFields) do
+  begin
+    for J := 0 to High(aDiffs) do
+      if SameText(lvPaths[J], aFields[I]) then
+      begin
+        if lvCount = Length(Result) then
+          SetLength(Result, 4 + lvCount * 2);
+        Result[lvCount].Prop := aFields[I];
+        Result[lvCount].Caption := aFields[I + 1];
+        Result[lvCount].OldText := _ValueText(aFields[I], aDiffs[J].OldValue);
+        Result[lvCount].NewText := _ValueText(aFields[I], aDiffs[J].NewValue);
+        Result[lvCount].Diff := aDiffs[J];
+        Inc(lvCount);
+      end;
+    Inc(I, 2);
+  end;
+  SetLength(Result, lvCount);
+end;
+
+class function TbpObjectComparer.FormatDiffs(const aEntries: TbpDiffEntries;
+  const aTemplate, aSeparator: string): string;
+var
+  I: Integer;
+begin
+  Result := '';
+  for I := 0 to High(aEntries) do
+  begin
+    if I > 0 then
+      Result := Result + aSeparator;
+    Result := Result + Format(aTemplate, [aEntries[I].Caption, aEntries[I].OldText,
+      aEntries[I].NewText, aEntries[I].Diff.Idx, aEntries[I].Prop]);
+  end;
+end;
+
+function TPropDifference.GetOldPropPath: string;
+begin
+  Result := FOldPropPath;
+end;
+
+function TPropDifference.GetNewPropPath: string;
+begin
+  Result := FNewPropPath;
+end;
+
+function TPropDifference.GetOldValue: Variant;
+begin
+  Result := FOldValue;
+end;
+
+function TPropDifference.GetNewValue: Variant;
+begin
+  Result := FNewValue;
+end;
+
+function TPropDifference.GetIdx: string;
+begin
+  Result := FIdx;
 end;
 
 end.

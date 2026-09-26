@@ -3,7 +3,7 @@ unit BpObjectComparerCollectionClasses;
 interface
 
 uses
-  Windows, Classes, UniqueIdIntf, InterfacedCollectionItem;
+  Windows, Classes, BpObjectComparer, InterfacedCollectionItem;
 
 type
   TMyEnumCol = (meValueOne, meValueTwo);

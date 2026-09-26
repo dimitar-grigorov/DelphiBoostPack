@@ -13,7 +13,7 @@ HTTP, JSON, hash dictionaries, SHA-256, background tasks. Pure Pascal source, no
 
 Nothing to install, two ways in:
 
-- **Modular.** Put `src\Core\Classes`, `src\Core\Units` and `src\Core\Interfaces` on your library path, or copy the units you use. A few want a companion: the dictionaries want `BpVariantUtils` and `BpKeyFold`, `TbpStringList` wants `BpKeyFold`, `BpJson` wants `BpStringBuilder`, `BpHMACSHA256` and `BpPasswordHash` want `BpBase64`, `BpPathUtils` wants `BpKeyFold`, `BpObjectComparer` wants `UniqueIdIntf` and `BpStrDictionary`, and everything that touches `TBytes` wants `BpCompat`.
+- **Modular.** Put `src\Core\Classes` and `src\Core\Units` on your library path, or copy the units you use. A few want a companion: the dictionaries want `BpVariantUtils` and `BpKeyFold`, `TbpStringList` wants `BpKeyFold`, `BpJson` wants `BpStringBuilder`, `BpHMACSHA256` and `BpPasswordHash` want `BpBase64`, `BpPathUtils` wants `BpKeyFold`, `BpObjectComparer` wants `BpStrDictionary`, and everything that touches `TBytes` wants `BpCompat`.
 - **One file.** Take a bundle from [dist/](dist/) instead. Each is self-contained, so do not also use the modular units it embeds.
 
 An HTTPS call and a JSON parse, on a 2007 compiler, with nothing else installed:

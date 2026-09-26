@@ -36,7 +36,6 @@ uses
   BpObjectComparerSimpleClasses in 'Core\BpObjectComparerSimpleClasses.pas',
   BpObjectComparerSimpleTests in 'Core\BpObjectComparerSimpleTests.pas',
   BpObjectComparer in '..\src\Core\Classes\BpObjectComparer.pas',
-  UniqueIdIntf in '..\src\Core\Interfaces\UniqueIdIntf.pas',
   InterfacedCollectionItem in '..\src\Core\Classes\InterfacedCollectionItem.pas',
   BpHashBobJenkinsTests in 'Core\BpHashBobJenkinsTests.pas',
   BpHashBobJenkins in '..\src\Core\Classes\BpHashBobJenkins.pas',
