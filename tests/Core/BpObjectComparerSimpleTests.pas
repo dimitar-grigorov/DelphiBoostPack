@@ -18,6 +18,7 @@ type
     procedure CompareBothNil;
     procedure CompareDifferentClasses;
     procedure CompareAsStringNewNil;
+    procedure CompareNegativeTolerance;
   protected
     procedure SetUp; override;
     procedure TearDown; override;
@@ -35,6 +36,16 @@ type
     procedure TestObjectCycleTerminates;
     procedure TestCollectionReachableFromItsItemTerminates;
     procedure TestCompareObjectsAsString;
+    procedure TestLastBitFloatDifferenceIsExactByDefault;
+    procedure TestFloatWithinToleranceIsNoDifference;
+    procedure TestFloatBeyondToleranceIsADifference;
+    procedure TestDateTimeIgnoresTolerance;
+    procedure TestNegativeToleranceRaises;
+    procedure TestExcludedNameIsSkippedAtAnyDepth;
+    procedure TestExcludedPathIsSkippedOnlyThere;
+    procedure TestExcludedPathIgnoresItemIndex;
+    procedure TestExcludedObjectSkipsItsSubtree;
+    procedure TestCompareObjectsAsStringWithOptions;
 
     procedure TestCompareWithSameCollectionData;
     procedure TestCompareWithDifferentCollectionData;
@@ -111,6 +122,20 @@ end;
 procedure TestTBpObjectComparer.CompareAsStringNewNil;
 begin
   TbpObjectComparer.CompareObjectsAsString(FObjA, nil);
+end;
+
+procedure TestTBpObjectComparer.CompareNegativeTolerance;
+begin
+  TbpObjectComparer.CompareObjects(FObjA, FObjA, -0.001, []);
+end;
+
+// the next representable Double above aValue, the kind of gap a DB round trip leaves
+function NextDouble(aValue: Double): Double;
+var
+  lvBits: Int64 absolute Result;
+begin
+  Result := aValue;
+  Inc(lvBits);
 end;
 
 // nil used to be an access violation on aOld.ClassInfo or inside GetPropValue
@@ -1022,6 +1047,193 @@ begin
   finally
     Orphan.Free;
     Component.Free;
+  end;
+end;
+
+procedure TestTBpObjectComparer.TestLastBitFloatDifferenceIsExactByDefault;
+var
+  Obj1, Obj2: TTestAuditRecord;
+begin
+  Obj1 := TTestAuditRecord.Create;
+  Obj2 := TTestAuditRecord.Create;
+  try
+    Obj1.Amount := 12.34;
+    Obj2.Amount := NextDouble(12.34);
+    CheckEquals(1, Length(TbpObjectComparer.CompareObjects(Obj1, Obj2)), 'the old overload still compares exactly');
+    CheckEquals(1, Length(TbpObjectComparer.CompareObjects(Obj1, Obj2, 0, [])), 'a zero tolerance compares exactly');
+  finally
+    Obj1.Free;
+    Obj2.Free;
+  end;
+end;
+
+procedure TestTBpObjectComparer.TestFloatWithinToleranceIsNoDifference;
+var
+  Obj1, Obj2: TTestAuditRecord;
+begin
+  Obj1 := TTestAuditRecord.Create;
+  Obj2 := TTestAuditRecord.Create;
+  try
+    Obj1.Amount := 12.34;
+    Obj2.Amount := NextDouble(12.34);
+    CheckEquals(0, Length(TbpObjectComparer.CompareObjects(Obj1, Obj2, 0.0005, [])), 'last bit');
+    Obj2.Amount := 12.3404;
+    CheckEquals(0, Length(TbpObjectComparer.CompareObjects(Obj1, Obj2, 0.0005, [])), 'inside the tolerance');
+  finally
+    Obj1.Free;
+    Obj2.Free;
+  end;
+end;
+
+procedure TestTBpObjectComparer.TestFloatBeyondToleranceIsADifference;
+var
+  Obj1, Obj2: TTestAuditRecord;
+  Diffs: TPropDifferences;
+begin
+  Obj1 := TTestAuditRecord.Create;
+  Obj2 := TTestAuditRecord.Create;
+  try
+    Obj1.Amount := 12.34;
+    Obj2.Amount := 12.35;
+    Diffs := TbpObjectComparer.CompareObjects(Obj1, Obj2, 0.0005, []);
+    CheckEquals(1, Length(Diffs), 'a cent is a change');
+    CheckEquals('Amount', Diffs[0].OldPropPath, 'property path');
+    CheckEquals(12.34, Diffs[0].OldValue, 0.0001, 'old value as read');
+    CheckEquals(12.35, Diffs[0].NewValue, 0.0001, 'new value as read');
+  finally
+    Obj1.Free;
+    Obj2.Free;
+  end;
+end;
+
+// a tolerance on a TDateTime would be days, so a date keeps the exact compare
+procedure TestTBpObjectComparer.TestDateTimeIgnoresTolerance;
+var
+  Obj1, Obj2: TTestAuditRecord;
+  Diffs: TPropDifferences;
+begin
+  Obj1 := TTestAuditRecord.Create;
+  Obj2 := TTestAuditRecord.Create;
+  try
+    Obj1.ModifiedOn := EncodeDate(2026, 9, 26) + EncodeTime(10, 0, 0, 0);
+    Obj2.ModifiedOn := Obj1.ModifiedOn + EncodeTime(0, 0, 1, 0);
+    Diffs := TbpObjectComparer.CompareObjects(Obj1, Obj2, 0.5, []);
+    CheckEquals(1, Length(Diffs), 'a second apart is a change under any tolerance');
+    CheckEquals('ModifiedOn', Diffs[0].OldPropPath, 'property path');
+  finally
+    Obj1.Free;
+    Obj2.Free;
+  end;
+end;
+
+procedure TestTBpObjectComparer.TestNegativeToleranceRaises;
+begin
+  CheckException(CompareNegativeTolerance, EbpObjectComparer);
+end;
+
+procedure TestTBpObjectComparer.TestExcludedNameIsSkippedAtAnyDepth;
+var
+  Obj1, Obj2: TTestAuditRecord;
+  Diffs: TPropDifferences;
+begin
+  Obj1 := TTestAuditRecord.Create;
+  Obj2 := TTestAuditRecord.Create;
+  try
+    Obj2.ModifiedOn := Now;
+    Obj2.Amount := 1;
+    Obj2.Inner.StringProp := 'changed';
+    Diffs := TbpObjectComparer.CompareObjects(Obj1, Obj2, 0, ['modifiedon', 'StringProp']);
+    CheckEquals(1, Length(Diffs), 'only the amount is left, names match case-insensitively');
+    CheckEquals('Amount', Diffs[0].OldPropPath, 'property path');
+  finally
+    Obj1.Free;
+    Obj2.Free;
+  end;
+end;
+
+procedure TestTBpObjectComparer.TestExcludedPathIsSkippedOnlyThere;
+var
+  Obj1, Obj2: TTestAuditRecord;
+  Diffs: TPropDifferences;
+begin
+  Obj1 := TTestAuditRecord.Create;
+  Obj2 := TTestAuditRecord.Create;
+  try
+    Obj2.Inner.IntegerProp := 1;
+    Obj2.Inner.StringProp := 'changed';
+    Diffs := TbpObjectComparer.CompareObjects(Obj1, Obj2, 0, ['Inner.IntegerProp', 'StringProp.Inner']);
+    CheckEquals(1, Length(Diffs), 'the path skips one property, a path that does not exist skips nothing');
+    CheckEquals('Inner.StringProp', Diffs[0].OldPropPath, 'property path');
+  finally
+    Obj1.Free;
+    Obj2.Free;
+  end;
+end;
+
+procedure TestTBpObjectComparer.TestExcludedPathIgnoresItemIndex;
+var
+  Obj1, Obj2: TTestClassWithCollection;
+  Diffs: TPropDifferences;
+begin
+  Obj1 := TTestClassWithCollection.Create;
+  Obj2 := TTestClassWithCollection.Create;
+  try
+    with Obj1.MyCollection.Add do
+    begin
+      Name := 'old';
+      ID := 1;
+    end;
+    with Obj2.MyCollection.Add do
+    begin
+      Name := 'new';
+      ID := 2;
+    end;
+    Diffs := TbpObjectComparer.CompareObjects(Obj1, Obj2, 0, ['MyCollection.Name']);
+    CheckEquals(1, Length(Diffs), 'the name of every item is skipped');
+    CheckEquals('MyCollection[0].ID', Diffs[0].OldPropPath, 'property path');
+  finally
+    Obj1.Free;
+    Obj2.Free;
+  end;
+end;
+
+procedure TestTBpObjectComparer.TestExcludedObjectSkipsItsSubtree;
+var
+  Obj1, Obj2: TTestClassWithCollection;
+begin
+  Obj1 := TTestClassWithCollection.Create;
+  Obj2 := TTestClassWithCollection.Create;
+  try
+    Obj1.MyCollection.Add.Name := 'old';
+    Obj2.MyCollection.Add.Name := 'new';
+    Obj2.MyCollection.Add;
+    CheckEquals(0, Length(TbpObjectComparer.CompareObjects(Obj1, Obj2, 0, ['MyCollection'])),
+      'neither the items nor the count are compared');
+  finally
+    Obj1.Free;
+    Obj2.Free;
+  end;
+end;
+
+procedure TestTBpObjectComparer.TestCompareObjectsAsStringWithOptions;
+var
+  Obj1, Obj2: TTestAuditRecord;
+  Text: string;
+begin
+  Obj1 := TTestAuditRecord.Create;
+  Obj2 := TTestAuditRecord.Create;
+  try
+    Obj1.Amount := 12.34;
+    Obj2.Amount := NextDouble(12.34);
+    Obj2.ModifiedOn := Now;
+    Obj2.Inner.IntegerProp := 7;
+    Text := TbpObjectComparer.CompareObjectsAsString(Obj1, Obj2, 0.0005, ['ModifiedOn']);
+    CheckTrue(Pos('Inner.IntegerProp', Text) > 0, 'the real change is listed');
+    CheckFalse(Pos('Amount', Text) > 0, 'the last-bit amount is not');
+    CheckFalse(Pos('ModifiedOn', Text) > 0, 'the excluded stamp is not');
+  finally
+    Obj1.Free;
+    Obj2.Free;
   end;
 end;
 

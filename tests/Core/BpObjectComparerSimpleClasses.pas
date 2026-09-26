@@ -56,6 +56,21 @@ type
     property Ref: TComponent read FRef write FRef;
   end;
 
+  // the shape of a saved record: an amount, an audit stamp and a nested part
+  TTestAuditRecord = class(TPersistent)
+  private
+    FAmount: Double;
+    FModifiedOn: TDateTime;
+    FInner: TTestClassA;
+  public
+    constructor Create;
+    destructor Destroy; override;
+  published
+    property Amount: Double read FAmount write FAmount;
+    property ModifiedOn: TDateTime read FModifiedOn write FModifiedOn;
+    property Inner: TTestClassA read FInner write FInner;
+  end;
+
 implementation
 
 constructor TTestNode.Create;
@@ -65,6 +80,18 @@ begin
 end;
 
 destructor TTestNode.Destroy;
+begin
+  FInner.Free;
+  inherited Destroy;
+end;
+
+constructor TTestAuditRecord.Create;
+begin
+  inherited Create;
+  FInner := TTestClassA.Create;
+end;
+
+destructor TTestAuditRecord.Destroy;
 begin
   FInner.Free;
   inherited Destroy;

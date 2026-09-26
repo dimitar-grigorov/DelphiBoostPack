@@ -334,7 +334,10 @@ Diffs two `TPersistent` objects of the same class by RTTI and reports which publ
 ```pascal
 lvDiffs := TbpObjectComparer.CompareObjects(lvBefore, lvAfter);   // IPropDifference
 Memo1.Text := TbpObjectComparer.CompareObjectsAsString(lvBefore, lvAfter);
+lvDiffs := TbpObjectComparer.CompareObjects(lvBefore, lvAfter, 0.0005, ['ModifiedOn', 'Lines.Note']);
 ```
+
+The overload adds a float tolerance (0 is exact; dates always are) and properties to skip: a bare name at any depth, a dotted path without item indexes only there.
 
 Each difference carries the property path and the old and new values, ready for an audit log. Collection items match by identity rather than position when they implement `IUniqueID`, which is why old and new paths are separate fields: a moved item is reported as changed, not as two unrelated edits. Items sharing an id pair up in order. A nil argument or two different classes raise `EbpObjectComparer`; nil or a changed class further down is one difference.
 

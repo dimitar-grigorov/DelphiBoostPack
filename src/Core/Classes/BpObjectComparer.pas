@@ -49,8 +49,14 @@ type
 
   TbpObjectComparer = class
   public
-    class function CompareObjects(aOld, aNew: TPersistent): TPropDifferences;
-    class function CompareObjectsAsString(aOld, aNew: TPersistent): string;
+    class function CompareObjects(aOld, aNew: TPersistent): TPropDifferences; overload;
+    // a tolerance of 0 is exact and dates are always exact; a bare excluded name skips at any depth,
+    // a dotted path from the root ('Lines.ModifiedOn', no item indexes) only there
+    class function CompareObjects(aOld, aNew: TPersistent; aFloatTolerance: Double;
+      const aExcludedProps: array of string): TPropDifferences; overload;
+    class function CompareObjectsAsString(aOld, aNew: TPersistent): string; overload;
+    class function CompareObjectsAsString(aOld, aNew: TPersistent; aFloatTolerance: Double;
+      const aExcludedProps: array of string): string; overload;
     class function StripIndexFromProperty(const aProp: string): string;
   end;
 
@@ -65,6 +71,9 @@ type
     Diffs: TPropDifferences;
     Count: Integer;
     Path: TList; // the old-side objects open on the current descent, so a cycle is skipped, not followed
+    FloatTolerance: Double;
+    Excluded: array of string; // a handful of names, scanned linearly with nothing to free
+    ExcludesPaths: Boolean;    // an entry has a dot, so the stripped path is worth building
   end;
 
 constructor TPropDifference.Create(const aOldPropPath, aNewPropPath: string; const aOldValue,
@@ -117,6 +126,39 @@ begin
     on EVariantError do
       Result := True;
   end;
+end;
+
+// a tolerance on a date would hide a change of up to that many days
+function IsDateTimeType(aTypeInfo: PTypeInfo): Boolean;
+var
+  lvName: string;
+begin
+  lvName := string(aTypeInfo^.Name);
+  Result := SameText(lvName, 'TDateTime') or SameText(lvName, 'TDate') or SameText(lvName, 'TTime');
+end;
+
+function FloatsDiffer(const aOld, aNew, aTolerance: Extended): Boolean;
+begin
+  // the equality test first keeps Inf - Inf, an invalid operation, out of the subtraction
+  Result := (aOld <> aNew) and (Abs(aOld - aNew) > aTolerance);
+end;
+
+// property names are identifiers, so the match ignores case
+function InList(const aList: array of string; const aValue: string): Boolean;
+var
+  i: Integer;
+begin
+  Result := True;
+  for i := 0 to High(aList) do
+    if SameText(aList[i], aValue) then
+      Exit;
+  Result := False;
+end;
+
+function IsExcluded(const aState: TCompareState; const aName, aPath: string): Boolean;
+begin
+  Result := InList(aState.Excluded, aName) or
+    (aState.ExcludesPaths and InList(aState.Excluded, TbpObjectComparer.StripIndexFromProperty(aPath)));
 end;
 
 procedure AddDiff(var aState: TCompareState; const aDiff: IPropDifference);
@@ -188,6 +230,7 @@ var
   lvOldValue, lvNewValue: Variant;
   lvOldPropPath, lvNewPropPath: string;
   lvOldWide, lvNewWide: WideString;
+  lvDiffers: Boolean;
 begin
   lvPropCount := GetPropList(aOld.ClassInfo, tkProperties, nil);
   GetMem(lvPropList, lvPropCount * SizeOf(Pointer));
@@ -198,6 +241,8 @@ begin
       lvPropInfo := lvPropList^[i];
       lvOldPropPath := IfThen(aOldPath <> '', aOldPath + '.', '') + string(lvPropInfo^.Name);
       lvNewPropPath := IfThen(aNewPath <> '', aNewPath + '.', '') + string(lvPropInfo^.Name);
+      if IsExcluded(aState, string(lvPropInfo^.Name), lvOldPropPath) then
+        Continue;
 
       case lvPropInfo^.PropType^.Kind of
         // tkUString exists from Delphi 2009 on; without it every string property is skipped
@@ -211,14 +256,14 @@ begin
           end;
         tkChar:
           begin
-            lvOldValue := Char(GetOrdProp(aOld, string(lvPropInfo^.Name)));
-            lvNewValue := Char(GetOrdProp(aNew, string(lvPropInfo^.Name)));
+            lvOldValue := Char(GetOrdProp(aOld, lvPropInfo));
+            lvNewValue := Char(GetOrdProp(aNew, lvPropInfo));
           end;
         tkWChar:
           begin
             // via WideString, or Char drops the high byte before Delphi 2009
-            lvOldWide := WideChar(GetOrdProp(aOld, string(lvPropInfo^.Name)));
-            lvNewWide := WideChar(GetOrdProp(aNew, string(lvPropInfo^.Name)));
+            lvOldWide := WideChar(GetOrdProp(aOld, lvPropInfo));
+            lvNewWide := WideChar(GetOrdProp(aNew, lvPropInfo));
             lvOldValue := lvOldWide;
             lvNewValue := lvNewWide;
           end;
@@ -232,7 +277,13 @@ begin
         Continue; // unhandled property kinds are ignored, not diffed
       end;
 
-      if VarsDiffer(lvOldValue, lvNewValue) then
+      if (lvPropInfo^.PropType^.Kind = tkFloat) and (aState.FloatTolerance > 0) and
+        not IsDateTimeType(lvPropInfo^.PropType^) then
+        lvDiffers := FloatsDiffer(GetFloatProp(aOld, lvPropInfo), GetFloatProp(aNew, lvPropInfo),
+          aState.FloatTolerance)
+      else
+        lvDiffers := VarsDiffer(lvOldValue, lvNewValue);
+      if lvDiffers then
         AddDiff(aState, TPropDifference.Create(lvOldPropPath, lvNewPropPath, lvOldValue, lvNewValue, aIdx));
     end;
   finally
@@ -312,14 +363,32 @@ begin
 end;
 
 class function TbpObjectComparer.CompareObjects(aOld, aNew: TPersistent): TPropDifferences;
+begin
+  Result := CompareObjects(aOld, aNew, 0, []);
+end;
+
+class function TbpObjectComparer.CompareObjects(aOld, aNew: TPersistent; aFloatTolerance: Double;
+  const aExcludedProps: array of string): TPropDifferences;
 var
   lvState: TCompareState;
+  i: Integer;
 begin
   if (aOld = nil) or (aNew = nil) then
     raise EbpObjectComparer.Create('Cannot compare a nil object');
   if aOld.ClassType <> aNew.ClassType then
     raise EbpObjectComparer.CreateFmt('Cannot compare a %s with a %s', [aOld.ClassName, aNew.ClassName]);
+  if aFloatTolerance < 0 then
+    raise EbpObjectComparer.Create('The float tolerance cannot be negative');
   lvState.Count := 0;
+  lvState.FloatTolerance := aFloatTolerance;
+  lvState.ExcludesPaths := False;
+  SetLength(lvState.Excluded, Length(aExcludedProps));
+  for i := 0 to High(aExcludedProps) do
+  begin
+    lvState.Excluded[i] := aExcludedProps[i];
+    if Pos('.', aExcludedProps[i]) > 0 then
+      lvState.ExcludesPaths := True;
+  end;
   lvState.Path := TList.Create;
   try
     ComparePair(aOld, aNew, '', '', '', lvState);
@@ -331,12 +400,18 @@ begin
 end;
 
 class function TbpObjectComparer.CompareObjectsAsString(aOld, aNew: TPersistent): string;
+begin
+  Result := CompareObjectsAsString(aOld, aNew, 0, []);
+end;
+
+class function TbpObjectComparer.CompareObjectsAsString(aOld, aNew: TPersistent; aFloatTolerance: Double;
+  const aExcludedProps: array of string): string;
 var
   lvDiffs: TPropDifferences;
   lvStrings: TStringList;
   I: Integer;
 begin
-  lvDiffs := CompareObjects(aOld, aNew);
+  lvDiffs := CompareObjects(aOld, aNew, aFloatTolerance, aExcludedProps);
   lvStrings := TStringList.Create;
   try
     for I := 0 to High(lvDiffs) do
@@ -355,14 +430,14 @@ end;
 
 class function TbpObjectComparer.StripIndexFromProperty(const aProp: string): string;
 var
-  lvResult: string;
   lvChar: Char;
   lvInBrackets: Boolean;
-  I: Integer;
+  I, lvLen: Integer;
 begin
-  lvResult := '';
+  // sized once and trimmed, not grown a char at a time
+  SetLength(Result, Length(aProp));
+  lvLen := 0;
   lvInBrackets := False;
-
   for I := 1 to Length(aProp) do
   begin
     lvChar := aProp[I];
@@ -371,10 +446,12 @@ begin
     else if lvChar = ']' then
       lvInBrackets := False
     else if not lvInBrackets then
-      lvResult := lvResult + lvChar;
+    begin
+      Inc(lvLen);
+      Result[lvLen] := lvChar;
+    end;
   end;
-
-  Result := lvResult;
+  SetLength(Result, lvLen);
 end;
 
 end.
