@@ -1,20 +1,7 @@
 unit BpHttpClient;
 
-// HTTP/HTTPS over WinInet for Delphi 7/2007+. TLS comes from Schannel, so no
-// OpenSSL DLLs to ship. Cancellable sync verbs, streaming downloads with
-// progress, and an async download task. Not from a Windows service: WinInet
-// is unsupported there, that is what WinHTTP is for. README has examples.
-//
-// House rule: the library is one class per unit, this one is deliberately
-// self-contained. A helper of up to ~300 lines that nothing else needs lives
-// here rather than in a unit of its own; the moment a second unit needs it,
-// it moves out, which is what the cancellation token did.
-//
-// It also ships as the single-file BpHttpClientStandalone bundle, where every
-// dependency is a unit the consumer is forced to carry. So the ~55 lines of
-// Base64 it needs are mirrored from BpBase64 rather than used, which is what
-// keeps that bundle down to this unit and BpTasks. The copy is not free-hand:
-// tools\CheckMirrors.js fails the build if the two regions stop matching.
+// HTTP/HTTPS over WinInet with Schannel TLS: cancellable requests, streaming downloads and an async download task.
+// Not for a Windows service, where WinInet is unsupported. The Base64 region is mirrored from BpBase64 to keep the bundle small.
 
 interface
 

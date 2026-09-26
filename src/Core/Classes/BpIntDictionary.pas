@@ -1,8 +1,6 @@
 unit BpIntDictionary;
 
-// Int64-key dictionary for Delphi 7/2007+ (no generics), same open-addressing
-// engine as TbpStrDictionary. Keys go through the Thomas Wang 64-bit mix;
-// values are Variant with the same strict typed accessors.
+// Int64-key dictionary on the TbpStrDictionary engine, with the same strict typed accessors.
 
 interface
 

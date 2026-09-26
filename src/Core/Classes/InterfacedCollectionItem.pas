@@ -1,9 +1,6 @@
 unit InterfacedCollectionItem;
 
-// A TCollectionItem with interface support whose reference counts go to the
-// owner of its collection, as in TInterfacedPersistent: an interface reference
-// to an item keeps the owner alive, and without a counted owner the item is
-// not reference counted at all.
+// A TCollectionItem with interfaces whose reference counts go to the owner of its collection.
 
 interface
 
@@ -42,7 +39,7 @@ begin
   lvOwner := Collection.Owner;
   if lvOwner = nil then
     Exit;
-  // through the interface table, not GetInterface, whose AddRef and Release pair would free an owner nobody holds yet
+  // the interface table, not GetInterface: its AddRef/Release pair would free an unheld owner
   lvEntry := lvOwner.GetInterfaceEntry(IInterface);
   if (lvEntry <> nil) and (lvEntry^.IOffset <> 0) then
     FOwnerIntf := Pointer(PAnsiChar(lvOwner) + lvEntry^.IOffset);

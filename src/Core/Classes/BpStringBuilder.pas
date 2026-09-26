@@ -1,9 +1,6 @@
 unit BpStringBuilder;
 
-// Fast string builder for Delphi 7/2007+, API modeled on XE6 TStringBuilder.
-// It writes through a cached buffer pointer rather than routing every append
-// through the Length setter, which is what makes the RTL version slow.
-// Chars and Insert use 0-based indexes; Clear keeps capacity for reuse.
+// A string builder with the XE6 TStringBuilder API that writes through a cached buffer pointer; indexes are 0-based.
 
 interface
 

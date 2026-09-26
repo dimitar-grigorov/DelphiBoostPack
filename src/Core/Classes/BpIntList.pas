@@ -1,12 +1,6 @@
 unit BpIntList;
 
-// A list of integers with O(1) IndexOf. The values stay dense in one array, so
-// reading Items[] is a single memory access and a sort is in place. The hash
-// index is built on the first IndexOf, kept across an append and dropped by any
-// mutation that moves a position, so a list that is only appended to keeps it
-// and one that is rebuilt pays a rescan, never more than the linear search it
-// replaces. Nothing is hashed until the first lookup, and a Sorted list builds
-// no index at all because it bisects instead.
+// A list of integers with O(1) IndexOf: the hash index is built on the first lookup, and a Sorted list bisects instead.
 
 interface
 

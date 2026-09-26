@@ -42,11 +42,8 @@ type
 
 // ----------------- begin BpKeyFold.pas interface ------------------
 
-// One ordinal relation for string keys: hash, equality and order read the same
-// folded characters, so a hash table and a binary search cannot disagree. The
-// fold is upper casing through a table built once, over the active code page on
-// Delphi 7 and 2007 and over the BMP on a Unicode compiler. A DBCS code page
-// cannot fold a byte at a time and takes the RTL path, which allocates.
+// One ordinal relation for string keys, so a hash table and a binary search cannot disagree.
+// The fold is an upper-case table built once; a DBCS code page takes the RTL path, which allocates.
 
 function BpKeyFoldUsable: Boolean;
 
@@ -78,16 +75,8 @@ function BpFoldInto(const aKey: string; var aBuf; aBufChars: Integer): Integer;
 
 // --------------- begin BpVariantUtils.pas interface ---------------
 
-// Strict Variant-to-native conversions shared by the Bp dictionary units.
-//
-// Contract: a conversion succeeds only when the variant already holds the
-// requested kind of data. Nothing is parsed, truncated or implicitly
-// widened: no numeric strings, no boolean-to-int, no float-to-int.
-// On failure the out parameter is zeroed/emptied and False is returned.
-//
-// varDate is a kind of its own here, not a float: use BpTryVarToDate.
-// Below Delphi 2009 a varOleStr converts only when the ANSI code page
-// carries every character, otherwise the call fails instead of writing '?'.
+// Strict Variant conversions: only a variant that already holds the kind converts, else the out value is zeroed and False returned.
+// varDate is its own kind; below Delphi 2009 a varOleStr fails rather than lose characters to '?'.
 
 type
   TbpIntegerDynArray = array of Integer;
@@ -103,10 +92,7 @@ function BpTryVarToIntArray(const aValue: Variant; out aResult: TbpIntegerDynArr
 
 // -------------- begin BpStrDictionary.pas interface ---------------
 
-// String-key dictionary for Delphi 7/2007+ (no generics), TDictionary-style API.
-// Open addressing with linear probing, power-of-two capacity and backward-shift
-// deletion. Hash and equality are the one ordinal relation from BpKeyFold, so a
-// case-insensitive key folds as it is hashed instead of through a copy.
+// String-key dictionary with a TDictionary-style API: open addressing, linear probing, backward-shift deletion.
 
 type
   // raised for missing keys, duplicate keys and failed typed conversions
@@ -188,9 +174,7 @@ type
 
 // -------------- begin BpIntDictionary.pas interface ---------------
 
-// Int64-key dictionary for Delphi 7/2007+ (no generics), same open-addressing
-// engine as TbpStrDictionary. Keys go through the Thomas Wang 64-bit mix;
-// values are Variant with the same strict typed accessors.
+// Int64-key dictionary on the TbpStrDictionary engine, with the same strict typed accessors.
 
 type
   // raised for missing keys, duplicate keys and failed typed conversions

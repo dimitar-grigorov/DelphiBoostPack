@@ -1,7 +1,6 @@
 unit BpSysUtils;
 
-// Small shims for pre-2009 compilers, e.g. CharInSet, which SysUtils only
-// gained in Delphi 2009.
+// CharInSet for compilers before Delphi 2009.
 
 interface
 

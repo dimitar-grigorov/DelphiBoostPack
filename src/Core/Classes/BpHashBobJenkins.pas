@@ -1,8 +1,7 @@
 unit BpHashBobJenkins;
 
-// Bob Jenkins lookup3 hash (public domain) for Delphi 7/2007+, seeded to
-// interoperate with the RTL's BobJenkinsHash. Hashing a string hashes its
-// bytes, so Ansi and Unicode builds differ: use the buffer overload.
+// Bob Jenkins lookup3 hash, seeded to interoperate with the RTL's BobJenkinsHash.
+// Hashing a string hashes its bytes, so Ansi and Unicode builds differ: use the buffer overload.
 
 interface
 
@@ -167,7 +166,6 @@ begin
 
   if (TbpUIntPtr(@Data) and 3) = 0 then
   begin
-    // 4-byte aligned data
     pd := PCardinalTriple(@Data);
     while Len > 12 do
     begin
@@ -176,7 +174,7 @@ begin
       Inc(c, pd^[2]);
       Mix(a, b, c);
       Dec(Len, 12);
-      Inc(pd); // one 12-byte block
+      Inc(pd);
     end;
 
     case Len of

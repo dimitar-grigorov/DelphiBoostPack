@@ -1,10 +1,6 @@
 unit BpMD5;
 
-// MD5 (RFC 1321), pure Pascal, for Delphi 7/2007+. Same interface as
-// BpSHA256: streaming Update plus one-shot class functions, digest or hex.
-// Broken for signatures; fine for checksums, ETags and fingerprints.
-// The string overloads hash raw bytes: UTF8Encode first on Delphi 2009+, or
-// the digest follows the machine's ANSI code page.
+// MD5 (RFC 1321) with the BpSHA256 interface; for checksums and ETags, never for signatures.
 
 // hash arithmetic relies on Cardinal wraparound mod 2^32
 {$Q-}
@@ -72,7 +68,6 @@ end;
 
 procedure TbpMD5.Init;
 begin
-  // RFC 1321 initial state
   FHash[0] := $67452301;
   FHash[1] := $EFCDAB89;
   FHash[2] := $98BADCFE;
@@ -142,7 +137,6 @@ begin
     Exit;
   lvSource := @aData;
   Inc(FLenBits, Int64(aSize) * 8);
-  // top up a partially filled block first
   if FIndex > 0 then
   begin
     lvFree := 64 - FIndex;
@@ -203,7 +197,6 @@ begin
   for i := 0 to 7 do
     FBuffer[56 + i] := Byte(lvBits shr (8 * i));
   Compress(@FBuffer);
-  // digest is the state words in little-endian byte order
   for i := 0 to 3 do
   begin
     aDigest[i * 4] := Byte(FHash[i]);

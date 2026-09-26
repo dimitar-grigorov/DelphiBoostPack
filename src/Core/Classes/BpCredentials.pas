@@ -1,9 +1,6 @@
 unit BpCredentials;
 
-// Keyring-style secret store on the Windows Credential Manager.
-//   TbpCredentials.SetPassword('MyApp', 'api', 'secret-token');
-//   lvClient.BearerToken := TbpCredentials.GetPassword('MyApp', 'api');
-//   TbpCredentials.DeletePassword('MyApp', 'api');
+// A keyring-style secret store on the Windows Credential Manager.
 
 interface
 

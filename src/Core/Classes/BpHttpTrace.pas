@@ -1,10 +1,6 @@
 unit BpHttpTrace;
 
-// An in-process 'ssh -v' for TbpHttpClient: DNS, connect, byte counts,
-// redirects. Optional - nothing references this unit.
-//
-//   if TbpHttpTrace.Attach(FClient, MyTrace) then ...
-//   TbpHttpTrace.Detach(FClient);
+// An in-process 'ssh -v' for TbpHttpClient: DNS, connect, byte counts, redirects. Nothing references this unit.
 
 interface
 

@@ -1,9 +1,6 @@
 unit BpPathUtils;
 
-// The Windows path relation - same path, under that path - and the arithmetic
-// around it. Case folds through BpKeyFold, never SameText. Textual throughout:
-// nothing resolves '.' or '..', and only BpPathCanonicalCase reads the disk.
-// A URL is not a path and gets no shape here; BpHttpClient parses those.
+// The Windows path relation, same path and under a path, done textually; only BpPathCanonicalCase reads the disk.
 
 interface
 

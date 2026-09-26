@@ -1,11 +1,7 @@
 unit BpSHA256;
 
-// SHA-256 (FIPS 180-4), pure Pascal, for Delphi 7/2007+. Streaming (Init,
-// Update in chunks, Final) so large files need not fit in memory, plus
-// one-shot class functions for buffer/bytes/string/file, digest or hex.
-// Final resets the state so an instance can be reused for the next message.
-// The string overloads hash raw bytes: UTF8Encode first on Delphi 2009+, or
-// the digest follows the machine's ANSI code page.
+// SHA-256 (FIPS 180-4), streaming or one-shot. The string overloads hash raw bytes:
+// UTF8Encode first on Delphi 2009+, or the digest follows the ANSI code page.
 
 // hash arithmetic relies on Cardinal wraparound mod 2^32
 {$Q-}
@@ -167,7 +163,6 @@ begin
     Exit;
   lvSource := @aData;
   Inc(FLenBits, Int64(aSize) * 8);
-  // top up a partially filled block first
   if FIndex > 0 then
   begin
     lvFree := 64 - FIndex;
@@ -228,7 +223,6 @@ begin
   for i := 0 to 7 do
     FBuffer[63 - i] := Byte(lvBits shr (8 * i));
   Compress(@FBuffer);
-  // digest is the hash words in big-endian byte order
   for i := 0 to 7 do
   begin
     aDigest[i * 4] := Byte(FHash[i] shr 24);

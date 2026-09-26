@@ -1,17 +1,7 @@
 unit BpDateUtils;
 
-// ISO 8601 / RFC 3339 dates the RTL lacks before XE6, plus Unix epoch <->
-// TDateTime. Strict parse of date-only, T or space timestamps, fractional
-// seconds, the leap second and Z / +hh:mm / +hhmm / +hh zones; formats to UTC
-// 'Z' or a local offset. Pairs with BpJson.
-//
-//   lvDt := BpISO8601ToDateTime('2026-07-24T15:30:00.250Z');
-//   lvS  := BpDateTimeToISO8601(lvDt);   // '2026-07-24T15:30:00.250Z'
-//
-// Local is the machine zone unless a TTimeZoneInformation is passed, and the
-// zone's rule is read for the date converted, not for today. Where wall clock
-// and UTC are not one-to-one, RFC 5545 3.3.5 applies: a wall clock that happens
-// twice means the first, and one that is skipped moves ahead by the gap.
+// ISO 8601 / RFC 3339 dates and Unix epoch conversions, strict on parse.
+// A wall clock that happens twice means the first; one that is skipped moves ahead by the gap.
 
 interface
 

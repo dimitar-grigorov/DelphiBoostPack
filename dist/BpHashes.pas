@@ -43,12 +43,8 @@ type
 
 // ------------------ begin BpBase64.pas interface ------------------
 
-// Base64 encode/decode (RFC 4648), standard and url-safe alphabets. Encoding
-// is a single allocation; standard pads with '=', url-safe omits it. Decoding
-// accepts either alphabet, tolerates missing padding and skips whitespace
-// (so MIME line breaks are fine); any other character raises EbpBase64.
-// The AnsiString overloads encode bytes, they do not transcode: for text use
-// the Utf8 functions, which encode UTF-8 on every compiler.
+// Base64 (RFC 4648), standard and url-safe. Decoding takes either alphabet, missing padding and whitespace.
+// The AnsiString overloads encode bytes as they are; for text use the Utf8 functions.
 
   // TBytes on Delphi 7
 
@@ -72,12 +68,8 @@ function Base64DecodeUtf8(const aBase64: string): WideString;
 
 // ------------------ begin BpSHA256.pas interface ------------------
 
-// SHA-256 (FIPS 180-4), pure Pascal, for Delphi 7/2007+. Streaming (Init,
-// Update in chunks, Final) so large files need not fit in memory, plus
-// one-shot class functions for buffer/bytes/string/file, digest or hex.
-// Final resets the state so an instance can be reused for the next message.
-// The string overloads hash raw bytes: UTF8Encode first on Delphi 2009+, or
-// the digest follows the machine's ANSI code page.
+// SHA-256 (FIPS 180-4), streaming or one-shot. The string overloads hash raw bytes:
+// UTF8Encode first on Delphi 2009+, or the digest follows the ANSI code page.
 
 // hash arithmetic relies on Cardinal wraparound mod 2^32
 {$Q-}
@@ -119,11 +111,7 @@ type
 
 // ------------------- begin BpMD5.pas interface --------------------
 
-// MD5 (RFC 1321), pure Pascal, for Delphi 7/2007+. Same interface as
-// BpSHA256: streaming Update plus one-shot class functions, digest or hex.
-// Broken for signatures; fine for checksums, ETags and fingerprints.
-// The string overloads hash raw bytes: UTF8Encode first on Delphi 2009+, or
-// the digest follows the machine's ANSI code page.
+// MD5 (RFC 1321) with the BpSHA256 interface; for checksums and ETags, never for signatures.
 
 // hash arithmetic relies on Cardinal wraparound mod 2^32
 {$Q-}
@@ -162,12 +150,8 @@ type
 
 // ---------------- begin BpHMACSHA256.pas interface ----------------
 
-// HMAC-SHA256 (RFC 2104), built on BpSHA256, for keyed message
-// authentication (API signatures, webhook verification, JWT HS256).
-// Streaming like the hash classes: Create with the key, Update, Final;
-// Final re-arms with the same key. One-shot class functions too.
-// Key and text are raw bytes: UTF8Encode first, or a Unicode compiler signs
-// the ANSI conversion instead of the bytes the peer signed.
+// HMAC-SHA256 (RFC 2104); Final re-arms with the same key. Key and text are raw bytes:
+// UTF8Encode first, or a Unicode compiler signs the ANSI conversion.
 
   // TBytes on Delphi 7
 
@@ -196,13 +180,8 @@ type
 
 // --------------- begin BpPasswordHash.pas interface ---------------
 
-// Password hashing with PBKDF2-HMAC-SHA256 (RFC 2898), built on BpHMACSHA256.
-// Salt from the Windows CSPRNG, constant-time verify, and a self-describing
-// record so the work factor can grow without breaking old hashes:
-//   lvStored := BpHashPassword('hunter2');  // $pbkdf2-sha256$600000$<salt>$<hash>
-//   if BpVerifyPassword('hunter2', lvStored) then ...
-// Takes bytes, not text: on Delphi 2009+ pass AnsiString(UTF8Encode(lvPassword)),
-// or the ANSI conversion makes the hash lossy and locale-dependent.
+// PBKDF2-HMAC-SHA256 password records with a CSPRNG salt and constant-time verify.
+// Takes bytes: on Delphi 2009+ pass AnsiString(UTF8Encode(lvPassword)).
 
 const
   // OWASP recommendation for PBKDF2-HMAC-SHA256 as of 2023+
@@ -637,7 +616,6 @@ begin
     Exit;
   lvSource := @aData;
   Inc(FLenBits, Int64(aSize) * 8);
-  // top up a partially filled block first
   if FIndex > 0 then
   begin
     lvFree := 64 - FIndex;
@@ -698,7 +676,6 @@ begin
   for i := 0 to 7 do
     FBuffer[63 - i] := Byte(lvBits shr (8 * i));
   Compress(@FBuffer);
-  // digest is the hash words in big-endian byte order
   for i := 0 to 7 do
   begin
     aDigest[i * 4] := Byte(FHash[i] shr 24);
@@ -830,7 +807,6 @@ end;
 
 procedure TbpMD5.Init;
 begin
-  // RFC 1321 initial state
   FHash[0] := $67452301;
   FHash[1] := $EFCDAB89;
   FHash[2] := $98BADCFE;
@@ -900,7 +876,6 @@ begin
     Exit;
   lvSource := @aData;
   Inc(FLenBits, Int64(aSize) * 8);
-  // top up a partially filled block first
   if FIndex > 0 then
   begin
     lvFree := 64 - FIndex;
@@ -961,7 +936,6 @@ begin
   for i := 0 to 7 do
     FBuffer[56 + i] := Byte(lvBits shr (8 * i));
   Compress(@FBuffer);
-  // digest is the state words in little-endian byte order
   for i := 0 to 3 do
   begin
     aDigest[i * 4] := Byte(FHash[i]);
@@ -1171,7 +1145,6 @@ begin
   FHasher.Assign(FOuter);
   FHasher.Update(lvInnerDigest, SizeOf(lvInnerDigest));
   FHasher.Final(aDigest);
-  // re-armed for the next message with the same key
   FHasher.Assign(FInner);
 end;
 

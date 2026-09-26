@@ -1,9 +1,6 @@
 unit BpStrDictionary;
 
-// String-key dictionary for Delphi 7/2007+ (no generics), TDictionary-style API.
-// Open addressing with linear probing, power-of-two capacity and backward-shift
-// deletion. Hash and equality are the one ordinal relation from BpKeyFold, so a
-// case-insensitive key folds as it is hashed instead of through a copy.
+// String-key dictionary with a TDictionary-style API: open addressing, linear probing, backward-shift deletion.
 
 interface
 

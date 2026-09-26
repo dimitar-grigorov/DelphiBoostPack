@@ -1,9 +1,6 @@
 unit BpStrUtils;
 
-// String helpers D2007 lacks: Split, Join, StartsWith/EndsWith (ordinal, with
-// locale-insensitive *Text variants), and FastStringReplace, which collects
-// all match positions and builds the result in one allocation instead of
-// SysUtils.StringReplace's per-match recopy that goes quadratic.
+// String helpers D2007 lacks; FastStringReplace builds its result in one allocation instead of recopying per match.
 
 interface
 

@@ -1,10 +1,7 @@
 unit BpKeyFold;
 
-// One ordinal relation for string keys: hash, equality and order read the same
-// folded characters, so a hash table and a binary search cannot disagree. The
-// fold is upper casing through a table built once, over the active code page on
-// Delphi 7 and 2007 and over the BMP on a Unicode compiler. A DBCS code page
-// cannot fold a byte at a time and takes the RTL path, which allocates.
+// One ordinal relation for string keys, so a hash table and a binary search cannot disagree.
+// The fold is an upper-case table built once; a DBCS code page takes the RTL path, which allocates.
 
 interface
 

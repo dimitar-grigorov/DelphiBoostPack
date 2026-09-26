@@ -1,7 +1,6 @@
 unit StopWatch;
 
-// A QueryPerformanceCounter stopwatch with the shape Delphi 2009 later gave
-// TStopwatch, handed out as an interface so there is nothing to free.
+// A QueryPerformanceCounter stopwatch, handed out as an interface so there is nothing to free.
 
 interface
 

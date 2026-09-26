@@ -1,22 +1,7 @@
 unit BpTasks;
 
-// Background tasks for Delphi 7/2007+: run a method on a worker thread,
-// get completion events on the main thread, cancel cooperatively.
-// Self-contained; one thread per task, no pool.
-//
-//   FTask := BpRunAsync(DoWork, HandleDone);  // DoWork polls aToken
-//   FTask.Cancel;  // or FTask.Free: cancels, joins, cleans up
-//
-// Rules
-// - Cancellation is TbpCancellationToken, declared here: the task engine is
-//   the smallest thing both a task and a download can agree on.
-// - Any thread may create or free a task.
-// - Default: events run on the main thread (the one that loaded the module),
-//   which must pump messages. Create(False): events run on the worker.
-// - Free cancels and joins. After Free is entered no event starts; a running
-//   handler finishes first. A handler may free its own task.
-// - A handler exception goes to BpSetTaskExceptionHook, else to
-//   ApplicationHandleException on the main thread, else to ShowException.
+// A method on a worker thread with completion events on the main thread, which must pump messages, and cooperative cancel.
+// Free cancels and joins; a handler exception goes to BpSetTaskExceptionHook, else to the application.
 
 interface
 

@@ -1,8 +1,6 @@
 unit BpEncoding;
 
-// Bytes to text through the Windows code page tables, which is all Delphi 7
-// has. The interesting one is BpUtf8OrAnsiToWide: strict UTF-8 first, the
-// system code page only when the bytes cannot be UTF-8 at all.
+// Bytes to text through the Windows code page tables; BpUtf8OrAnsiToWide falls back to ANSI only for invalid UTF-8.
 
 interface
 

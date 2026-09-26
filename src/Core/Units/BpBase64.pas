@@ -1,11 +1,7 @@
 unit BpBase64;
 
-// Base64 encode/decode (RFC 4648), standard and url-safe alphabets. Encoding
-// is a single allocation; standard pads with '=', url-safe omits it. Decoding
-// accepts either alphabet, tolerates missing padding and skips whitespace
-// (so MIME line breaks are fine); any other character raises EbpBase64.
-// The AnsiString overloads encode bytes, they do not transcode: for text use
-// the Utf8 functions, which encode UTF-8 on every compiler.
+// Base64 (RFC 4648), standard and url-safe. Decoding takes either alphabet, missing padding and whitespace.
+// The AnsiString overloads encode bytes as they are; for text use the Utf8 functions.
 
 interface
 

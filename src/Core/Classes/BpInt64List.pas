@@ -1,10 +1,6 @@
 unit BpInt64List;
 
-// TbpIntList with an Int64 element: O(1) IndexOf off a hash index that is built
-// on the first lookup, kept across an append and dropped by any mutation that
-// moves a position. The values stay dense in one array, so reading Items[] is a
-// single memory access and a sort is in place, and a Sorted list builds no index
-// at all because it bisects instead.
+// TbpIntList with an Int64 element.
 
 interface
 

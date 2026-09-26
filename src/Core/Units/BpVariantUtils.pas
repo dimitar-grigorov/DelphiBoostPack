@@ -1,15 +1,7 @@
 unit BpVariantUtils;
 
-// Strict Variant-to-native conversions shared by the Bp dictionary units.
-//
-// Contract: a conversion succeeds only when the variant already holds the
-// requested kind of data. Nothing is parsed, truncated or implicitly
-// widened: no numeric strings, no boolean-to-int, no float-to-int.
-// On failure the out parameter is zeroed/emptied and False is returned.
-//
-// varDate is a kind of its own here, not a float: use BpTryVarToDate.
-// Below Delphi 2009 a varOleStr converts only when the ANSI code page
-// carries every character, otherwise the call fails instead of writing '?'.
+// Strict Variant conversions: only a variant that already holds the kind converts, else the out value is zeroed and False returned.
+// varDate is its own kind; below Delphi 2009 a varOleStr fails rather than lose characters to '?'.
 
 interface
 

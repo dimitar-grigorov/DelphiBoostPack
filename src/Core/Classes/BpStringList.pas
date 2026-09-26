@@ -1,10 +1,6 @@
 unit BpStringList;
 
-// A TStrings with O(1) IndexOf and IndexOfName. Hash, equality and order all
-// come from one ordinal relation (BpKeyFold), so a hash hit and a binary search
-// cannot disagree. Rows live in stable slots and positions are a separate order
-// array, so a mutation permutes ints and never touches a chain. Nothing is
-// hashed until the first lookup.
+// A TStrings with O(1) IndexOf and IndexOfName; hash, equality and order share one ordinal relation (BpKeyFold).
 
 interface
 

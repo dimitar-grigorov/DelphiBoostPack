@@ -22,10 +22,7 @@ uses
 
 // -------------- begin BpStringBuilder.pas interface ---------------
 
-// Fast string builder for Delphi 7/2007+, API modeled on XE6 TStringBuilder.
-// It writes through a cached buffer pointer rather than routing every append
-// through the Length setter, which is what makes the RTL version slow.
-// Chars and Insert use 0-based indexes; Clear keeps capacity for reuse.
+// A string builder with the XE6 TStringBuilder API that writes through a cached buffer pointer; indexes are 0-based.
 
 type
   // raised for out-of-range indexes and invalid capacity or length values
@@ -70,14 +67,8 @@ type
 
 // ------------------- begin BpJson.pas interface -------------------
 
-// JSON reader/writer for Delphi 7/2007+ (RFC 8259). TbpJsonValue is the whole
-// tree, so freeing the root frees it all; FindPath walks 'data.items[0].name'.
-// A value built with CreateXxx or Clone is yours until Add or SetValue takes it
-// over, and Extract hands it back. A container refuses nil, a value that already
-// belongs somewhere, and any attach that would make a cycle.
-// The parser is strict: leading zeros, trailing commas and junk all fail.
-// Below Delphi 2009 a string holds UTF-8 bytes, in and out, so a \u escape and
-// the raw character it names give the same result.
+// JSON (RFC 8259) reader and writer; freeing the root frees the tree, and the parser is strict.
+// Below Delphi 2009 a string holds UTF-8 bytes, in and out.
 
 type
   // raised on parse errors, kind mismatches and missing object members

@@ -1,13 +1,7 @@
 unit BpJson;
 
-// JSON reader/writer for Delphi 7/2007+ (RFC 8259). TbpJsonValue is the whole
-// tree, so freeing the root frees it all; FindPath walks 'data.items[0].name'.
-// A value built with CreateXxx or Clone is yours until Add or SetValue takes it
-// over, and Extract hands it back. A container refuses nil, a value that already
-// belongs somewhere, and any attach that would make a cycle.
-// The parser is strict: leading zeros, trailing commas and junk all fail.
-// Below Delphi 2009 a string holds UTF-8 bytes, in and out, so a \u escape and
-// the raw character it names give the same result.
+// JSON (RFC 8259) reader and writer; freeing the root frees the tree, and the parser is strict.
+// Below Delphi 2009 a string holds UTF-8 bytes, in and out.
 
 interface
 
