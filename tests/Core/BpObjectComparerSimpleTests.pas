@@ -77,6 +77,7 @@ type
     procedure TestDiffEntriesFollowTheFieldList;
     procedure TestDiffEntriesValueCallback;
     procedure TestDiffEntriesIgnoreTheItemIndex;
+    procedure TestDiffEntriesAppendTheUnlisted;
   end;
 
   TestTInterfacedCollectionItem = class(TTestCase)
@@ -1079,6 +1080,59 @@ begin
   finally
     Obj1.Free;
     Obj2.Free;
+  end;
+end;
+
+procedure TestTBpObjectComparer.TestDiffEntriesAppendTheUnlisted;
+var
+  Obj2: TTestClassA;
+  Coll1, Coll2: TTestClassWithCollectionUnique;
+  Diffs: TPropDifferences;
+  Entries: TbpDiffEntries;
+begin
+  Obj2 := TTestClassA.Create;
+  try
+    FObjA.IntegerProp := 1;
+    FObjA.Int64Prop := 5;
+    FObjA.StringProp := 'a';
+    Obj2.IntegerProp := 2;
+    Obj2.Int64Prop := 6;
+    Diffs := TbpObjectComparer.CompareObjects(FObjA, Obj2);
+
+    Entries := TbpObjectComparer.DiffEntries(Diffs, ['StringProp', 'Name'], '(empty)', nil, True);
+    CheckEquals(3, Length(Entries), 'the listed one and both unlisted');
+    CheckEquals('Name', Entries[0].Caption, 'the listed one first');
+    CheckEquals('Name: a -> (empty); Int64Prop: 5 -> 6; IntegerProp: 1 -> 2',
+      TbpObjectComparer.FormatDiffs(Entries, '%0:s: %1:s -> %2:s', '; '),
+      'the unlisted follow in the order of the differences, captioned with their path');
+    CheckEquals('IntegerProp', Entries[2].Prop, 'the path is the property too');
+
+    Entries := TbpObjectComparer.DiffEntries(Diffs, ['StringProp', 'Name'], '(empty)', nil, False);
+    CheckEquals(1, Length(Entries), 'without the flag only the listed one');
+  finally
+    Obj2.Free;
+  end;
+
+  Coll1 := TTestClassWithCollectionUnique.Create;
+  Coll2 := TTestClassWithCollectionUnique.Create;
+  try
+    with Coll1.MyCollection.Add do
+    begin
+      ID := 77;
+      Name := 'Item1';
+    end;
+    with Coll2.MyCollection.Add do
+    begin
+      ID := 77;
+      Name := 'Renamed';
+    end;
+    Entries := TbpObjectComparer.DiffEntries(TbpObjectComparer.CompareObjects(Coll1, Coll2),
+      ['MyCollection.ID', 'Id'], '', nil, True);
+    CheckEquals(1, Length(Entries), 'the renamed item');
+    CheckEquals('MyCollection.Name', Entries[0].Caption, 'an item''s caption drops the index');
+  finally
+    Coll1.Free;
+    Coll2.Free;
   end;
 end;
 

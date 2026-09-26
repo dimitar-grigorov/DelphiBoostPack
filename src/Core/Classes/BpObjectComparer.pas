@@ -75,8 +75,10 @@ type
       const aExcludedProps: array of string): string; overload;
     class function StripIndexFromProperty(const aProp: string): string;
     // aFields pairs a path without item indexes ('Lines.Amount') with a caption, in the output's order
+    // aIncludeUnlisted appends the other differences in aDiffs order, captioned with their path
     class function DiffEntries(const aDiffs: TPropDifferences; const aFields: array of string;
-      const aEmpty: string = ''; aOnValue: TbpDiffValueText = nil): TbpDiffEntries;
+      const aEmpty: string = ''; aOnValue: TbpDiffValueText = nil;
+      aIncludeUnlisted: Boolean = False): TbpDiffEntries;
     // aTemplate formats caption, old, new, item id and property, as in '%0:s: %1:s -> %2:s'
     class function FormatDiffs(const aEntries: TbpDiffEntries; const aTemplate, aSeparator: string): string;
   end;
@@ -456,7 +458,8 @@ begin
 end;
 
 class function TbpObjectComparer.DiffEntries(const aDiffs: TPropDifferences;
-  const aFields: array of string; const aEmpty: string; aOnValue: TbpDiffValueText): TbpDiffEntries;
+  const aFields: array of string; const aEmpty: string; aOnValue: TbpDiffValueText;
+  aIncludeUnlisted: Boolean): TbpDiffEntries;
 
   function _ValueText(const aProp: string; const aValue: Variant): string;
   begin
@@ -471,11 +474,27 @@ class function TbpObjectComparer.DiffEntries(const aDiffs: TPropDifferences;
 
 var
   lvPaths: array of string;
+  lvListed: array of Boolean;
   I, J, lvCount: Integer;
+
+  procedure _Add(const aProp, aCaption: string; aIndex: Integer);
+  begin
+    if lvCount = Length(Result) then
+      SetLength(Result, 4 + lvCount * 2);
+    Result[lvCount].Prop := aProp;
+    Result[lvCount].Caption := aCaption;
+    Result[lvCount].OldText := _ValueText(aProp, aDiffs[aIndex].OldValue);
+    Result[lvCount].NewText := _ValueText(aProp, aDiffs[aIndex].NewValue);
+    Result[lvCount].Diff := aDiffs[aIndex];
+    Inc(lvCount);
+    lvListed[aIndex] := True;
+  end;
+
 begin
   if Odd(Length(aFields)) then
     raise EbpObjectComparer.Create('Every property in the field list needs a caption');
   SetLength(lvPaths, Length(aDiffs));
+  SetLength(lvListed, Length(aDiffs));
   for J := 0 to High(aDiffs) do
     lvPaths[J] := StripIndexFromProperty(aDiffs[J].OldPropPath);
   // Result can arrive holding the caller's old array, which the writes below must not touch
@@ -486,18 +505,13 @@ begin
   begin
     for J := 0 to High(aDiffs) do
       if SameText(lvPaths[J], aFields[I]) then
-      begin
-        if lvCount = Length(Result) then
-          SetLength(Result, 4 + lvCount * 2);
-        Result[lvCount].Prop := aFields[I];
-        Result[lvCount].Caption := aFields[I + 1];
-        Result[lvCount].OldText := _ValueText(aFields[I], aDiffs[J].OldValue);
-        Result[lvCount].NewText := _ValueText(aFields[I], aDiffs[J].NewValue);
-        Result[lvCount].Diff := aDiffs[J];
-        Inc(lvCount);
-      end;
+        _Add(aFields[I], aFields[I + 1], J);
     Inc(I, 2);
   end;
+  if aIncludeUnlisted then
+    for J := 0 to High(aDiffs) do
+      if not lvListed[J] then
+        _Add(lvPaths[J], lvPaths[J], J);
   SetLength(Result, lvCount);
 end;
 
