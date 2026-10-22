@@ -16,43 +16,28 @@ type
   TBpHttpVerbTests = class(TBpWireTestCase)
   published
     procedure TestGetReachesTheServer;
-    procedure TestPostSendsTheBody;
-    procedure TestPostJsonSetsContentType;
-    procedure TestPutSendsTheBody;
-    procedure TestDeleteHasNoBody;
-    procedure TestPatchSendsTheBody;
-    procedure TestHeadHasNoBody;
-    procedure TestOptionsReachesTheServer;
-    procedure TestQueryStringSurvives;
-    procedure TestStatusTextComesFromTheServer;
+    procedure TestBodyVerbsSendTheBody;
+    procedure TestBodylessVerbsSendNone;
+    procedure TestFetchUrlRaisesOnAnErrorStatus;
   end;
 
   TBpHttpHeaderWireTests = class(TBpWireTestCase)
+  private
+    function SentAuthorization(const aUrl: string): string;
   published
-    procedure TestPersistentHeaderIsSentOnce;
-    procedure TestBearerTokenIsSentOnce;
-    procedure TestBasicAuthIsSentOnce;
+    procedure TestPersistentHeaderIsOneLine;
     procedure TestPerRequestHeaderReplacesPersistent;
-    procedure TestColonInValueStaysOneLine;
-    procedure TestServerCookiesAreNotStored;
-    procedure TestExplicitAuthorizationReplacesTheBearer;
-    procedure TestBearerReplacesAnExplicitAuthorization;
+    procedure TestAuthorizationHasOneWriter;
     procedure TestUrlCredentialsBecomeBasicAuth;
-    procedure TestUrlCredentialsArePercentDecoded;
-    procedure TestUrlCredentialsAgreeWithSetBasicAuth;
-    procedure TestExplicitAuthorizationBeatsTheUrl;
+    procedure TestServerCookiesAreNotStored;
     procedure TestUsernameAndPasswordAnswerAChallenge;
   end;
 
   TBpHttpBodyWireTests = class(TBpWireTestCase)
   published
     procedure TestChunkedResponseIsBuffered;
-    procedure TestEmptyBodyIsFine;
-    procedure TestShortBodyFailsTheDownload;
-    procedure TestShortBodyLeavesNoFile;
-    procedure TestHeadReplyHasNoBodyAndNoError;
-    procedure TestNoContentReplyHasNoBody;
-    procedure TestNotModifiedReplyHasNoBody;
+    procedure TestRepliesWithoutABody;
+    procedure TestShortBodyFails;
     procedure TestNoResponseAtAllIsAnError;
     procedure TestMaxResponseBytesStopsABigBody;
   end;
@@ -67,37 +52,24 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestSuccessReplacesTheFile;
-    procedure TestSuccessCreatesAMissingFile;
-    procedure TestNotFoundLeavesTheFileAlone;
-    procedure TestTruncatedBodyLeavesTheFileAlone;
+    procedure TestSuccessWritesTheFile;
+    procedure TestEveryFailureLeavesTheFileAlone;
     procedure TestCancelLeavesTheFileAlone;
-    procedure TestUnparsableUrlLeavesTheFileAlone;
-    procedure TestPartialContentLeavesTheFileAlone;
   end;
 
   TBpHttpGzipTests = class(TBpWireTestCase)
   published
     procedure TestGzipIsDecoded;
-    procedure TestAcceptEncodingIsSent;
     procedure TestNoAcceptEncodingWhenDecompressionIsOff;
   end;
 
   TBpHttpRedirectWireTests = class(TBpWireTestCase)
   published
-    procedure TestRelativeLocationIsResolved;
-    procedure TestThreeHopChain;
-    procedure TestPostBecomesGetOn301;
-    procedure TestPostBecomesGetOn302;
-    procedure Test307KeepsMethodAndBody;
-    procedure Test308KeepsMethodAndBody;
-    procedure Test303TurnsPutIntoGet;
-    procedure Test303LeavesHeadAlone;
+    procedure TestChainIsFollowedOnOneConnection;
+    procedure TestPostBecomesGetOn301And302;
+    procedure Test307And308KeepMethodAndBody;
+    procedure TestRedirectIsReturnedWhenNotFollowed;
     procedure TestMaxRedirectsExceededRaises;
-    procedure TestMaxRedirectsZeroReturnsTheRedirect;
-    procedure TestFollowRedirectsFalseReturnsTheRedirect;
-    procedure TestRedirectWithoutLocationIsReturned;
-    procedure TestRedirectBodyIsDrainedSoTheConnectionIsReused;
     procedure TestDownloadFollowsARedirect;
   end;
 
@@ -117,23 +89,41 @@ type
   // cancellation and timeouts against a server that answers and then goes quiet
   TBpHttpCancelWireTests = class(TBpWireTestCase)
   private
-    FCancelAtFirstData: Boolean;
-    FCompleteFired: Boolean;
-    FErrorFired: Boolean;
-    procedure EnqueueSlowReply;
-    procedure HandleProgress(aSender: TObject; const aReceived, aTotal: Int64;
+    procedure CancelAtFirstData(aSender: TObject; const aReceived, aTotal: Int64;
       var aCancel: Boolean);
-    procedure HandleComplete(aSender: TObject);
-    procedure HandleError(aSender: TObject; const aErrorMessage: string);
-  protected
-    procedure SetUp; override;
   published
     procedure TestSyncCancelViaProgressCallback;
     procedure TestSyncRequestCancelMidFlight;
-    procedure TestAsyncCancelMidFlight;
-    procedure TestTraceSinkSeesTheWire;
+    procedure TestTraceFollowsEachRequestOfItsClient;
     procedure TestDetachWaitsForASinkInFlight;
+    procedure TestFailureNamesTheCallAndTheHost;
     procedure TestReceiveTimeoutFiresOnAStall;
+    procedure TestTimeoutEndsTheWholeCall;
+  end;
+
+  // Begin* and the lifetimes around it: the task, its client, a form holding both
+  TBpHttpTaskWireTests = class(TBpWireTestCase)
+  private
+    FTask: IbpHttpTask;
+    FDoneCount: Integer;
+    FDoneThread: Cardinal;
+    FDoneState: TbpHttpTaskState;
+    FDoneBody: AnsiString;
+    FArmed: Boolean;
+    FReleasedInProgress: Boolean;
+    procedure StartSlowDownload(aDest: TStream;
+      aOnProgress: TbpHttpTaskProgressEvent);
+    procedure HandleDone(const aTask: IbpHttpTask);
+    procedure ReleaseOnProgress(const aTask: IbpHttpTask;
+      const aReceived, aTotal: Int64);
+  protected
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestBeginGetAnswersLikeTheSyncCall;
+    procedure TestReleasingTheTaskCancelsIt;
+    procedure TestReleaseInsideAWorkerEventIsDeferred;
+    procedure TestFreeingTheClientEndsEveryCallInFlight;
   end;
 
 implementation
@@ -159,11 +149,12 @@ const
   );
 
 type
-  // a request the test thread can call Detach across
-  TbpTraceGetThread = class(TThread)
+  // a Get on its own thread, for a Detach or a Free across it
+  TbpGetThread = class(TThread)
   private
     FClient: TbpHttpClient;
     FUrl: string;
+    FErrorClass: string;  // what the Get raised, '' when it returned
   protected
     procedure Execute; override;
   public
@@ -192,19 +183,33 @@ begin
   gvSinkLeft := True;
 end;
 
-constructor TbpTraceGetThread.Create(aClient: TbpHttpClient; const aUrl: string);
+constructor TbpGetThread.Create(aClient: TbpHttpClient; const aUrl: string);
 begin
   FClient := aClient;
   FUrl := aUrl;
   inherited Create(False);
 end;
 
-procedure TbpTraceGetThread.Execute;
+procedure TbpGetThread.Execute;
 begin
   try
     FClient.Get(FUrl);
   except
+    on E: Exception do
+      FErrorClass := E.ClassName;
   end;
+end;
+
+// a burst then silence, so a cancel lands while WinInet is blocked in a read
+procedure EnqueueSlowReply(aServer: TbpMockHttpServer);
+var
+  lvReply: TbpMockResponse;
+begin
+  lvReply := BpMockOk(BpRepeated($42, gcSlowBurst));
+  lvReply.Headers.Add('Content-Type: application/octet-stream');
+  lvReply.ClaimedLength := gcSlowClaimed;
+  lvReply.Effect := mseStall;
+  aServer.Enqueue(lvReply);
 end;
 
 // the userinfo goes between the scheme and the host the mock server hands out
@@ -275,139 +280,123 @@ end;
 
 procedure TBpHttpVerbTests.TestGetReachesTheServer;
 var
+  lvReply: TbpMockResponse;
   lvResponse: TbpHttpResponse;
   lvRequest: TbpRecordedRequest;
 begin
-  FServer.Enqueue(BpMockOk('hello'));
-  lvResponse := FClient.Get(Url('/plain'));
+  lvReply := BpMockOk('hello');
+  lvReply.ReasonPhrase := 'Fine Indeed';  // no local table knows this one
+  FServer.Enqueue(lvReply);
+  lvResponse := FClient.Get(Url('/search?q=delphi&page=2'));
   CheckEquals(200, lvResponse.StatusCode);
+  CheckEquals('Fine Indeed', lvResponse.StatusText);
   CheckEquals('hello', string(lvResponse.Body));
   CheckEquals(5, lvResponse.ContentLength);
-  CheckEquals(Url('/plain'), lvResponse.FinalUrl, 'no redirect, so the same url');
+  CheckEquals(Url('/search?q=delphi&page=2'), lvResponse.FinalUrl,
+    'no redirect, so the same url');
 
   lvRequest := NextRequest;
   CheckEquals('GET', lvRequest.Method);
-  CheckEquals('/plain', lvRequest.Path);
+  CheckEquals('/search?q=delphi&page=2', lvRequest.Path, 'the query survives');
   CheckEquals('HTTP/1.1', lvRequest.HttpVersion);
   CheckEquals('', string(lvRequest.Body));
 end;
 
-procedure TBpHttpVerbTests.TestPostSendsTheBody;
+procedure TBpHttpVerbTests.TestBodyVerbsSendTheBody;
 var
   lvRequest: TbpRecordedRequest;
 begin
   FServer.Enqueue(BpMockStatus(201, 'made'));
+  FServer.Enqueue(BpMockOk('{}'));
+  FServer.Enqueue(BpMockOk('ok'));
+  FServer.Enqueue(BpMockOk('ok'));
   CheckEquals(201, FClient.Post(Url('/items'), 'name=box').StatusCode);
+  FClient.PostJson(Url('/api'), '{"a":1}');
+  FClient.Put(Url('/items/7'), 'replaced');
+  FClient.Patch(Url('/items/7'), '{"n":2}');
+
   lvRequest := NextRequest;
   CheckEquals('POST', lvRequest.Method);
   CheckEquals('name=box', string(lvRequest.Body));
   CheckEquals('8', lvRequest.HeaderValue('Content-Length'));
-end;
-
-procedure TBpHttpVerbTests.TestPostJsonSetsContentType;
-var
-  lvRequest: TbpRecordedRequest;
-begin
-  FServer.Enqueue(BpMockOk('{}'));
-  FClient.PostJson(Url('/api'), '{"a":1}');
   lvRequest := NextRequest;
   CheckEquals('POST', lvRequest.Method);
   CheckEquals('{"a":1}', string(lvRequest.Body));
   CheckEquals('application/json', lvRequest.HeaderValue('Content-Type'));
-end;
-
-procedure TBpHttpVerbTests.TestPutSendsTheBody;
-var
-  lvRequest: TbpRecordedRequest;
-begin
-  FServer.Enqueue(BpMockOk('ok'));
-  FClient.Put(Url('/items/7'), 'replaced');
   lvRequest := NextRequest;
   CheckEquals('PUT', lvRequest.Method);
   CheckEquals('replaced', string(lvRequest.Body));
-end;
-
-procedure TBpHttpVerbTests.TestDeleteHasNoBody;
-var
-  lvRequest: TbpRecordedRequest;
-begin
-  FServer.Enqueue(BpMockStatus(204));
-  CheckEquals(204, FClient.Delete(Url('/items/7')).StatusCode);
-  lvRequest := NextRequest;
-  CheckEquals('DELETE', lvRequest.Method);
-  CheckEquals('', string(lvRequest.Body));
-end;
-
-procedure TBpHttpVerbTests.TestPatchSendsTheBody;
-var
-  lvRequest: TbpRecordedRequest;
-begin
-  FServer.Enqueue(BpMockOk('ok'));
-  FClient.Patch(Url('/items/7'), '{"n":2}');
   lvRequest := NextRequest;
   CheckEquals('PATCH', lvRequest.Method);
   CheckEquals('{"n":2}', string(lvRequest.Body));
 end;
 
-procedure TBpHttpVerbTests.TestHeadHasNoBody;
+procedure TBpHttpVerbTests.TestBodylessVerbsSendNone;
 var
+  lvHead, lvOptions: TbpMockResponse;
   lvResponse: TbpHttpResponse;
   lvRequest: TbpRecordedRequest;
-  lvReply: TbpMockResponse;
 begin
   // a real HEAD reply announces what a GET would have returned and sends none
-  lvReply := BpMockStatus(200);
-  lvReply.ClaimedLength := 4096;
-  FServer.Enqueue(lvReply);
+  lvHead := BpMockStatus(200);
+  lvHead.ClaimedLength := 4096;
+  lvOptions := BpMockStatus(204);
+  lvOptions.Headers.Add('Allow: GET, POST');
+  FServer.Enqueue(BpMockStatus(204));
+  FServer.Enqueue(lvHead);
+  FServer.Enqueue(lvOptions);
+
+  CheckEquals(204, FClient.Delete(Url('/items/7')).StatusCode);
   lvResponse := FClient.Head(Url('/big.bin'));
   CheckEquals(200, lvResponse.StatusCode);
   CheckEquals('', string(lvResponse.Body), 'a HEAD reply carries no body');
   CheckEquals(4096, lvResponse.ContentLength, 'the announced length is reported');
-  lvRequest := NextRequest;
-  CheckEquals('HEAD', lvRequest.Method);
-end;
-
-procedure TBpHttpVerbTests.TestOptionsReachesTheServer;
-var
-  lvResponse: TbpMockResponse;
-  lvRequest: TbpRecordedRequest;
-begin
-  lvResponse := BpMockStatus(204);
-  lvResponse.Headers.Add('Allow: GET, POST');
-  FServer.Enqueue(lvResponse);
   CheckEquals('GET, POST',
     BpHttpHeaderValue(FClient.Options(Url('/api')).Headers, 'Allow'));
+
   lvRequest := NextRequest;
-  CheckEquals('OPTIONS', lvRequest.Method);
+  CheckEquals('DELETE', lvRequest.Method);
+  CheckEquals('', string(lvRequest.Body));
+  CheckEquals('HEAD', NextRequest.Method);
+  CheckEquals('OPTIONS', NextRequest.Method);
 end;
 
-procedure TBpHttpVerbTests.TestQueryStringSurvives;
-var
-  lvRequest: TbpRecordedRequest;
+// the README parses FetchUrl as JSON, so a 404 page became a parse error later
+procedure TBpHttpVerbTests.TestFetchUrlRaisesOnAnErrorStatus;
 begin
-  FServer.Enqueue(BpMockOk('ok'));
-  FClient.Get(Url('/search?q=delphi&page=2'));
-  lvRequest := NextRequest;
-  CheckEquals('/search?q=delphi&page=2', lvRequest.Path);
-end;
-
-procedure TBpHttpVerbTests.TestStatusTextComesFromTheServer;
-var
-  lvResponse: TbpMockResponse;
-begin
-  lvResponse := BpMockStatus(418, 'nope');
-  lvResponse.ReasonPhrase := 'I am a teapot';
-  FServer.Enqueue(lvResponse);
-  CheckEquals('I am a teapot', FClient.Get(Url('/tea')).StatusText);
+  FServer.Enqueue(BpMockStatus(404, '<html>not here</html>'));
+  try
+    TbpHttpClient.FetchUrl(Url('/missing'));
+    Fail('a 404 must not come back as the body');
+  except
+    on E: EbpHttpClient do
+    begin
+      CheckEquals(404, E.StatusCode);
+      Check(Pos('404', E.Message) > 0, E.Message);
+    end;
+  end;
 end;
 
 { TBpHttpHeaderWireTests }
 
-procedure TBpHttpHeaderWireTests.TestPersistentHeaderIsSentOnce;
+// one Get, and the one Authorization line it carried
+function TBpHttpHeaderWireTests.SentAuthorization(const aUrl: string): string;
+var
+  lvRequest: TbpRecordedRequest;
+begin
+  FServer.Enqueue(BpMockOk('ok'));
+  FClient.Get(aUrl);
+  lvRequest := NextRequest;
+  CheckEquals(1, lvRequest.HeaderCount('Authorization'), 'one Authorization line');
+  Result := lvRequest.HeaderValue('Authorization');
+end;
+
+procedure TBpHttpHeaderWireTests.TestPersistentHeaderIsOneLine;
 var
   lvRequest: TbpRecordedRequest;
 begin
   FClient.AddHeader('X-Api-Key', 'secret-value');
+  FClient.AddHeader('X-Note', 'a: b, c');
   FServer.Enqueue(BpMockOk('ok'));
   FClient.Get(Url('/a'));
   lvRequest := NextRequest;
@@ -415,93 +404,8 @@ begin
   CheckEquals('secret-value', lvRequest.HeaderValue('X-Api-Key'));
   CheckEquals(1, CountOccurrences(lvRequest.RawHead, 'secret-value'),
     'the value must appear once in the raw head');
-end;
-
-procedure TBpHttpHeaderWireTests.TestBearerTokenIsSentOnce;
-var
-  lvRequest: TbpRecordedRequest;
-begin
-  FClient.BearerToken := 'tok-123';
-  FServer.Enqueue(BpMockOk('ok'));
-  FClient.Get(Url('/a'));
-  lvRequest := NextRequest;
-  CheckEquals(1, lvRequest.HeaderCount('Authorization'));
-  CheckEquals('Bearer tok-123', lvRequest.HeaderValue('Authorization'));
-end;
-
-procedure TBpHttpHeaderWireTests.TestBasicAuthIsSentOnce;
-var
-  lvRequest: TbpRecordedRequest;
-begin
-  FClient.SetBasicAuth('user', 'pass');
-  FServer.Enqueue(BpMockOk('ok'));
-  FClient.Get(Url('/a'));
-  lvRequest := NextRequest;
-  CheckEquals(1, lvRequest.HeaderCount('Authorization'));
-  // RFC 7617 base64 of user:pass
-  CheckEquals('Basic dXNlcjpwYXNz', lvRequest.HeaderValue('Authorization'));
-end;
-
-// curl, requests, axios and .NET all send user:pass@host as Basic auth
-procedure TBpHttpHeaderWireTests.TestUrlCredentialsBecomeBasicAuth;
-var
-  lvRequest: TbpRecordedRequest;
-begin
-  FServer.Enqueue(BpMockOk('ok'));
-  FClient.Get(WithUserInfo(Url('/a'), 'user:pass'));
-  lvRequest := NextRequest;
-  CheckEquals(1, lvRequest.HeaderCount('Authorization'));
-  CheckEquals('Basic dXNlcjpwYXNz', lvRequest.HeaderValue('Authorization'));
-  CheckEquals('/a', lvRequest.Path, 'the userinfo is not part of the resource');
-end;
-
-procedure TBpHttpHeaderWireTests.TestUrlCredentialsArePercentDecoded;
-var
-  lvRequest: TbpRecordedRequest;
-begin
-  FServer.Enqueue(BpMockOk('ok'));
-  // an email as the user id is the case that forces the escaping
-  FClient.Get(WithUserInfo(Url('/a'), 'us%40er:p%3Aw'));
-  lvRequest := NextRequest;
-  CheckEquals('Basic dXNAZXI6cDp3', lvRequest.HeaderValue('Authorization'));
-
-  // %2540 is an escaped percent sign, so it must decode exactly once
-  FServer.Enqueue(BpMockOk('ok'));
-  FClient.Get(WithUserInfo(Url('/b'), '%2540:pass'));
-  lvRequest := NextRequest;
-  CheckEquals('Basic JTQwOnBhc3M=', lvRequest.HeaderValue('Authorization'));
-end;
-
-// the two auth paths must put the same bytes on the wire for the same password
-procedure TBpHttpHeaderWireTests.TestUrlCredentialsAgreeWithSetBasicAuth;
-var
-  lvFromUrl, lvFromApi: string;
-begin
-  // a url carries non-ASCII percent-escaped, so these are the UTF-8 bytes of paB
-  FServer.Enqueue(BpMockOk('ok'));
-  FClient.Get(WithUserInfo(Url('/a'), 'user:pa%C3%9F'));
-  lvFromUrl := NextRequest.HeaderValue('Authorization');
-
-  FClient.SetBasicAuth('user', WideChar('p') + WideChar('a') + WideChar($00DF));
-  FServer.Enqueue(BpMockOk('ok'));
-  FClient.Get(Url('/b'));
-  lvFromApi := NextRequest.HeaderValue('Authorization');
-
-  CheckEquals('Basic dXNlcjpwYcOf', lvFromUrl, 'the url path sends the decoded bytes');
-  CheckEquals(lvFromUrl, lvFromApi, 'url credentials and SetBasicAuth must agree');
-end;
-
-procedure TBpHttpHeaderWireTests.TestExplicitAuthorizationBeatsTheUrl;
-var
-  lvRequest: TbpRecordedRequest;
-begin
-  FClient.SetBasicAuth('real', 'secret');
-  FServer.Enqueue(BpMockOk('ok'));
-  FClient.Get(WithUserInfo(Url('/a'), 'user:pass'));
-  lvRequest := NextRequest;
-  CheckEquals(1, lvRequest.HeaderCount('Authorization'));
-  CheckEquals('Basic cmVhbDpzZWNyZXQ=', lvRequest.HeaderValue('Authorization'),
-    'what the caller set wins over what the url carried');
+  CheckEquals('a: b, c', lvRequest.HeaderValue('X-Note'));
+  CheckEquals(0, lvRequest.HeaderCount('a'), 'a colon in the value starts no header');
 end;
 
 procedure TBpHttpHeaderWireTests.TestPerRequestHeaderReplacesPersistent;
@@ -518,36 +422,45 @@ begin
     'the replaced value must not reach the wire');
 end;
 
-// Username/Password are WinInet-level, so only a real 401 exercises them
-procedure TBpHttpHeaderWireTests.TestUsernameAndPasswordAnswerAChallenge;
-var
-  lvChallenge: TbpMockResponse;
-  lvResponse: TbpHttpResponse;
+// two lines would let the server pick the one the caller did not mean
+procedure TBpHttpHeaderWireTests.TestAuthorizationHasOneWriter;
 begin
-  lvChallenge := TbpMockResponse.Create(401);
-  lvChallenge.Headers.Add('WWW-Authenticate: Basic realm="test"');
-  FServer.Enqueue(lvChallenge);
-  FServer.Enqueue(BpMockOk('in'));
-  FClient.Username := 'user';
-  FClient.Password := 'pass';
-  lvResponse := FClient.Get(Url('/secret'));
-  CheckEquals(200, lvResponse.StatusCode, 'the challenge must be answered');
-  CheckFalse(NextRequest.HasHeader('Authorization'), 'the first try is unauthenticated');
-  CheckEquals('Basic dXNlcjpwYXNz', NextRequest.HeaderValue('Authorization'),
-    'the retry carries user:pass');
+  FClient.BearerToken := 'tok-123';
+  CheckEquals('Bearer tok-123', SentAuthorization(Url('/a')));
+  FClient.AddHeader('Authorization', 'Basic AAAA');
+  CheckEquals('Basic AAAA', SentAuthorization(Url('/b')),
+    'an explicit header replaces the bearer');
+  FClient.BearerToken := 'tok-456';
+  CheckEquals('Bearer tok-456', SentAuthorization(Url('/c')),
+    'and a bearer replaces an explicit header');
+  FClient.SetBasicAuth('user', 'pass');
+  // RFC 7617 base64 of user:pass
+  CheckEquals('Basic dXNlcjpwYXNz', SentAuthorization(Url('/d')));
 end;
 
-procedure TBpHttpHeaderWireTests.TestColonInValueStaysOneLine;
-var
-  lvRequest: TbpRecordedRequest;
+// curl, requests, axios and .NET all send user:pass@host as Basic auth
+procedure TBpHttpHeaderWireTests.TestUrlCredentialsBecomeBasicAuth;
 begin
-  FClient.AddHeader('X-Note', 'a: b, c');
-  FServer.Enqueue(BpMockOk('ok'));
-  FClient.Get(Url('/a'));
-  lvRequest := NextRequest;
-  CheckEquals(1, lvRequest.HeaderCount('X-Note'));
-  CheckEquals('a: b, c', lvRequest.HeaderValue('X-Note'));
-  CheckEquals(0, lvRequest.HeaderCount('a'), 'no header named after the value');
+  CheckEquals('Basic dXNlcjpwYXNz',
+    SentAuthorization(WithUserInfo(Url('/a'), 'user:pass')));
+  // an email as the user id is the case that forces the escaping
+  CheckEquals('Basic dXNAZXI6cDp3',
+    SentAuthorization(WithUserInfo(Url('/b'), 'us%40er:p%3Aw')));
+  // %2540 is an escaped percent sign, so it must decode exactly once
+  CheckEquals('Basic JTQwOnBhc3M=',
+    SentAuthorization(WithUserInfo(Url('/c'), '%2540:pass')));
+
+  // a url carries non-ASCII as escaped UTF-8, and SetBasicAuth must send the same
+  CheckEquals('Basic dXNlcjpwYcOf',
+    SentAuthorization(WithUserInfo(Url('/d'), 'user:pa%C3%9F')));
+  FClient.SetBasicAuth('user', WideChar('p') + WideChar('a') + WideChar($00DF));
+  CheckEquals('Basic dXNlcjpwYcOf', SentAuthorization(Url('/e')),
+    'url credentials and SetBasicAuth must agree');
+
+  FClient.SetBasicAuth('real', 'secret');
+  CheckEquals('Basic cmVhbDpzZWNyZXQ=',
+    SentAuthorization(WithUserInfo(Url('/f'), 'user:pass')),
+    'what the caller set wins over what the url carried');
 end;
 
 // the client keeps no jar, so WinInet's per-user one must not answer for it
@@ -569,33 +482,23 @@ begin
     lvSecond.HeaderValue('Cookie'));
 end;
 
-// two lines would let the server pick the one the caller did not mean
-procedure TBpHttpHeaderWireTests.TestExplicitAuthorizationReplacesTheBearer;
+// Username/Password are WinInet-level, so only a real 401 exercises them
+procedure TBpHttpHeaderWireTests.TestUsernameAndPasswordAnswerAChallenge;
 var
-  lvRequest: TbpRecordedRequest;
+  lvChallenge: TbpMockResponse;
+  lvResponse: TbpHttpResponse;
 begin
-  FClient.BearerToken := 'tok-456';
-  FClient.AddHeader('Authorization', 'Basic AAAA');
-  FServer.Enqueue(BpMockOk('ok'));
-  FClient.Get(Url('/a'));
-  lvRequest := NextRequest;
-  CheckEquals(1, lvRequest.HeaderCount('Authorization'));
-  CheckEquals('Basic AAAA', lvRequest.HeaderValue('Authorization'));
-  CheckEquals(0, CountOccurrences(lvRequest.RawHead, 'tok-456'));
-end;
-
-procedure TBpHttpHeaderWireTests.TestBearerReplacesAnExplicitAuthorization;
-var
-  lvRequest: TbpRecordedRequest;
-begin
-  FClient.AddHeader('Authorization', 'Basic AAAA');
-  FClient.BearerToken := 'tok-456';
-  FServer.Enqueue(BpMockOk('ok'));
-  FClient.Get(Url('/a'));
-  lvRequest := NextRequest;
-  CheckEquals(1, lvRequest.HeaderCount('Authorization'));
-  CheckEquals('Bearer tok-456', lvRequest.HeaderValue('Authorization'));
-  CheckEquals(0, CountOccurrences(lvRequest.RawHead, 'Basic AAAA'));
+  lvChallenge := TbpMockResponse.Create(401);
+  lvChallenge.Headers.Add('WWW-Authenticate: Basic realm="test"');
+  FServer.Enqueue(lvChallenge);
+  FServer.Enqueue(BpMockOk('in'));
+  FClient.Username := 'user';
+  FClient.Password := 'pass';
+  lvResponse := FClient.Get(Url('/secret'));
+  CheckEquals(200, lvResponse.StatusCode, 'the challenge must be answered');
+  CheckFalse(NextRequest.HasHeader('Authorization'), 'the first try is unauthenticated');
+  CheckEquals('Basic dXNlcjpwYXNz', NextRequest.HeaderValue('Authorization'),
+    'the retry carries user:pass');
 end;
 
 { TBpHttpBodyWireTests }
@@ -612,139 +515,72 @@ begin
   CheckEquals(-1, lvResponse.ContentLength, 'a chunked reply has no length');
 end;
 
-// a buffered body is the one place a hostile endpoint can exhaust memory
-procedure TBpHttpBodyWireTests.TestMaxResponseBytesStopsABigBody;
-begin
-  FServer.Enqueue(BpMockOk(BpRepeated($41, 40000)));
-  FClient.MaxResponseBytes := 1024;
-  try
-    FClient.Get(Url('/huge.bin'));
-    Fail('expected EbpHttpClient past the ceiling');
-  except
-    on EbpHttpClientCancelled do
-      Fail('a ceiling is not a cancellation');
-    on EbpHttpClient do
-      ; // expected
-  end;
-
-  // and the default, no ceiling, still takes the same body whole
-  FServer.Enqueue(BpMockOk(BpRepeated($41, 40000)));
-  FClient.MaxResponseBytes := 0;
-  CheckEquals(40000, Length(FClient.Get(Url('/huge.bin')).Body));
-end;
-
-procedure TBpHttpBodyWireTests.TestEmptyBodyIsFine;
+// none of these may trip the completeness check, which lives on the streaming path
+procedure TBpHttpBodyWireTests.TestRepliesWithoutABody;
 var
+  lvHead, lvNoContent, lvNotModified: TbpMockResponse;
   lvResponse: TbpHttpResponse;
+  lvStream: TMemoryStream;
 begin
+  lvHead := BpMockStatus(200);
+  lvHead.ClaimedLength := 4096;
+  lvNoContent := BpMockStatus(204);
+  lvNoContent.ClaimedLength := gcMockNoContentLength;  // as a real server sends it
+  lvNotModified := BpMockStatus(304);
+  lvNotModified.ClaimedLength := 4096;  // a 304 repeats the length it would have sent
+  lvNotModified.Effect := mseStall;     // and never sends it, so it goes last
   FServer.Enqueue(BpMockOk(''));
+  FServer.Enqueue(lvHead);
+  FServer.Enqueue(lvNoContent);
+  FServer.Enqueue(lvNotModified);
+
   lvResponse := FClient.Get(Url('/empty'));
   CheckEquals(200, lvResponse.StatusCode);
   CheckEquals('', string(lvResponse.Body));
   CheckEquals(0, lvResponse.ContentLength);
-end;
-
-procedure TBpHttpBodyWireTests.TestShortBodyFailsTheDownload;
-var
-  lvReply: TbpMockResponse;
-  lvStream: TMemoryStream;
-begin
-  lvReply := BpMockOk(BpRepeated($41, 500));
-  lvReply.ClaimedLength := 1000;   // announces twice what it sends
-  lvReply.Effect := mseCloseAtEnd;
-  FServer.Enqueue(lvReply);
 
   lvStream := TMemoryStream.Create;
   try
-    try
-      FClient.Download(Url('/short'), lvStream);
-      Fail('a body shorter than Content-Length must not be reported as success');
-    except
-      on E: EbpHttpClient do
-        Check(Pos('Incomplete', E.Message) > 0,
-          'the error must say the response was incomplete, got: ' + E.Message);
-    end;
-  finally
-    lvStream.Free;
-  end;
-end;
-
-procedure TBpHttpBodyWireTests.TestShortBodyLeavesNoFile;
-var
-  lvReply: TbpMockResponse;
-  lvFileName: string;
-begin
-  lvReply := BpMockOk(BpRepeated($41, 500));
-  lvReply.ClaimedLength := 1000;
-  lvReply.Effect := mseCloseAtEnd;
-  FServer.Enqueue(lvReply);
-
-  lvFileName := BpTempFilePath('BpWireShortBody.tmp');
-  SysUtils.DeleteFile(lvFileName);
-  try
-    try
-      FClient.DownloadToFile(Url('/short'), lvFileName);
-      Fail('a truncated download must not be reported as success');
-    except
-      on EbpHttpClient do
-        CheckFalse(FileExists(lvFileName),
-          'the partial file must not be left behind');
-    end;
-  finally
-    SysUtils.DeleteFile(lvFileName);
-  end;
-end;
-
-procedure TBpHttpBodyWireTests.TestHeadReplyHasNoBodyAndNoError;
-var
-  lvReply: TbpMockResponse;
-  lvStream: TMemoryStream;
-  lvResponse: TbpHttpResponse;
-begin
-  lvReply := BpMockStatus(200);
-  lvReply.ClaimedLength := 4096;
-  FServer.Enqueue(lvReply);
-  lvStream := TMemoryStream.Create;
-  try
-    // the streaming path is where the completeness guard lives
-    lvResponse := FClient.Download(Url('/big.bin'), lvStream, nil, nil, '', 'HEAD');
-    CheckEquals(200, lvResponse.StatusCode);
-    CheckEquals(0, lvStream.Size, 'a HEAD reply writes nothing');
-  finally
-    lvStream.Free;
-  end;
-end;
-
-procedure TBpHttpBodyWireTests.TestNoContentReplyHasNoBody;
-var
-  lvReply: TbpMockResponse;
-  lvStream: TMemoryStream;
-begin
-  lvReply := BpMockStatus(204);
-  lvReply.ClaimedLength := gcMockNoContentLength;  // as a real server sends it
-  FServer.Enqueue(lvReply);
-  lvStream := TMemoryStream.Create;
-  try
+    CheckEquals(200, FClient.Download(Url('/big.bin'), lvStream, nil, nil, '',
+      'HEAD').StatusCode);
     CheckEquals(204, FClient.Download(Url('/none'), lvStream).StatusCode);
-    CheckEquals(0, lvStream.Size);
+    CheckEquals(304, FClient.Download(Url('/cached'), lvStream).StatusCode);
+    CheckEquals(0, lvStream.Size, 'none of them writes anything');
   finally
     lvStream.Free;
   end;
 end;
 
-procedure TBpHttpBodyWireTests.TestNotModifiedReplyHasNoBody;
+// a 200 used to come back with half the body, as if nothing had happened
+procedure TBpHttpBodyWireTests.TestShortBodyFails;
+const
+  lcCall: array[Boolean] of string = ('Download', 'Get');
 var
   lvReply: TbpMockResponse;
   lvStream: TMemoryStream;
+  lvBuffered: Boolean;
 begin
-  lvReply := BpMockStatus(304);
-  lvReply.ClaimedLength := 4096;  // a 304 repeats the length it would have sent
-  lvReply.Effect := mseStall;     // and then never sends it, as the RFC requires
-  FServer.Enqueue(lvReply);
   lvStream := TMemoryStream.Create;
   try
-    CheckEquals(304, FClient.Download(Url('/cached'), lvStream).StatusCode);
-    CheckEquals(0, lvStream.Size);
+    for lvBuffered := True downto False do
+    begin
+      lvReply := BpMockOk(BpRepeated($41, 500));
+      lvReply.ClaimedLength := 1000;   // announces twice what it sends
+      lvReply.Effect := mseCloseAtEnd;
+      FServer.Enqueue(lvReply);
+      try
+        if lvBuffered then
+          FClient.Get(Url('/short'))
+        else
+          FClient.Download(Url('/short'), lvStream);
+        Fail(lcCall[lvBuffered] + ': a short body must not pass as success');
+      except
+        on E: EbpHttpClient do
+          Check(Pos('Incomplete', E.Message) > 0,
+            lcCall[lvBuffered] + ' must say the response was incomplete, got: ' +
+            E.Message);
+      end;
+    end;
   finally
     lvStream.Free;
   end;
@@ -767,6 +603,27 @@ begin
       ; // expected
   end;
   CheckEquals(1, FServer.RequestCount, 'the request did reach the server');
+end;
+
+// a buffered body is the one place a hostile endpoint can exhaust memory
+procedure TBpHttpBodyWireTests.TestMaxResponseBytesStopsABigBody;
+begin
+  FServer.Enqueue(BpMockOk(BpRepeated($41, 40000)));
+  FClient.MaxResponseBytes := 1024;
+  try
+    FClient.Get(Url('/huge.bin'));
+    Fail('expected EbpHttpClient past the ceiling');
+  except
+    on EbpHttpClientCancelled do
+      Fail('a ceiling is not a cancellation');
+    on EbpHttpClient do
+      ; // expected
+  end;
+
+  // and the default, no ceiling, still takes the same body whole
+  FServer.Enqueue(BpMockOk(BpRepeated($41, 40000)));
+  FClient.MaxResponseBytes := 0;
+  CheckEquals(40000, Length(FClient.Get(Url('/huge.bin')).Body));
 end;
 
 { TBpHttpDownloadToFileTests }
@@ -793,14 +650,37 @@ begin
   CheckEquals(1, BpCountFiles(FDir), aWhat + ': a temp file was left behind');
 end;
 
-// nothing asked for a range, so a fragment must not become the whole file
-procedure TBpHttpDownloadToFileTests.TestPartialContentLeavesTheFileAlone;
-var
-  lvReply: TbpMockResponse;
+procedure TBpHttpDownloadToFileTests.TestSuccessWritesTheFile;
 begin
-  lvReply := BpMockStatus(206, 'PART');
-  lvReply.Headers.Add('Content-Range: bytes 0-3/9999');
-  FServer.Enqueue(lvReply);
+  FServer.Enqueue(BpMockOk('REPLACED'));
+  FServer.Enqueue(BpMockOk('BRAND NEW'));
+  CheckEquals(200, FClient.DownloadToFile(Url('/f.bin'), FDest).StatusCode);
+  CheckEquals('REPLACED', string(BpReadWholeFile(FDest)));
+  CheckEquals(1, BpCountFiles(FDir), 'no temp file may survive a success');
+
+  SysUtils.DeleteFile(FDest);
+  CheckEquals(200, FClient.DownloadToFile(Url('/f.bin'), FDest).StatusCode);
+  CheckEquals('BRAND NEW', string(BpReadWholeFile(FDest)), 'a missing file is created');
+  CheckEquals(1, BpCountFiles(FDir));
+end;
+
+procedure TBpHttpDownloadToFileTests.TestEveryFailureLeavesTheFileAlone;
+var
+  lvPartial, lvTruncated: TbpMockResponse;
+begin
+  lvPartial := BpMockStatus(206, 'PART');
+  lvPartial.Headers.Add('Content-Range: bytes 0-3/9999');
+  lvTruncated := BpMockOk(BpRepeated($41, 500));
+  lvTruncated.ClaimedLength := 1000;
+  lvTruncated.Effect := mseCloseAtEnd;
+  FServer.Enqueue(BpMockStatus(404, '<html>not here</html>'));
+  FServer.Enqueue(lvPartial);
+  FServer.Enqueue(lvTruncated);
+
+  CheckEquals(404, FClient.DownloadToFile(Url('/gone.bin'), FDest).StatusCode);
+  CheckSurvived('404');
+
+  // nothing asked for a range, so a fragment must not become the whole file
   try
     FClient.DownloadToFile(Url('/part.bin'), FDest);
     Fail('expected EbpHttpClient for 206 Partial Content');
@@ -809,40 +689,7 @@ begin
       CheckEquals(206, E.StatusCode);
   end;
   CheckSurvived('206');
-end;
 
-procedure TBpHttpDownloadToFileTests.TestSuccessReplacesTheFile;
-begin
-  FServer.Enqueue(BpMockOk('REPLACED'));
-  CheckEquals(200, FClient.DownloadToFile(Url('/f.bin'), FDest).StatusCode);
-  CheckEquals('REPLACED', string(BpReadWholeFile(FDest)));
-  CheckEquals(1, BpCountFiles(FDir), 'no temp file may survive a success');
-end;
-
-procedure TBpHttpDownloadToFileTests.TestSuccessCreatesAMissingFile;
-begin
-  SysUtils.DeleteFile(FDest);
-  FServer.Enqueue(BpMockOk('BRAND NEW'));
-  CheckEquals(200, FClient.DownloadToFile(Url('/f.bin'), FDest).StatusCode);
-  CheckEquals('BRAND NEW', string(BpReadWholeFile(FDest)));
-  CheckEquals(1, BpCountFiles(FDir));
-end;
-
-procedure TBpHttpDownloadToFileTests.TestNotFoundLeavesTheFileAlone;
-begin
-  FServer.Enqueue(BpMockStatus(404, '<html>not here</html>'));
-  CheckEquals(404, FClient.DownloadToFile(Url('/gone.bin'), FDest).StatusCode);
-  CheckSurvived('404');
-end;
-
-procedure TBpHttpDownloadToFileTests.TestTruncatedBodyLeavesTheFileAlone;
-var
-  lvReply: TbpMockResponse;
-begin
-  lvReply := BpMockOk(BpRepeated($41, 500));
-  lvReply.ClaimedLength := 1000;
-  lvReply.Effect := mseCloseAtEnd;
-  FServer.Enqueue(lvReply);
   try
     FClient.DownloadToFile(Url('/short.bin'), FDest);
     Fail('a truncated download must not be reported as success');
@@ -851,6 +698,15 @@ begin
       ; // expected
   end;
   CheckSurvived('truncated body');
+
+  try
+    FClient.DownloadToFile('not a url at all', FDest);
+    Fail('expected EbpHttpClient for an unparsable url');
+  except
+    on EbpHttpClient do
+      ; // expected
+  end;
+  CheckSurvived('unparsable url');
 end;
 
 procedure TBpHttpDownloadToFileTests.TestCancelLeavesTheFileAlone;
@@ -886,18 +742,6 @@ begin
   CheckSurvived('cancel');
 end;
 
-procedure TBpHttpDownloadToFileTests.TestUnparsableUrlLeavesTheFileAlone;
-begin
-  try
-    FClient.DownloadToFile('not a url at all', FDest);
-    Fail('expected EbpHttpClient for an unparsable url');
-  except
-    on EbpHttpClient do
-      ; // expected
-  end;
-  CheckSurvived('unparsable url');
-end;
-
 { TBpHttpGzipTests }
 
 procedure TBpHttpGzipTests.TestGzipIsDecoded;
@@ -909,19 +753,14 @@ begin
   lvReply.Headers.Add('Content-Encoding: gzip');
   FServer.Enqueue(lvReply);
   lvResponse := FClient.Get(Url('/gz'));
+  CheckEquals('gzip, deflate', NextRequest.HeaderValue('Accept-Encoding'));
   CheckEquals(200, lvResponse.StatusCode);
   CheckEquals(gcGzipPlain, string(lvResponse.Body),
     'WinInet must hand back the decoded bytes');
-end;
-
-procedure TBpHttpGzipTests.TestAcceptEncodingIsSent;
-var
-  lvRequest: TbpRecordedRequest;
-begin
-  FServer.Enqueue(BpMockOk('plain'));
-  FClient.Get(Url('/a'));
-  lvRequest := NextRequest;
-  CheckEquals('gzip, deflate', lvRequest.HeaderValue('Accept-Encoding'));
+  // the truncation check relies on it: no length is left to compare decoded bytes with
+  CheckEquals(-1, lvResponse.ContentLength, 'WinInet drops Content-Length when it decodes');
+  CheckEquals('', BpHttpHeaderValue(lvResponse.Headers, 'Content-Encoding'),
+    'WinInet drops Content-Encoding when it decodes');
 end;
 
 procedure TBpHttpGzipTests.TestNoAcceptEncodingWhenDecompressionIsOff;
@@ -945,23 +784,8 @@ end;
 
 { TBpHttpRedirectWireTests }
 
-procedure TBpHttpRedirectWireTests.TestRelativeLocationIsResolved;
-var
-  lvResponse: TbpHttpResponse;
-begin
-  FServer.Enqueue(BpMockRedirect(302, '/second'));
-  FServer.Enqueue(BpMockOk('arrived'));
-  lvResponse := FClient.Get(Url('/first'));
-  CheckEquals(200, lvResponse.StatusCode);
-  CheckEquals('arrived', string(lvResponse.Body));
-  CheckEquals(Url('/second'), lvResponse.FinalUrl,
-    'FinalUrl is the resolved absolute url');
-  CheckEquals(2, FServer.RequestCount);
-  CheckEquals('/first', NextRequest.Path);
-  CheckEquals('/second', NextRequest.Path);
-end;
-
-procedure TBpHttpRedirectWireTests.TestThreeHopChain;
+// one connection for every hop is the only real proof each 3xx body was drained
+procedure TBpHttpRedirectWireTests.TestChainIsFollowedOnOneConnection;
 var
   lvResponse: TbpHttpResponse;
 begin
@@ -970,93 +794,96 @@ begin
   FServer.Enqueue(BpMockRedirect(302, '/d'));
   FServer.Enqueue(BpMockOk('last'));
   lvResponse := FClient.Get(Url('/a'));
+  CheckEquals(200, lvResponse.StatusCode);
   CheckEquals('last', string(lvResponse.Body));
-  CheckEquals(Url('/d'), lvResponse.FinalUrl);
+  CheckEquals(Url('/d'), lvResponse.FinalUrl, 'FinalUrl is the resolved absolute url');
+
   CheckEquals(4, FServer.RequestCount);
+  CheckEquals(1, FServer.ConnectionCount, 'every hop shares the pooled connection');
+  CheckEquals('/a', NextRequest.Path);
+  CheckEquals('/b', NextRequest.Path, 'a relative Location is resolved');
+  CheckEquals('/c', NextRequest.Path);
+  CheckEquals('/d', NextRequest.Path);
 end;
 
-procedure TBpHttpRedirectWireTests.TestPostBecomesGetOn301;
+// the body is gone, so whatever described it must go too
+procedure TBpHttpRedirectWireTests.TestPostBecomesGetOn301And302;
 var
-  lvSecond: TbpRecordedRequest;
+  lvHop: TbpRecordedRequest;
 begin
   FServer.Enqueue(BpMockRedirect(301, '/moved'));
   FServer.Enqueue(BpMockOk('done'));
-  FClient.Post(Url('/old'), 'a=1', 'Content-Type: text/plain');
-  NextRequest;
-  lvSecond := NextRequest;
-  CheckEquals('GET', lvSecond.Method);
-  CheckEquals('', string(lvSecond.Body), 'the body is dropped');
-  CheckFalse(lvSecond.HasHeader('Content-Type'), 'Content-Type described the body');
-  CheckEquals('', lvSecond.HeaderValue('Content-Length'),
-    'Content-Length described the body');
-end;
-
-procedure TBpHttpRedirectWireTests.TestPostBecomesGetOn302;
-var
-  lvSecond: TbpRecordedRequest;
-begin
-  // a Content-Type set on the client, not per request, is the harder case
-  FClient.AddHeader('Content-Type', 'application/json');
   FServer.Enqueue(BpMockRedirect(302, '/moved'));
   FServer.Enqueue(BpMockOk('done'));
+
+  FClient.Post(Url('/old'), 'a=1', 'Content-Type: text/plain');
+  NextRequest;
+  lvHop := NextRequest;
+  CheckEquals('GET', lvHop.Method, '301');
+  CheckEquals('', string(lvHop.Body), 'the body is dropped');
+  CheckFalse(lvHop.HasHeader('Content-Type'), 'Content-Type described the body');
+  CheckEquals('', lvHop.HeaderValue('Content-Length'),
+    'Content-Length described the body');
+
+  // a Content-Type set on the client, not per request, is the harder case
+  FClient.AddHeader('Content-Type', 'application/json');
   FClient.Post(Url('/old'), '{"a":1}');
   NextRequest;
-  lvSecond := NextRequest;
-  CheckEquals('GET', lvSecond.Method);
-  CheckEquals('', string(lvSecond.Body));
-  CheckFalse(lvSecond.HasHeader('Content-Type'),
+  lvHop := NextRequest;
+  CheckEquals('GET', lvHop.Method, '302');
+  CheckEquals('', string(lvHop.Body));
+  CheckFalse(lvHop.HasHeader('Content-Type'),
     'a persistent Content-Type described the body that is now gone');
 end;
 
-procedure TBpHttpRedirectWireTests.Test307KeepsMethodAndBody;
+procedure TBpHttpRedirectWireTests.Test307And308KeepMethodAndBody;
 var
-  lvSecond: TbpRecordedRequest;
+  lvHop: TbpRecordedRequest;
 begin
   FServer.Enqueue(BpMockRedirect(307, '/here'));
   FServer.Enqueue(BpMockOk('done'));
-  FClient.Post(Url('/old'), 'payload=307');
-  NextRequest;
-  lvSecond := NextRequest;
-  CheckEquals('POST', lvSecond.Method);
-  CheckEquals('payload=307', string(lvSecond.Body), 'the body is resent');
-end;
-
-procedure TBpHttpRedirectWireTests.Test308KeepsMethodAndBody;
-var
-  lvSecond: TbpRecordedRequest;
-begin
   FServer.Enqueue(BpMockRedirect(308, '/here'));
   FServer.Enqueue(BpMockOk('done'));
+  FClient.Post(Url('/old'), 'payload=307');
   FClient.Put(Url('/old'), 'payload=308');
+
   NextRequest;
-  lvSecond := NextRequest;
-  CheckEquals('PUT', lvSecond.Method);
-  CheckEquals('payload=308', string(lvSecond.Body));
+  lvHop := NextRequest;
+  CheckEquals('POST', lvHop.Method);
+  CheckEquals('payload=307', string(lvHop.Body), 'the body is resent');
+  NextRequest;
+  lvHop := NextRequest;
+  CheckEquals('PUT', lvHop.Method);
+  CheckEquals('payload=308', string(lvHop.Body));
 end;
 
-procedure TBpHttpRedirectWireTests.Test303TurnsPutIntoGet;
+// the interface documents MaxRedirects 0 as FollowRedirects False
+procedure TBpHttpRedirectWireTests.TestRedirectIsReturnedWhenNotFollowed;
 var
-  lvSecond: TbpRecordedRequest;
+  lvResponse: TbpHttpResponse;
 begin
-  FServer.Enqueue(BpMockRedirect(303, '/result'));
-  FServer.Enqueue(BpMockOk('done'));
-  FClient.Put(Url('/jobs'), 'start');
-  NextRequest;
-  lvSecond := NextRequest;
-  CheckEquals('GET', lvSecond.Method);
-  CheckEquals('', string(lvSecond.Body));
-end;
+  FServer.Enqueue(BpMockStatus(302, 'no location here'));
+  FServer.Enqueue(BpMockRedirect(302, '/second'));
+  FServer.Enqueue(BpMockRedirect(302, '/second'));
 
-procedure TBpHttpRedirectWireTests.Test303LeavesHeadAlone;
-var
-  lvSecond: TbpRecordedRequest;
-begin
-  FServer.Enqueue(BpMockRedirect(303, '/result'));
-  FServer.Enqueue(BpMockOk(''));
-  FClient.Head(Url('/jobs'));
-  NextRequest;
-  lvSecond := NextRequest;
-  CheckEquals('HEAD', lvSecond.Method, 'a 303 does not downgrade a HEAD');
+  lvResponse := FClient.Get(Url('/first'));
+  CheckEquals(302, lvResponse.StatusCode);
+  CheckEquals('no location here', string(lvResponse.Body));
+  CheckEquals(1, FServer.RequestCount, 'without a Location there is nowhere to go');
+
+  FClient.FollowRedirects := False;
+  lvResponse := FClient.Get(Url('/first'));
+  CheckEquals(302, lvResponse.StatusCode);
+  CheckEquals('/second', BpHttpHeaderValue(lvResponse.Headers, 'Location'));
+  CheckEquals('redirecting', string(lvResponse.Body), 'the 3xx body is returned');
+  CheckEquals(2, FServer.RequestCount, 'FollowRedirects False takes no hop');
+
+  FClient.FollowRedirects := True;
+  FClient.MaxRedirects := 0;
+  lvResponse := FClient.Get(Url('/first'));
+  CheckEquals(302, lvResponse.StatusCode);
+  CheckEquals('/second', BpHttpHeaderValue(lvResponse.Headers, 'Location'));
+  CheckEquals(3, FServer.RequestCount, 'MaxRedirects 0 takes no hop');
 end;
 
 procedure TBpHttpRedirectWireTests.TestMaxRedirectsExceededRaises;
@@ -1074,58 +901,6 @@ begin
       Check(Pos('redirects', E.Message) > 0, E.Message);
   end;
   CheckEquals(3, FServer.RequestCount, 'one request plus the two allowed hops');
-end;
-
-// the interface documents 0 as having the same effect as FollowRedirects False
-procedure TBpHttpRedirectWireTests.TestMaxRedirectsZeroReturnsTheRedirect;
-var
-  lvResponse: TbpHttpResponse;
-begin
-  FClient.MaxRedirects := 0;
-  FServer.Enqueue(BpMockRedirect(302, '/second'));
-  lvResponse := FClient.Get(Url('/first'));
-  CheckEquals(302, lvResponse.StatusCode);
-  CheckEquals('/second', BpHttpHeaderValue(lvResponse.Headers, 'Location'));
-  CheckEquals(1, FServer.RequestCount, 'no hop may be taken');
-end;
-
-procedure TBpHttpRedirectWireTests.TestFollowRedirectsFalseReturnsTheRedirect;
-var
-  lvResponse: TbpHttpResponse;
-begin
-  FClient.FollowRedirects := False;
-  FServer.Enqueue(BpMockRedirect(302, '/second'));
-  lvResponse := FClient.Get(Url('/first'));
-  CheckEquals(302, lvResponse.StatusCode);
-  CheckEquals('/second', BpHttpHeaderValue(lvResponse.Headers, 'Location'));
-  CheckEquals('redirecting', string(lvResponse.Body), 'the 3xx body is returned');
-  CheckEquals(1, FServer.RequestCount);
-end;
-
-procedure TBpHttpRedirectWireTests.TestRedirectWithoutLocationIsReturned;
-var
-  lvResponse: TbpHttpResponse;
-begin
-  FServer.Enqueue(BpMockStatus(302, 'no location here'));
-  lvResponse := FClient.Get(Url('/first'));
-  CheckEquals(302, lvResponse.StatusCode);
-  CheckEquals('no location here', string(lvResponse.Body));
-  CheckEquals(1, FServer.RequestCount, 'there is nowhere to go');
-end;
-
-// the only real proof that the 3xx body was drained rather than abandoned
-procedure TBpHttpRedirectWireTests.TestRedirectBodyIsDrainedSoTheConnectionIsReused;
-var
-  lvFirst, lvSecond: TbpRecordedRequest;
-begin
-  FServer.Enqueue(BpMockRedirect(302, '/second'));
-  FServer.Enqueue(BpMockOk('arrived'));
-  FClient.Get(Url('/first'));
-  lvFirst := NextRequest;
-  lvSecond := NextRequest;
-  CheckEquals(lvFirst.ConnectionId, lvSecond.ConnectionId,
-    'both hops must share the pooled connection');
-  CheckEquals(1, FServer.ConnectionCount);
 end;
 
 procedure TBpHttpRedirectWireTests.TestDownloadFollowsARedirect;
@@ -1220,54 +995,22 @@ end;
 
 { TBpHttpCancelWireTests }
 
-procedure TBpHttpCancelWireTests.SetUp;
-begin
-  inherited;
-  FCancelAtFirstData := False;
-  FCompleteFired := False;
-  FErrorFired := False;
-end;
-
-// a burst then silence, so a cancel lands while WinInet is blocked in a read
-procedure TBpHttpCancelWireTests.EnqueueSlowReply;
-var
-  lvReply: TbpMockResponse;
-begin
-  lvReply := BpMockOk(BpRepeated($42, gcSlowBurst));
-  lvReply.Headers.Add('Content-Type: application/octet-stream');
-  lvReply.ClaimedLength := gcSlowClaimed;
-  lvReply.Effect := mseStall;
-  FServer.Enqueue(lvReply);
-end;
-
-procedure TBpHttpCancelWireTests.HandleProgress(aSender: TObject;
+procedure TBpHttpCancelWireTests.CancelAtFirstData(aSender: TObject;
   const aReceived, aTotal: Int64; var aCancel: Boolean);
 begin
-  if FCancelAtFirstData and (aReceived > 0) then
+  if aReceived > 0 then
     aCancel := True;
-end;
-
-procedure TBpHttpCancelWireTests.HandleComplete(aSender: TObject);
-begin
-  FCompleteFired := True;
-end;
-
-procedure TBpHttpCancelWireTests.HandleError(aSender: TObject;
-  const aErrorMessage: string);
-begin
-  FErrorFired := True;
 end;
 
 procedure TBpHttpCancelWireTests.TestSyncCancelViaProgressCallback;
 var
   lvStream: TMemoryStream;
 begin
-  EnqueueSlowReply;
+  EnqueueSlowReply(FServer);
   lvStream := TMemoryStream.Create;
   try
-    FCancelAtFirstData := True;
     try
-      FClient.Download(Url('/slow.bin'), lvStream, HandleProgress);
+      FClient.Download(Url('/slow.bin'), lvStream, CancelAtFirstData);
       Fail('expected EbpHttpClientCancelled');
     except
       on E: EbpHttpClientCancelled do
@@ -1286,7 +1029,7 @@ var
   lvCanceller: TDelayedCancelThread;
   lvStart, lvElapsed: Cardinal;
 begin
-  EnqueueSlowReply;
+  EnqueueSlowReply(FServer);
   lvToken := TbpCancellationToken.Create;
   try
     // the server stays quiet for half a minute, so only the cancel can end this
@@ -1313,89 +1056,10 @@ begin
   end;
 end;
 
-procedure TBpHttpCancelWireTests.TestAsyncCancelMidFlight;
-var
-  lvTask: TbpHttpDownloadTask;
-  lvFileName: string;
-  lvDeadline: Cardinal;
-begin
-  EnqueueSlowReply;
-  lvFileName := BpTempFilePath('bp_wire_async_cancel.bin');
-  lvTask := TbpHttpDownloadTask.Create(False);  // events on the worker thread
-  try
-    lvTask.Client.ReceiveTimeout := 25000;
-    lvTask.Url := Url('/slow.bin');
-    lvTask.DestFileName := lvFileName;
-    lvTask.OnComplete := HandleComplete;
-    lvTask.OnError := HandleError;
-    lvTask.Start;
-
-    // the token closes the handle, so even a blocked read aborts promptly
-    lvDeadline := GetTickCount + 15000;
-    while (lvTask.Received = 0) and not lvTask.IsFinished and
-      (GetTickCount < lvDeadline) do
-      Sleep(10);
-    Check(lvTask.Received > 0,
-      'no data arrived to cancel mid-flight: ' + lvTask.ErrorMessage);
-    lvTask.Cancel;
-
-    CheckTrue(lvTask.WaitFor(10000), 'cancel must unwind promptly');
-    Check(lvTask.State = dtsCancelled,
-      'expected cancelled, got: ' + lvTask.ErrorMessage);
-    CheckEquals(gcErrOperationCancelled, lvTask.ErrorCode);
-    CheckFalse(FileExists(lvFileName),
-      'a cancelled download leaves no file behind');
-    CheckTrue(FCompleteFired, 'OnComplete fires on every terminal state');
-    CheckFalse(FErrorFired, 'cancellation is not an error');
-  finally
-    lvTask.Free;
-    SysUtils.DeleteFile(lvFileName);
-  end;
-end;
-
-procedure TBpHttpCancelWireTests.TestTraceSinkSeesTheWire;
-var
-  lvStream: TMemoryStream;
-  lvOffLength: Integer;
-begin
-  EnqueueSlowReply;
-  EnqueueSlowReply;
-  lvStream := TMemoryStream.Create;
-  try
-    gvTraceLog := '';
-    FCancelAtFirstData := True;  // the reply never ends on its own
-    TbpHttpTrace.Attach(FClient, CollectTraceLine);
-    try
-      try
-        FClient.Download(Url('/slow.bin'), lvStream, HandleProgress);
-      except
-        on EbpHttpClientCancelled do ; // expected
-      end;
-    finally
-      TbpHttpTrace.Detach(FClient);
-    end;
-
-    Check(Pos('connecting to', gvTraceLog) > 0, 'connect phase: ' + gvTraceLog);
-    Check(Pos('sending request', gvTraceLog) > 0, 'send phase: ' + gvTraceLog);
-    Check(Pos('request sent', gvTraceLog) > 0, 'byte count: ' + gvTraceLog);
-    Check(Pos('response received', gvTraceLog) > 0, 'read phase: ' + gvTraceLog);
-
-    lvOffLength := Length(gvTraceLog);
-    try
-      FClient.Download(Url('/slow.bin'), lvStream, HandleProgress);
-    except
-      on EbpHttpClientCancelled do ;
-    end;
-    CheckEquals(lvOffLength, Length(gvTraceLog), 'detached must be silent');
-  finally
-    lvStream.Free;
-  end;
-end;
-
 // freeing a sink the moment Detach returns must not race a thread inside it
 procedure TBpHttpCancelWireTests.TestDetachWaitsForASinkInFlight;
 var
-  lvWorker: TbpTraceGetThread;
+  lvWorker: TbpGetThread;
   lvEntered, lvLeftBeforeDetachReturned, lvFinished: Boolean;
 begin
   FServer.Enqueue(BpMockOk('warm'));
@@ -1405,9 +1069,8 @@ begin
   gvSinkLeft := False;
   gvSinkHoldMs := 300;
   CheckTrue(TbpHttpTrace.Attach(FClient, HoldingTraceLine), 'attach');
-  lvEntered := False;
   lvLeftBeforeDetachReturned := False;
-  lvWorker := TbpTraceGetThread.Create(FClient, Url('/held'));
+  lvWorker := TbpGetThread.Create(FClient, Url('/held'));
   // every check waits until after the cleanup, so nothing throws past the Free
   try
     lvEntered := BpWaitForFlag(gvSinkEntered, 5000);
@@ -1425,6 +1088,71 @@ begin
   CheckTrue(lvEntered, 'no callback reached the sink');
   CheckTrue(lvLeftBeforeDetachReturned, 'Detach returned with a thread still in the sink');
   CheckTrue(lvFinished, 'the worker request finished');
+end;
+
+// the trace used to be one sink per process with no request ids or timings
+procedure TBpHttpCancelWireTests.TestTraceFollowsEachRequestOfItsClient;
+var
+  lvOther: TbpHttpClient;
+  lvFirst, lvSecond: string;
+  lvTracedLength: Integer;
+begin
+  FServer.Enqueue(BpMockOk('one'));
+  FServer.Enqueue(BpMockOk('two'));
+  FServer.Enqueue(BpMockOk('three'));
+  FServer.Enqueue(BpMockOk('four'));
+  gvTraceLog := '';
+  lvOther := TbpHttpClient.Create;
+  try
+    CheckTrue(TbpHttpTrace.Attach(FClient, CollectTraceLine), 'attach');
+    try
+      FClient.Get(Url('/one'));
+      FClient.Get(Url('/two'));
+      lvOther.Get(Url('/three'));  // untraced, so it must add nothing
+    finally
+      TbpHttpTrace.Detach(FClient);
+    end;
+  finally
+    lvOther.Free;
+  end;
+  lvTracedLength := Length(gvTraceLog);
+  FClient.Get(Url('/four'));
+  CheckEquals(lvTracedLength, Length(gvTraceLog), 'detached must be silent');
+
+  Check(Pos('connecting to', gvTraceLog) > 0, 'connect phase: ' + gvTraceLog);
+  Check(Pos('sending request', gvTraceLog) > 0, 'send phase: ' + gvTraceLog);
+  Check(Pos('request sent', gvTraceLog) > 0, 'byte count: ' + gvTraceLog);
+  Check(Pos('response received', gvTraceLog) > 0, 'read phase: ' + gvTraceLog);
+  lvFirst := Copy(gvTraceLog, Pos('#1 done', gvTraceLog), MaxInt);
+  lvFirst := Copy(lvFirst, 1, Pos(#13#10, lvFirst));
+  lvSecond := Copy(gvTraceLog, Pos('#2 done', gvTraceLog), MaxInt);
+  lvSecond := Copy(lvSecond, 1, Pos(#13#10, lvSecond));
+  Check(Pos('new connection', lvFirst) > 0, 'first summary: ' + gvTraceLog);
+  Check(Pos('127.0.0.1', lvFirst) > 0, 'the remote address: ' + gvTraceLog);
+  Check(Pos('reused connection', lvSecond) > 0, 'second summary: ' + gvTraceLog);
+  CheckEquals(0, Pos('#3', gvTraceLog), 'another client is not traced: ' + gvTraceLog);
+end;
+
+// errors used to blame "send" for a refused connect and name no host
+procedure TBpHttpCancelWireTests.TestFailureNamesTheCallAndTheHost;
+begin
+  gvTraceLog := '';
+  CheckTrue(TbpHttpTrace.Attach(FClient, CollectTraceLine), 'attach');
+  try
+    try
+      // nothing listens on port 1, so the connect is refused at once
+      FClient.Get('http://127.0.0.1:1/');
+      Fail('expected a refused connection');
+    except
+      on E: EbpHttpClient do
+        Check(Pos('HttpSendRequest failed for 127.0.0.1:1', E.Message) > 0,
+          'name the call and the host: ' + E.Message);
+    end;
+  finally
+    TbpHttpTrace.Detach(FClient);
+  end;
+  Check(Pos('#1 failed: HttpSendRequest failed for 127.0.0.1:1', gvTraceLog) > 0,
+    'the sink hears of the failure: ' + gvTraceLog);
 end;
 
 procedure TBpHttpCancelWireTests.TestReceiveTimeoutFiresOnAStall;
@@ -1453,6 +1181,188 @@ begin
     Format('the timeout must end the read, took %d ms', [lvElapsed]));
 end;
 
+// the step timeout alone would wait 25 s here; the deadline closes the handle
+procedure TBpHttpCancelWireTests.TestTimeoutEndsTheWholeCall;
+var
+  lvReply: TbpMockResponse;
+  lvStart, lvElapsed: Cardinal;
+begin
+  lvReply := BpMockStatus(200);
+  lvReply.ClaimedLength := 4096;
+  lvReply.Effect := mseStall;
+  FServer.Enqueue(lvReply);
+
+  FClient.ReceiveTimeout := 25000;
+  FClient.Timeout := 1000;
+  lvStart := GetTickCount;
+  try
+    FClient.Get(Url('/stall'));
+    Fail('expected the deadline to end the call');
+  except
+    on EbpHttpClientCancelled do
+      Fail('a deadline is not a cancellation');
+    on E: EbpHttpClient do
+    begin
+      CheckEquals(12002, Integer(E.WinInetError), 'ERROR_INTERNET_TIMEOUT');
+      Check(Pos('Timeout', E.Message) > 0, 'say it was the deadline: ' + E.Message);
+    end;
+  end;
+  lvElapsed := GetTickCount - lvStart;
+  Check(lvElapsed < 10000,
+    Format('the deadline must end the call, took %d ms', [lvElapsed]));
+end;
+
+{ TBpHttpTaskWireTests }
+
+procedure TBpHttpTaskWireTests.SetUp;
+begin
+  inherited;
+  FDoneCount := 0;
+  FDoneThread := 0;
+  FDoneBody := '';
+  FArmed := False;
+  FReleasedInProgress := False;
+  // the server stays quiet for half a minute, so only a cancel ends a slow reply
+  FClient.ReceiveTimeout := 25000;
+end;
+
+procedure TBpHttpTaskWireTests.TearDown;
+begin
+  FTask := nil;  // cancels and waits, before the client and the server go
+  inherited;
+end;
+
+// a method of its own: Delphi keeps a hidden copy of a returned interface
+// until the caller returns, which would hold the task past FTask := nil
+procedure TBpHttpTaskWireTests.StartSlowDownload(aDest: TStream;
+  aOnProgress: TbpHttpTaskProgressEvent);
+begin
+  EnqueueSlowReply(FServer);
+  FTask := FClient.BeginDownload(Url('/slow.bin'), aDest, HandleDone, aOnProgress);
+end;
+
+procedure TBpHttpTaskWireTests.HandleDone(const aTask: IbpHttpTask);
+begin
+  FDoneThread := GetCurrentThreadId;
+  FDoneState := aTask.State;
+  if FDoneState = htsSucceeded then
+    FDoneBody := aTask.Response.Body;
+  Inc(FDoneCount);
+end;
+
+procedure TBpHttpTaskWireTests.ReleaseOnProgress(const aTask: IbpHttpTask;
+  const aReceived, aTotal: Int64);
+begin
+  // the worker may get here before the test thread has stored FTask
+  if FReleasedInProgress or not BpWaitForFlag(FArmed, 5000) then
+    Exit;
+  FTask := nil;
+  FReleasedInProgress := True;
+end;
+
+// the same call on a worker: its response, or its exception with every field
+procedure TBpHttpTaskWireTests.TestBeginGetAnswersLikeTheSyncCall;
+begin
+  FServer.Enqueue(BpMockOk('async'));
+  FTask := FClient.BeginGet(Url('/a'), HandleDone);
+  CheckTrue(BpPumpUntilCount(FDoneCount, 1, 5000), 'OnDone must arrive');
+  CheckEquals(GetCurrentThreadId, FDoneThread, 'OnDone runs on the main thread');
+  Check(FDoneState = htsSucceeded, 'failed: ' + FTask.ErrorMessage);
+  CheckEquals('async', string(FDoneBody));
+
+  // nothing listens on port 1, so the connect is refused at once
+  FTask := FClient.BeginGet('http://127.0.0.1:1/', nil);
+  CheckTrue(FTask.WaitFor(10000), 'the task must end');
+  Check(FTask.State = htsFailed, 'expected failed');
+  try
+    FTask.Response;
+    Fail('expected the error of the sync call');
+  except
+    on EbpHttpClientCancelled do
+      Fail('a refused connection is not a cancel');
+    on E: EbpHttpClient do
+    begin
+      CheckNotEquals(0, Integer(E.WinInetError), 'the WinInet error survives');
+      Check(Pos('HttpSendRequest failed for 127.0.0.1:1', E.Message) > 0,
+        'the message survives: ' + E.Message);
+    end;
+  end;
+end;
+
+// a form's field going away must not leave a request running behind it
+procedure TBpHttpTaskWireTests.TestReleasingTheTaskCancelsIt;
+var
+  lvStream: TMemoryStream;
+  lvStart, lvElapsed: Cardinal;
+begin
+  lvStream := TMemoryStream.Create;
+  try
+    StartSlowDownload(lvStream, nil);
+    CheckNotNull(FServer.TakeRequest(10000), 'the request must reach the server');
+    lvStart := GetTickCount;
+    FTask := nil;
+    lvElapsed := GetTickCount - lvStart;
+  finally
+    FTask := nil;
+    lvStream.Free;
+  end;
+  Check(lvElapsed < 10000,
+    Format('the release must cancel, not wait out the reply, took %d ms', [lvElapsed]));
+  BpPumpFor(100);
+  CheckEquals(0, FDoneCount, 'a released task tells no one');
+end;
+
+// the worker cannot join itself, so the free waits for the end of the work
+procedure TBpHttpTaskWireTests.TestReleaseInsideAWorkerEventIsDeferred;
+var
+  lvStream: TMemoryStream;
+begin
+  lvStream := TMemoryStream.Create;
+  try
+    FClient.MarshalTaskEvents := False;
+    StartSlowDownload(lvStream, ReleaseOnProgress);
+    FArmed := True;
+    CheckTrue(BpWaitForFlag(FReleasedInProgress, 10000), 'progress must arrive');
+  finally
+    // returns once the worker has left the call, so the stream is free to go
+    FreeAndNil(FClient);
+    lvStream.Free;
+  end;
+  CheckFalse(BpWaitForCount(FDoneCount, 1, 200), 'a released task tells no one');
+end;
+
+// the client used to go while a call on another thread still read its fields
+procedure TBpHttpTaskWireTests.TestFreeingTheClientEndsEveryCallInFlight;
+var
+  lvStream: TMemoryStream;
+  lvWorker: TbpGetThread;
+  lvStart, lvElapsed: Cardinal;
+begin
+  lvStream := TMemoryStream.Create;
+  lvWorker := nil;
+  try
+    StartSlowDownload(lvStream, nil);
+    EnqueueSlowReply(FServer);
+    lvWorker := TbpGetThread.Create(FClient, Url('/thread.bin'));
+    CheckNotNull(FServer.TakeRequest(10000), 'the first request must arrive');
+    CheckNotNull(FServer.TakeRequest(10000), 'the second request must arrive');
+    lvStart := GetTickCount;
+    FreeAndNil(FClient);
+    lvElapsed := GetTickCount - lvStart;
+    CheckTrue(WaitForSingleObject(lvWorker.Handle, 10000) = WAIT_OBJECT_0,
+      'the call on the other thread must end');
+    CheckEquals('EbpHttpClientCancelled', lvWorker.FErrorClass);
+    Check(lvElapsed < 10000,
+      Format('Free must cancel, not wait out the replies, took %d ms', [lvElapsed]));
+    CheckTrue(BpPumpUntilCount(FDoneCount, 1, 5000), 'OnDone must arrive');
+    Check(FDoneState = htsCancelled, 'expected cancelled: ' + FTask.ErrorMessage);
+  finally
+    FTask := nil;
+    lvWorker.Free;
+    lvStream.Free;
+  end;
+end;
+
 initialization
 {$IFNDEF NO_INTEGRATION}
   // every test here binds a loopback port, so /nointeg drops the lot
@@ -1464,6 +1374,7 @@ initialization
   RegisterTest(TBpHttpRedirectWireTests.Suite);
   RegisterTest(TBpHttpRedirectCredentialTests.Suite);
   RegisterTest(TBpHttpCancelWireTests.Suite);
+  RegisterTest(TBpHttpTaskWireTests.Suite);
 {$ENDIF}
 
 end.

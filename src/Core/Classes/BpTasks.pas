@@ -73,7 +73,8 @@ type
     function CreateWorkerThread: TThread; virtual;
   public
     constructor Create(aMarshalToMainThread: Boolean = True);
-    // cancels and joins
+    // cancels and joins. On the worker only OnComplete and OnError may free it:
+    // OnProgress runs inside the work, which would go on in freed memory
     destructor Destroy; override;
 
     // raises when already started or Work is unassigned
@@ -708,6 +709,8 @@ initialization
 
 finalization
   DestroyDispatcher;
-  DeleteCriticalSection(gvLock);
+  // a task never freed may still finish its work, and would enter a deleted lock
+  if gvCount = 0 then
+    DeleteCriticalSection(gvLock);
 
 end.

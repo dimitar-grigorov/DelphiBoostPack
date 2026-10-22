@@ -123,44 +123,40 @@ begin
   end;
 end;
 
-function CheckDownloadTask: Boolean;
+function CheckAsyncTask: Boolean;
 var
-  lvTask: TbpHttpDownloadTask;
-  lvRaised: Boolean;
+  lvClient: TbpHttpClient;
+  lvTask: IbpHttpTask;
 begin
   Result := False;
-  // events on this thread: no message loop in a console smoke test
-  lvTask := TbpHttpDownloadTask.Create(False);
+  lvClient := TbpHttpClient.Create;
   try
-    if lvTask.State <> dtsPending then
-      Writeln('FAIL: fresh task not pending')
-    else if lvTask.Total <> -1 then
-      Writeln('FAIL: fresh task total not unknown')
+    // events on the worker: no message loop in a console smoke test
+    lvClient.MarshalTaskEvents := False;
+    // an unparsable url fails the task on the worker, never reaching the network
+    lvTask := lvClient.BeginGet('not a url at all', nil);
+    if not lvTask.WaitFor(5000) then
+      Writeln('FAIL: async task did not finish')
+    else if lvTask.State <> htsFailed then
+      Writeln('FAIL: async task with a bad url did not fail')
     else
-    begin
-      lvRaised := False;
       try
-        lvTask.Start;  // no Url, no destination
+        lvTask.Response;
+        Writeln('FAIL: Response of a failed task did not raise');
       except
         on EbpHttpClient do
-          lvRaised := True;
+          Result := True;
       end;
-      if not lvRaised then
-        Writeln('FAIL: Start accepted a misconfigured task')
-      else if lvTask.State <> dtsPending then
-        Writeln('FAIL: failed validation changed the task state')
-      else
-        Result := True;
-    end;
+    lvTask := nil;
   finally
-    lvTask.Free;
+    lvClient.Free;
   end;
 end;
 
 begin
   ExitCode := 1;
   if CheckClient and CheckDownloadHelpers and CheckCancellationToken and
-    CheckRequestCancellation and CheckDownloadTask then
+    CheckRequestCancellation and CheckAsyncTask then
   begin
     Writeln('OK: BpHttpClientStandalone');
     ExitCode := 0;

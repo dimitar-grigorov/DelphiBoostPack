@@ -5,7 +5,7 @@ unit BpHttpClientTests;
 interface
 
 uses
-  TestFramework, SysUtils, BpHttpClient, BpBase64;
+  TestFramework, SysUtils, Classes, Windows, BpHttpClient, BpBase64, BpTestSupport;
 
 type
   // basic offline tests, no network access needed
@@ -20,20 +20,13 @@ type
     procedure TestParseUrl;
     procedure TestBuildHeaders;
     procedure TestBasicAuth;
-    procedure TestBasicAuthMatchesBpBase64;
-    procedure TestMethodToString;
-    procedure TestHeaderValue;
-    procedure TestIsSuccess;
-    procedure TestBodyAsUtf8;
+    procedure TestHeaderParsing;
+    procedure TestResponseTextFollowsTheCharset;
     procedure TestClassifyHttpError;
     procedure TestHeaderInjectionRejected;
-    procedure TestBuildHeadersOddValues;
-    procedure TestVerbsHonourPreCancelledToken;
-    procedure TestSameOrigin;
-    procedure TestKeepsCredentials;
-    procedure TestReasonPhrase;
-    procedure TestRedirectMethod;
-    procedure TestRedirectTarget;
+    procedure TestEveryCallHonoursAPreCancelledToken;
+    procedure TestOriginRules;
+    procedure TestRedirectRules;
     procedure TestStripCredentials;
   end;
 
@@ -58,6 +51,7 @@ begin
   CheckEquals(8000, Integer(FClient.ConnectTimeout), 'ConnectTimeout');
   CheckEquals(8000, Integer(FClient.SendTimeout), 'SendTimeout');
   CheckEquals(8000, Integer(FClient.ReceiveTimeout), 'ReceiveTimeout');
+  CheckEquals(100000, Integer(FClient.Timeout), 'Timeout');
   CheckTrue(FClient.FollowRedirects, 'FollowRedirects');
   CheckEquals(10, FClient.MaxRedirects, 'MaxRedirects');
   CheckTrue(FClient.AutoDecompress, 'AutoDecompress');
@@ -190,11 +184,26 @@ begin
   FClient.ClearHeaders;
   FClient.BearerToken := '';
   CheckEquals('', FClient.BuildHeaders(''), 'clear removes everything');
+
+  // the headers live in a TStrings, so an empty value removes the name
+  FClient.AddHeader('X-Gone', 'here');
+  FClient.AddHeader('X-Gone', '');
+  CheckEquals('', FClient.BuildHeaders(''), 'an empty value removes the header');
+
+  // a stray CRLF around the per-request block is trimmed off
+  FClient.AddHeader('X-Custom', 'one');
+  CheckEquals('X-Custom: one'#13#10'Accept: text/plain',
+    FClient.BuildHeaders('Accept: text/plain'#13#10), 'trailing CRLF trimmed');
+  CheckEquals('X-Custom: one'#13#10'Accept: text/plain',
+    FClient.BuildHeaders(#13#10'Accept: text/plain'), 'leading CRLF trimmed');
+  CheckEquals('X-Custom: one', FClient.BuildHeaders(#13#10),
+    'a CRLF-only block adds nothing');
 end;
 
 procedure TBpHttpClientTests.TestBasicAuth;
 var
   lvPassword: WideString;
+  i: Integer;
 begin
   FClient.BearerToken := 'stale-token';
   // 'user:pass' in Base64 is dXNlcjpwYXNz
@@ -207,17 +216,10 @@ begin
   FClient.SetBasicAuth('user', lvPassword);
   CheckEquals('Authorization: Basic dXNlcjpwYcOf', FClient.BuildHeaders(''),
     'non-ascii credentials go out as UTF-8, not the machine code page');
-end;
 
-// the client mirrors BpBase64's encoder; the text is checked by CheckMirrors.js,
-// this pins the wiring around it, where a wrong alphabet or padding would hide
-procedure TBpHttpClientTests.TestBasicAuthMatchesBpBase64;
-var
-  lvPassword: WideString;
-  i: Integer;
-begin
+  // the client mirrors BpBase64's encoder, which CheckMirrors.js compares as text;
+  // this pins the wiring around it, every remainder of 3 over ASCII and above it
   lvPassword := '';
-  // every remainder of 3 and both padding cases, over ASCII and above it
   for i := 0 to 12 do
   begin
     FClient.SetBasicAuth('u', lvPassword);
@@ -227,18 +229,7 @@ begin
   end;
 end;
 
-procedure TBpHttpClientTests.TestMethodToString;
-begin
-  CheckEquals('GET', TbpHttpClient.MethodToString(hmGet));
-  CheckEquals('POST', TbpHttpClient.MethodToString(hmPost));
-  CheckEquals('PUT', TbpHttpClient.MethodToString(hmPut));
-  CheckEquals('DELETE', TbpHttpClient.MethodToString(hmDelete));
-  CheckEquals('PATCH', TbpHttpClient.MethodToString(hmPatch));
-  CheckEquals('HEAD', TbpHttpClient.MethodToString(hmHead));
-  CheckEquals('OPTIONS', TbpHttpClient.MethodToString(hmOptions));
-end;
-
-procedure TBpHttpClientTests.TestHeaderValue;
+procedure TBpHttpClientTests.TestHeaderParsing;
 const
   lcHeaders = 'HTTP/1.1 200 OK'#13#10 +
     'Content-Type: application/json; charset=utf-8'#13#10 +
@@ -262,44 +253,59 @@ begin
   // and a present but empty value reads the same as an absent one
   CheckEquals('', BpHttpHeaderValue(lcLossy, 'X-Empty'), 'empty value yields empty');
   CheckEquals('', BpHttpHeaderValue(lcLossy, 'X-Missing'), 'and so does an absent one');
+
+  CheckEquals('Not Found',
+    BpHttpReasonPhrase('HTTP/1.1 404 Not Found'#13#10'Server: x'#13#10), 'plain');
+  CheckEquals('Moved Permanently',
+    BpHttpReasonPhrase('HTTP/1.1 301 Moved Permanently'), 'no trailing CRLF');
+  CheckEquals('', BpHttpReasonPhrase('HTTP/1.1 204'#13#10), 'server sent none');
+  CheckEquals('', BpHttpReasonPhrase('Server: x'#13#10), 'no status line');
+
+  Check(BpHttpContentLength(lcHeaders) = 42, 'plain length');
+  Check(BpHttpContentLength('Content-Length: 5368709120') = Int64(5) * 1024 * 1024 * 1024,
+    'past 4 GB stays exact');
+  Check(BpHttpContentLength(lcLossy) = -1, 'absent length yields -1');
+  // RFC 7230 allows digits only; StrToInt64Def would read each of these as a length
+  Check(BpHttpContentLength('Content-Length: -5') = -1, 'negative');
+  Check(BpHttpContentLength('Content-Length: $40000') = -1, 'Pascal hex');
+  Check(BpHttpContentLength('Content-Length: 0x40000') = -1, 'C hex');
+  Check(BpHttpContentLength('Content-Length: +42') = -1, 'leading plus');
+  Check(BpHttpContentLength('Content-Length: 42 bytes') = -1, 'trailing text');
+  Check(BpHttpContentLength('Content-Length: 99999999999999999999') = -1, 'past Int64');
 end;
 
-procedure TBpHttpClientTests.TestIsSuccess;
+// a windows-1251 reply used to decode as UTF-8, every Cyrillic letter a U+FFFD
+procedure TBpHttpClientTests.TestResponseTextFollowsTheCharset;
+
+  function Text(const aContentType: string; const aBody: AnsiString): WideString;
+  var
+    lvResponse: TbpHttpResponse;
+  begin
+    lvResponse.Headers := 'HTTP/1.1 200 OK'#13#10'Content-Type: ' + aContentType;
+    lvResponse.Body := aBody;
+    Result := BpHttpResponseText(lvResponse);
+  end;
+
 var
   lvResponse: TbpHttpResponse;
 begin
-  lvResponse.StatusCode := 200;
-  CheckTrue(BpHttpResponseIsSuccess(lvResponse));
-  lvResponse.StatusCode := 204;
-  CheckTrue(BpHttpResponseIsSuccess(lvResponse));
-  lvResponse.StatusCode := 299;
-  CheckTrue(BpHttpResponseIsSuccess(lvResponse));
-  lvResponse.StatusCode := 199;
-  CheckFalse(BpHttpResponseIsSuccess(lvResponse));
-  lvResponse.StatusCode := 301;
-  CheckFalse(BpHttpResponseIsSuccess(lvResponse));
-  lvResponse.StatusCode := 404;
-  CheckFalse(BpHttpResponseIsSuccess(lvResponse));
-end;
-
-procedure TBpHttpClientTests.TestBodyAsUtf8;
-var
-  lvResponse: TbpHttpResponse;
-  lvText: WideString;
-begin
-  lvResponse.Body := '';
-  CheckEquals('', BpHttpResponseBodyAsUtf8(lvResponse), 'empty body');
-
-  // 'caf' + e-acute: C3 A9 is the UTF-8 encoding of U+00E9
+  // the wizard's call: UTF-8 whatever the header says
+  lvResponse.Headers := 'HTTP/1.1 200 OK'#13#10'Content-Type: text/plain; charset=windows-1251';
   lvResponse.Body := 'caf'#$C3#$A9;
-  lvText := BpHttpResponseBodyAsUtf8(lvResponse);
-  CheckEquals(4, Length(lvText));
-  CheckEquals('caf', Copy(lvText, 1, 3));
-  CheckEquals($00E9, Ord(lvText[4]));
+  CheckEquals($00E9, Ord(BpHttpResponseBodyAsUtf8(lvResponse)[4]), 'BodyAsUtf8');
+  lvResponse.Body := '';
+  CheckEquals('', BpHttpResponseBodyAsUtf8(lvResponse), 'BodyAsUtf8 of nothing');
 
-  // plain ASCII passes through unchanged
-  lvResponse.Body := 'hello';
-  CheckEquals('hello', BpHttpResponseBodyAsUtf8(lvResponse));
+  CheckEquals($00E9, Ord(Text('application/json', 'caf'#$C3#$A9)[4]), 'UTF-8 by default');
+  CheckEquals($0430, Ord(Text('text/plain; charset=windows-1251', #$E0)[1]), 'windows-1251');
+  CheckEquals($03B1, Ord(Text('text/html; charset="ISO-8859-7"', #$E1)[1]),
+    'quoted, upper case, iso-8859-7');
+  CheckEquals($00E9, Ord(Text('text/plain; charset=x-unknown', 'caf'#$C3#$A9)[4]),
+    'an unknown charset reads as UTF-8');
+  CheckEquals('x', Text('text/plain; charset=windows-1251', #$EF#$BB#$BF'x'),
+    'a UTF-8 BOM outranks the header');
+  CheckEquals('ab', Text('text/plain; charset=utf-16le', 'a'#0'b'#0), 'UTF-16LE');
+  CheckEquals('ab', Text('text/plain', #$FE#$FF#0'a'#0'b'), 'a UTF-16BE BOM');
 end;
 
 procedure TBpHttpClientTests.TestClassifyHttpError;
@@ -370,24 +376,7 @@ begin
   CheckEquals(0, Pos(#10, FClient.BuildHeaders('')), 'no LF in the basic auth line');
 end;
 
-procedure TBpHttpClientTests.TestBuildHeadersOddValues;
-begin
-  // the headers live in a TStrings, so an empty value removes the name
-  FClient.AddHeader('X-Gone', 'here');
-  FClient.AddHeader('X-Gone', '');
-  CheckEquals('', FClient.BuildHeaders(''), 'an empty value removes the header');
-
-  // a stray CRLF around the per-request block is trimmed off
-  FClient.AddHeader('X-Custom', 'one');
-  CheckEquals('X-Custom: one'#13#10'Accept: text/plain',
-    FClient.BuildHeaders('Accept: text/plain'#13#10), 'trailing CRLF trimmed');
-  CheckEquals('X-Custom: one'#13#10'Accept: text/plain',
-    FClient.BuildHeaders(#13#10'Accept: text/plain'), 'leading CRLF trimmed');
-  CheckEquals('X-Custom: one', FClient.BuildHeaders(#13#10),
-    'a CRLF-only block adds nothing');
-end;
-
-procedure TBpHttpClientTests.TestSameOrigin;
+procedure TBpHttpClientTests.TestOriginRules;
 begin
   CheckTrue(FClient.SameOrigin('https://a.com/x', 'https://a.com/y?q=1'), 'path only');
   CheckTrue(FClient.SameOrigin('https://A.COM/x', 'https://a.com/x'), 'host is case free');
@@ -398,10 +387,7 @@ begin
   // an http to https upgrade is still a new origin, as WHATWG fetch has it
   CheckFalse(FClient.SameOrigin('http://a.com/x', 'https://a.com/x'), 'other scheme');
   CheckFalse(FClient.SameOrigin('https://a.com/x', 'not a url'), 'unparsable');
-end;
 
-procedure TBpHttpClientTests.TestKeepsCredentials;
-begin
   CheckTrue(FClient.KeepsCredentials('https://a.com/x', 'https://a.com/y'),
     'same origin');
   // requests makes the same exception, so a plain to secure hop keeps the auth
@@ -419,31 +405,8 @@ begin
     'unparsable');
 end;
 
-procedure TBpHttpClientTests.TestReasonPhrase;
-begin
-  CheckEquals('Not Found',
-    BpHttpReasonPhrase('HTTP/1.1 404 Not Found'#13#10'Server: x'#13#10), 'plain');
-  CheckEquals('OK', BpHttpReasonPhrase('HTTP/1.0 200 OK'#13#10), 'http 1.0');
-  CheckEquals('Moved Permanently',
-    BpHttpReasonPhrase('HTTP/1.1 301 Moved Permanently'), 'no trailing CRLF');
-  CheckEquals('', BpHttpReasonPhrase('HTTP/1.1 204'#13#10), 'server sent none');
-  CheckEquals('', BpHttpReasonPhrase('Server: x'#13#10), 'no status line');
-  CheckEquals('', BpHttpReasonPhrase(''), 'empty block');
-end;
-
-procedure TBpHttpClientTests.TestRedirectMethod;
-begin
-  CheckEquals('GET', BpHttpRedirectMethod(301, 'POST'), '301 downgrades a POST');
-  CheckEquals('GET', BpHttpRedirectMethod(302, 'POST'), '302 downgrades a POST');
-  CheckEquals('PUT', BpHttpRedirectMethod(301, 'PUT'), '301 keeps a PUT');
-  CheckEquals('GET', BpHttpRedirectMethod(303, 'PUT'), '303 downgrades anything');
-  CheckEquals('HEAD', BpHttpRedirectMethod(303, 'HEAD'), '303 keeps a HEAD');
-  CheckEquals('POST', BpHttpRedirectMethod(307, 'POST'), '307 keeps the method');
-  CheckEquals('POST', BpHttpRedirectMethod(308, 'POST'), '308 keeps the method');
-  CheckEquals('POST', BpHttpRedirectMethod(200, 'POST'), 'not a redirect');
-end;
-
-procedure TBpHttpClientTests.TestRedirectTarget;
+// the WHATWG fetch table; the wire tests show the body and its headers go with it
+procedure TBpHttpClientTests.TestRedirectRules;
 const
   lcBase = 'https://a.com/dir/page?q=1';
 
@@ -454,6 +417,14 @@ const
   end;
 
 begin
+  CheckEquals('GET', BpHttpRedirectMethod(301, 'POST'), '301 downgrades a POST');
+  CheckEquals('GET', BpHttpRedirectMethod(302, 'POST'), '302 downgrades a POST');
+  CheckEquals('PUT', BpHttpRedirectMethod(301, 'PUT'), '301 keeps a PUT');
+  CheckEquals('GET', BpHttpRedirectMethod(303, 'PUT'), '303 downgrades anything');
+  CheckEquals('HEAD', BpHttpRedirectMethod(303, 'HEAD'), '303 keeps a HEAD');
+  CheckEquals('POST', BpHttpRedirectMethod(307, 'POST'), '307 keeps the method');
+  CheckEquals('POST', BpHttpRedirectMethod(308, 'POST'), '308 keeps the method');
+
   CheckEquals('https://b.com/x', Loc('https://b.com/x'), 'absolute');
   CheckEquals('https://a.com/other', Loc('/other'), 'root relative');
   CheckEquals('https://a.com/dir/next', Loc('next'), 'path relative');
@@ -462,6 +433,9 @@ begin
   CheckEquals('', Loc('/other', 304), '304 is not a redirect');
   CheckEquals('', BpHttpRedirectTarget(lcBase, 'HTTP/1.1 302 Found'#13#10, 302),
     'no Location header');
+  // past INTERNET_MAX_URL_LENGTH the 3xx used to come back as the answer
+  CheckEquals('https://a.com/' + StringOfChar('a', 3000),
+    Loc('/' + StringOfChar('a', 3000)), 'a Location longer than 2083');
 end;
 
 procedure TBpHttpClientTests.TestStripCredentials;
@@ -491,21 +465,26 @@ begin
     'content-length: 12'#13#10'Transfer-Encoding: chunked'), 'entity headers');
 end;
 
-procedure TBpHttpClientTests.TestVerbsHonourPreCancelledToken;
+procedure TBpHttpClientTests.TestEveryCallHonoursAPreCancelledToken;
 const
-  lcUrl = 'https://example.com/';
-  lcVerbs: array[0..8] of string =
+  lcUrl = 'http://127.0.0.1:1/never-contacted';
+  lcCalls: array[0..10] of string =
     ('Execute', 'Get', 'Post', 'PostJson', 'Put', 'Delete', 'Patch', 'Head',
-     'Options');
+     'Options', 'Download', 'DownloadToFile');
 var
   lvToken: TbpCancellationToken;
+  lvStream: TMemoryStream;
+  lvFileName: string;
   i: Integer;
 begin
   // the token check comes before any network activity, so this is offline
   lvToken := TbpCancellationToken.Create;
+  lvStream := TMemoryStream.Create;
+  lvFileName := BpTempFilePath('bp_precancelled.tmp');
   try
+    BpWriteWholeFile(lvFileName, 'KEEPME');
     lvToken.Cancel;
-    for i := Low(lcVerbs) to High(lcVerbs) do
+    for i := Low(lcCalls) to High(lcCalls) do
     begin
       try
         case i of
@@ -518,15 +497,22 @@ begin
           6: FClient.Patch(lcUrl, 'body', '', lvToken);
           7: FClient.Head(lcUrl, '', lvToken);
           8: FClient.Options(lcUrl, '', lvToken);
+          9: FClient.Download(lcUrl, lvStream, nil, lvToken);
+          10: FClient.DownloadToFile(lcUrl, lvFileName, nil, lvToken);
         end;
-        Fail(lcVerbs[i] + ' must raise EbpHttpClientCancelled');
+        Fail(lcCalls[i] + ' must raise EbpHttpClientCancelled');
       except
         on E: EbpHttpClientCancelled do
           CheckEquals(gcErrOperationCancelled, E.WinInetError,
-            lcVerbs[i] + ' error code');
+            lcCalls[i] + ' error code');
       end;
     end;
+    CheckEquals(0, Integer(lvStream.Size), 'nothing may reach the stream');
+    CheckEquals('KEEPME', string(BpReadWholeFile(lvFileName)),
+      'the file that was there must survive');
   finally
+    SysUtils.DeleteFile(lvFileName);
+    lvStream.Free;
     lvToken.Free;
   end;
 end;

@@ -87,17 +87,20 @@ end;
 
 procedure DemoAsyncCancel;
 var
-  lvTask: TbpHttpDownloadTask;
+  lvClient: TbpHttpClient;
+  lvTask: IbpHttpTask;
   lvFileName: string;
   lvDeadline: Cardinal;
 begin
   Writeln('3) Async download on a worker thread, cancelled mid-flight');
   lvFileName := ExtractFilePath(ParamStr(0)) + 'demo_cancel.bin';
-  // hot task in one call; False = console app without a message loop, so no
-  // event marshaling, this thread just polls the thread-safe properties
-  lvTask := BpDownloadAsync('https://speed.cloudflare.com/__down?bytes=67108864',
-    lvFileName, nil, nil, False);
+  lvClient := TbpHttpClient.Create;
   try
+    // a console app has no message loop, so the events stay on the worker and
+    // this thread polls the task instead
+    lvClient.MarshalTaskEvents := False;
+    lvTask := lvClient.BeginDownloadToFile(
+      'https://speed.cloudflare.com/__down?bytes=67108864', lvFileName, nil);
     Writeln('  started, main thread stays free...');
 
     // let it move some bytes, then abort
@@ -111,19 +114,21 @@ begin
     lvTask.WaitFor(10000);
 
     case lvTask.State of
-      dtsCancelled:
+      htsCancelled:
         Writeln('  state: cancelled (as requested)');
-      dtsSucceeded:
+      htsSucceeded:
         Writeln('  state: succeeded (too fast to cancel)');
     else
       Writeln('  state: failed: ' + lvTask.ErrorMessage);
     end;
+    // the bytes went to a sibling temp file, which a cancel deletes
     if FileExists(lvFileName) then
-      Writeln('  partial file still exists (unexpected)')
+      Writeln('  a file reached the destination (unexpected)')
     else
-      Writeln('  partial file was cleaned up');
+      Writeln('  nothing reached the destination');
+    lvTask := nil;
   finally
-    lvTask.Free;
+    lvClient.Free;
   end;
 end;
 

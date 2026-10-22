@@ -33,7 +33,7 @@ end;
 A big download that does not freeze the UI, in one line:
 
 ```pascal
-FTask := BpDownloadAsync('https://host/big.zip', 'C:\temp\big.zip', HandleProgress, HandleDone);
+FTask := FClient.BeginDownloadToFile('https://host/big.zip', 'C:\temp\big.zip', HandleDone, HandleProgress);
 ```
 
 Worker thread, progress and completion events on the main thread, no `ProcessMessages`, `FTask.Cancel` whenever you like. [More examples ->](docs/FEATURES.md)
@@ -52,8 +52,7 @@ Full descriptions and examples in the [feature guide](docs/FEATURES.md).
 
 | Unit | What you get |
 |------|--------------|
-| [TbpHttpClient](docs/FEATURES.md#tbphttpclient) | `Get` / `Post` / `PostJson` / `Put` / `Delete`, all cancellable, bearer and basic auth, streaming downloads, keep-alive. WinInet, so TLS comes from Windows and no OpenSSL DLLs ride along |
-| [TbpHttpDownloadTask](docs/FEATURES.md#tbphttpdownloadtask) | non-blocking downloads with progress, prompt cancel and partial-file cleanup |
+| [TbpHttpClient](docs/FEATURES.md#tbphttpclient) | `Get` / `Post` / `PostJson` / `Put` / `Delete`, all cancellable and each also non-blocking as `BeginGet` and kin, bearer and basic auth, streaming downloads, keep-alive. WinInet, so TLS comes from Windows and no OpenSSL DLLs ride along |
 | [TbpTask](docs/FEATURES.md#tbptask) | run any method on a worker thread, completion and failure as events on the main thread, any thread may create or free it |
 | [TbpCancellationToken](docs/FEATURES.md#tbpcancellationtoken) | the C# `CancellationToken` idea, for Delphi 7 |
 

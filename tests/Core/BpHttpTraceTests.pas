@@ -11,13 +11,8 @@ type
   // decoder only, no network
   TBpHttpTraceTests = class(TTestCase)
   published
-    procedure TestStatusWithoutPayload;
-    procedure TestStatusWithHostPayload;
-    procedure TestStatusWithByteCount;
-    procedure TestNoisyStatusesAreSkipped;
-    procedure TestUnknownStatus;
-    procedure TestRedirectDropsCredentials;
-    procedure TestSanitizeUrl;
+    procedure TestStatusText;
+    procedure TestUrlsLoseTheirUserInfo;
     procedure TestLongPayloadIsMarkedAsCut;
     procedure TestDetachWithoutSession;
   end;
@@ -55,25 +50,22 @@ begin
   Result := PChar(aText);
 end;
 
-procedure TBpHttpTraceTests.TestStatusWithoutPayload;
+procedure TBpHttpTraceTests.TestStatusText;
+const
+  lcHost = 'api.example.com';
+  lcAddr = '93.184.216.34:443';
+var
+  lvBytes: DWORD;
 begin
-  CheckEquals('sending request',
-    TbpHttpTrace.StatusText(lcSendingRequest, nil, 0));
+  CheckEquals('sending request', TbpHttpTrace.StatusText(lcSendingRequest, nil, 0));
   CheckEquals('waiting for response',
     TbpHttpTrace.StatusText(lcReceivingResponse, nil, 0));
   CheckEquals('closing connection',
     TbpHttpTrace.StatusText(lcClosingConnection, nil, 0));
-  CheckEquals('connection closed',
-    TbpHttpTrace.StatusText(lcConnectionClosed, nil, 0));
-  CheckEquals('detecting proxy',
-    TbpHttpTrace.StatusText(lcDetectingProxy, nil, 0));
-end;
+  CheckEquals('connection closed', TbpHttpTrace.StatusText(lcConnectionClosed, nil, 0));
+  CheckEquals('detecting proxy', TbpHttpTrace.StatusText(lcDetectingProxy, nil, 0));
+  CheckEquals('status 999', TbpHttpTrace.StatusText(999, nil, 0), 'unknown status');
 
-procedure TBpHttpTraceTests.TestStatusWithHostPayload;
-const
-  lcHost = 'api.example.com';
-  lcAddr = '93.184.216.34:443';
-begin
   CheckEquals('resolving ' + lcHost,
     TbpHttpTrace.StatusText(lcResolvingName, TextInfo(lcHost), Length(lcHost)));
   CheckEquals('resolved -> ' + lcAddr,
@@ -82,9 +74,29 @@ begin
     TbpHttpTrace.StatusText(lcConnectingToServer, TextInfo(lcAddr), Length(lcAddr)));
   CheckEquals('connected to ' + lcAddr,
     TbpHttpTrace.StatusText(lcConnectedToServer, TextInfo(lcAddr), Length(lcAddr)));
-
   // a missing payload must not take the decoder down
   CheckEquals('resolving ', TbpHttpTrace.StatusText(lcResolvingName, nil, 0));
+
+  lvBytes := 1460;
+  CheckEquals('request sent (1460 bytes)',
+    TbpHttpTrace.StatusText(lcRequestSent, @lvBytes, SizeOf(lvBytes)));
+  lvBytes := 65536;
+  CheckEquals('response received (65536 bytes)',
+    TbpHttpTrace.StatusText(lcResponseReceived, @lvBytes, SizeOf(lvBytes)));
+  // too short a payload reads as zero rather than as garbage
+  CheckEquals('request sent (0 bytes)',
+    TbpHttpTrace.StatusText(lcRequestSent, @lvBytes, 2));
+  CheckEquals('request sent (0 bytes)',
+    TbpHttpTrace.StatusText(lcRequestSent, nil, SizeOf(lvBytes)));
+
+  // handle bookkeeping and the cookie and privacy family, 320 to 327, are noise
+  CheckEquals('', TbpHttpTrace.StatusText(lcHandleCreated, nil, 0));
+  CheckEquals('', TbpHttpTrace.StatusText(lcHandleClosing, nil, 0));
+  CheckEquals('', TbpHttpTrace.StatusText(lcRequestComplete, nil, 0));
+  CheckEquals('', TbpHttpTrace.StatusText(lcStateChange, nil, 0));
+  CheckEquals('', TbpHttpTrace.StatusText(lcCookieSent, nil, 0));
+  CheckEquals('', TbpHttpTrace.StatusText(lcCookieReceived, nil, 0));
+  CheckEquals('', TbpHttpTrace.StatusText(lcCookieHistory, nil, 0));
 end;
 
 // a cut url used to be printed as if it were the whole thing
@@ -118,44 +130,7 @@ begin
   end;
 end;
 
-procedure TBpHttpTraceTests.TestStatusWithByteCount;
-var
-  lvBytes: DWORD;
-begin
-  lvBytes := 1460;
-  CheckEquals('request sent (1460 bytes)',
-    TbpHttpTrace.StatusText(lcRequestSent, @lvBytes, SizeOf(lvBytes)));
-
-  lvBytes := 65536;
-  CheckEquals('response received (65536 bytes)',
-    TbpHttpTrace.StatusText(lcResponseReceived, @lvBytes, SizeOf(lvBytes)));
-
-  // too short a payload reads as zero rather than as garbage
-  CheckEquals('request sent (0 bytes)',
-    TbpHttpTrace.StatusText(lcRequestSent, @lvBytes, 2));
-  CheckEquals('request sent (0 bytes)',
-    TbpHttpTrace.StatusText(lcRequestSent, nil, SizeOf(lvBytes)));
-end;
-
-procedure TBpHttpTraceTests.TestNoisyStatusesAreSkipped;
-begin
-  CheckEquals('', TbpHttpTrace.StatusText(lcHandleCreated, nil, 0),
-    'handle bookkeeping is noise');
-  CheckEquals('', TbpHttpTrace.StatusText(lcHandleClosing, nil, 0));
-  CheckEquals('', TbpHttpTrace.StatusText(lcRequestComplete, nil, 0));
-  CheckEquals('', TbpHttpTrace.StatusText(lcStateChange, nil, 0));
-  // the cookie and privacy family, 320 to 327
-  CheckEquals('', TbpHttpTrace.StatusText(lcCookieSent, nil, 0));
-  CheckEquals('', TbpHttpTrace.StatusText(lcCookieReceived, nil, 0));
-  CheckEquals('', TbpHttpTrace.StatusText(lcCookieHistory, nil, 0));
-end;
-
-procedure TBpHttpTraceTests.TestUnknownStatus;
-begin
-  CheckEquals('status 999', TbpHttpTrace.StatusText(999, nil, 0));
-end;
-
-procedure TBpHttpTraceTests.TestRedirectDropsCredentials;
+procedure TBpHttpTraceTests.TestUrlsLoseTheirUserInfo;
 const
   lcUrl = 'https://user:secret@api.example.com/v2/items?page=2';
 var
@@ -164,10 +139,7 @@ begin
   lvLine := TbpHttpTrace.StatusText(lcRedirect, TextInfo(lcUrl), Length(lcUrl));
   CheckEquals('redirect -> https://api.example.com/v2/items?page=2', lvLine);
   Check(Pos('secret', lvLine) = 0, 'no password may survive in a trace line');
-end;
 
-procedure TBpHttpTraceTests.TestSanitizeUrl;
-begin
   CheckEquals('https://example.com/path',
     TbpHttpTrace.SanitizeUrl('https://example.com/path'));
   CheckEquals('', TbpHttpTrace.SanitizeUrl(''));

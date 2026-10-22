@@ -321,7 +321,7 @@ end;
 
 procedure TbpInt64List.Exchange(aIndex1, aIndex2: Integer);
 var
-  lvTemp: Integer;
+  lvTemp: Int64;
 begin
   CheckNotSorted;
   CheckIndex(aIndex1);
