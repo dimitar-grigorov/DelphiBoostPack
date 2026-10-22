@@ -149,7 +149,7 @@ begin
   Move(FHash, Result[0], 4);
 end;
 
-// lookup3: Final folds the last 12-byte block, so the tail never reads past Data
+// lookup3: the aligned path reads the last word whole and masks it, as the reference C does
 class function TbpHashBobJenkins.HashLittle(const Data; Len, InitVal: Integer): Integer;
 var
   a, b, c: Cardinal;

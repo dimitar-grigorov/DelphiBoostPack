@@ -141,7 +141,9 @@ end;
 
 procedure TBpPathUtilsTests.TestNormalizeLeavesARootAlone;
 begin
-  CheckEquals('C:', BpPathNormalize('C:\'), 'a drive root keeps no separator');
+  // 'C:' alone is the drive's current folder, so the root keeps its separator
+  CheckEquals('C:/', BpPathNormalize('C:\'), 'a drive root keeps its separator');
+  CheckFalse(BpPathSame('C:\', 'C:'), 'the drive root is not its current folder');
   CheckEquals('/', BpPathNormalize('\'), 'the current drive root is its separator');
   CheckEquals('//', BpPathNormalize('\\'), 'and so is a bare UNC prefix');
   CheckEquals('//server/share', BpPathNormalize('\\server\share\'), 'a share');
@@ -292,6 +294,7 @@ begin
   CheckEquals('D:\b', BpPathCombine('C:\a', 'D:\b'), 'a rooted tail wins');
   CheckEquals('\b', BpPathCombine('C:\a', '\b'), 'so does one rooted on the current drive');
   CheckEquals('C:b', BpPathCombine('D:\a', 'C:b'), 'and a drive-relative one');
+  CheckEquals('C:b', BpPathCombine('C:', 'b'), 'a bare drive takes no separator, as in .NET');
   CheckEquals('C:\a', BpPathCombine('C:\a', ''), 'an empty tail changes nothing');
   CheckEquals('b', BpPathCombine('', 'b'), 'and an empty base is not a separator');
 end;

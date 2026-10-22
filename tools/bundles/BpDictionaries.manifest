@@ -1,6 +1,5 @@
 # BpDictionaries - both hash dictionaries with everything they need.
 # Order matters: a unit may only use units listed above it.
-Core\Units\BpCompat.pas
 Core\Units\BpKeyFold.pas
 Core\Units\BpVariantUtils.pas
 Core\Classes\BpStrDictionary.pas

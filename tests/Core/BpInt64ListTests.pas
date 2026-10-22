@@ -252,6 +252,10 @@ begin
   FBpInt64List.Exchange(0, 1);
   CheckEqualsInt64(2, FBpInt64List.Items[0], 'First item should be 2 after exchange');
   CheckEqualsInt64(1, FBpInt64List.Items[1], 'Second item should be 1 after exchange');
+  // the swap went through an Integer once and came back as 705032704
+  FBpInt64List.Add(5000000000);
+  FBpInt64List.Exchange(0, 2);
+  CheckEqualsInt64(5000000000, FBpInt64List.Items[0], 'a value above 32 bits survives');
 end;
 
 procedure TBpInt64ListTests.TestExchangeSameIndex;

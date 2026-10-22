@@ -25,12 +25,8 @@ uses BpHttpClient;
 
 lvBody := TbpHttpClient.FetchUrl('https://api.example.com/v1/status');
 
-// one call of any verb on a fresh client; a 4xx or 5xx is a response, lvResp.StatusCode says which
-lvResp := TbpHttpClient.Send(hmPost, lvUrl, BpHttpUtf8(lvJsonText), 'Content-Type: application/json', 600000);
-lvText := BpHttpResponseText(lvResp);     // UTF-8 JSON out, text back
-
-lvResp := TbpHttpClient.Send(hmPut, lvUrl, lvBytes, lvHeaders);
-lvBytes := lvResp.Body;                   // bytes out, bytes back
+lvResp := TbpHttpClient.Send(hmPost, lvUrl, BpHttpUtf8(lvJson), 'Content-Type: application/json');
+lvText := BpHttpResponseText(lvResp);              // any status is a response
 
 lvClient.BearerToken := TbpCredentials.GetPassword('MyApp', 'api');
 lvClient.AddHeader('X-Api-Version', '2');          // persistent
@@ -39,7 +35,7 @@ if BpHttpResponseIsSuccess(lvResp) then
   lvText := BpHttpResponseBodyAsUtf8(lvResp);
 ```
 
-`Get`, `Post`, `PostJson`, `Put`, `Delete`, `Patch`, `Head`, `Options`, `Execute`, and the `FetchUrl` and `Send` class functions. Every verb but `PostJson`, which sets its own `Content-Type`, takes an optional header block, and every one takes a [TbpCancellationToken](#tbpcancellationtoken) last; `Execute`, `BeginExecute` and `Send` take method, url, body, headers, as `requests.request` and `THTTPClient.Execute` do. `Send` is `Execute` on a client of its own, freed when it returns, so it sees none of an instance's settings; its `aTimeoutMs` is the whole call, and the send and receive steps may wait that long too, since their 10000 ms would otherwise end a slow server's answer first. It blocks, as `FetchUrl` does; a caller that must not block uses an instance and `BeginExecute`. `MaxResponseBytes` caps a body held in memory, 0 meaning no cap as everywhere else. A `user:pass@` in the URL is sent as Basic auth, the way curl and requests do it, unless the caller set an `Authorization` of their own; like every other credential it stops at a foreign origin.
+`Get`, `Post`, `PostJson`, `Put`, `Delete`, `Patch`, `Head`, `Options`, `Execute`, and the `FetchUrl` and `Send` class functions. Every verb takes a [TbpCancellationToken](#tbpcancellationtoken) last and all but `PostJson` an optional header block; `Execute`, `BeginExecute` and `Send` take method, url, body, headers. `Send` is `Execute` on a client of its own, so no instance setting applies, and its one timeout also bounds the send and receive steps. `MaxResponseBytes` caps a body held in memory, 0 meaning no cap as everywhere else. A `user:pass@` in the URL is sent as Basic auth, the way curl and requests do it, unless the caller set an `Authorization` of their own; like every other credential it stops at a foreign origin.
 
 ```pascal
 TbpHttpResponse = record
@@ -54,7 +50,7 @@ end;
 
 A 404 is a response, not an exception. Only transport failures raise `EbpHttpClient`, which carries `StatusCode` and `WinInetError`. `FetchUrl` is the exception, as .NET's `GetStringAsync` is: it returns the body of a 2xx and raises on any other status, so an error page never reaches a JSON parser.
 
-**Properties.** `UserAgent` (`DelphiBoostPack/1.0`), `ConnectTimeout` / `SendTimeout` / `ReceiveTimeout` (10000 ms each, OkHttp's defaults: how long one WinInet step may wait, so a server silent for 10 s ends the call), `Timeout` (30000 ms, the whole buffered call with its redirects: a ceiling for a server that keeps sending just inside each step timeout, never extra patience for a silent one; `INFINITE` turns it off, and `Download` is bounded by the step timeouts alone), `FollowRedirects` (`True`), `MaxRedirects` (10), `AutoDecompress` (`True`), `Username` / `Password` (`WideString`) answer a server's 401 challenge, not a proxy's 407; WinInet sends them in the ANSI code page with best-fit, so for a non-ASCII credential use `SetBasicAuth`, which sends UTF-8. Proxy settings come from Internet Options and WPAD with no code. One client owns one WinInet session, so keep the instance: every later request to the same host skips the TCP and TLS handshake. Setting `UserAgent` drops the session. A zero restores the default on all four timeouts. When `Timeout` passes, the call raises `EbpHttpClient` with `WinInetError` 12002 and a message naming `Timeout`; only the caller's own token raises `EbpHttpClientCancelled`.
+**Properties.** `UserAgent` (`DelphiBoostPack/1.0`), `ConnectTimeout` / `SendTimeout` / `ReceiveTimeout` (10000 ms, how long one WinInet step may wait), `Timeout` (30000 ms, the whole buffered call with its redirects, a cap above the steps; `INFINITE` turns it off, and `Download` is bounded by the step timeouts alone), `FollowRedirects` (`True`), `MaxRedirects` (10), `AutoDecompress` (`True`), `Username` / `Password` (`WideString`) answer a server's 401 challenge, not a proxy's 407; WinInet sends them in the ANSI code page with best-fit, so for a non-ASCII credential use `SetBasicAuth`, which sends UTF-8. Proxy settings come from Internet Options and WPAD with no code. One client owns one WinInet session, so keep the instance: every later request to the same host skips the TCP and TLS handshake. Setting `UserAgent` drops the session. A zero restores the default on all four timeouts. When `Timeout` passes, the call raises `EbpHttpClient` with `WinInetError` 12002 and a message naming `Timeout`; only the caller's own token raises `EbpHttpClientCancelled`.
 
 **Compression.** The buffered verbs send `Accept-Encoding: gzip, deflate` and let WinInet decode the reply, from Vista on; an older WinInet that cannot decode is not asked for gzip. A body shorter than its `Content-Length` raises `Incomplete response` on every verb, but WinInet drops that header from a reply it decodes, so a compressed body has no length to check. Downloads therefore ask for no compression.
 
@@ -75,7 +71,7 @@ end;
 lvClient.DownloadToFile(lvUrl, 'C:\temp\big.zip', HandleProgress, FToken);
 ```
 
-The file is kept only on a 200, and a body short of the advertised `Content-Length` is an error. A 206 is a fragment, so `DownloadToFile` raises rather than write it over the destination; resume by streaming into a positioned `TStream` with `Range: bytes=<n>-` instead, and trust what was appended only when the answer is a 206: a server that ignores the range sends the whole file with a 200, and a 416 sends an error page, both written after byte n.
+The file is kept only on a 200, and a body short of the advertised `Content-Length` is an error. A 206 is a fragment, so `DownloadToFile` raises rather than write it over the destination; resume by streaming into a positioned `TStream` with `Range: bytes=<n>-` instead, after checking for a 206: a server that ignores the range answers 200 with the whole file.
 
 **Async.** `BeginGet`, `BeginPost`, `BeginExecute`, `BeginDownload` and `BeginDownloadToFile` run the same call on a worker thread and return an `IbpHttpTask` at once. Only the network wait moves; parsing the body stays the caller's, as in .NET and fetch.
 
@@ -158,7 +154,7 @@ finally
 end;
 ```
 
-Four shapes per type: `GetX` raises, `GetXDef` returns the default, `TryGetX` returns `False`, `Find` / `FindPath` return `nil`. Same for `Str`, `Bool`, `Int` (`Int64`) and `Float`. `Parse` raises `EbpJson` with line and column, `TryParse` returns `False`, and the parser is strict about leading zeros, control characters, trailing commas, `NaN`, single quotes, junk after the value and out-of-range numbers.
+Four shapes per type: `GetX` raises, `GetXDef` returns the default, `TryGetX` returns `False`, `Find` / `FindPath` return `nil`. Same for `Str`, `Bool`, `Int` (`Int64`) and `Float`. `Parse` raises `EbpJson` with line and column, `TryParse` returns `False`, and the parser is strict about leading zeros, control characters, trailing commas, `NaN`, single quotes, junk after the value, out-of-range numbers and a lone surrogate escape.
 
 ```pascal
 lvRoot := TbpJsonValue.CreateObject;
@@ -186,7 +182,7 @@ lvStamp := BpDateTimeToUnix(lvUtc);          // Int64 seconds, also *MS
 lvWall := BpUtcToLocal(lvUtc);               // machine zone, or pass a zone
 ```
 
-Date-only values, `T`-or-space separators, fractional seconds and every zone form, parsed strictly: malformed input is rejected, not guessed at. Epoch conversion is `Int64` both ways, so 1850 round-trips as cleanly as 2040. Local time follows the date, not the day the code runs, so a July stamp formatted in January still carries `+03:00`; every local call overloads on a `TTimeZoneInformation`. Where wall clock and UTC are not one-to-one, RFC 5545 decides: a time that occurs twice means the first, one in the skipped hour moves ahead by the gap.
+Date-only values, `T`-or-space separators, fractional seconds and every zone form, parsed strictly: malformed input is rejected, not guessed at. Epoch conversion is `Int64` both ways, so 1850 round-trips as cleanly as 2040. Local time follows the date, not the day the code runs, by the DST rule Windows holds today, so a July stamp formatted in January still carries `+03:00`; every local call overloads on a `TTimeZoneInformation`. Where wall clock and UTC are not one-to-one, RFC 5545 decides: a time that occurs twice means the first, one in the skipped hour moves ahead by the gap.
 
 ### [TbpStringList](../src/Core/Classes/BpStringList.pas)
 

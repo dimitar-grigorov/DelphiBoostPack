@@ -23,6 +23,7 @@ type
     procedure TestRegisterAfterCancelRefuses;
     procedure TestCleanupsRunInRegistrationOrder;
     procedure TestARaisingCleanupDoesNotStopTheRest;
+    procedure TestACleanupThatUnregistersItselfStopsNothing;
     procedure TestCancelFromAnotherThread;
   end;
 
@@ -42,6 +43,18 @@ var
 procedure AppendCleanupLog(aData: Pointer);
 begin
   gvCleanupLog := gvCleanupLog + string(PChar(aData));
+end;
+
+var
+  // the token and id a cleanup unregisters from inside Cancel
+  gvSelfToken: TbpCancellationToken;
+  gvSelfId: Integer;
+  gvSelfUnregistered: Boolean;
+
+procedure LogThenUnregisterSelf(aData: Pointer);
+begin
+  AppendCleanupLog(aData);
+  gvSelfUnregistered := gvSelfToken.UnregisterCleanup(gvSelfId);
 end;
 
 procedure LogThenRaise(aData: Pointer);
@@ -171,6 +184,20 @@ begin
   CheckTrue(FToken.IsCancellationRequested, 'and the token is cancelled');
   // the registry was emptied, so nothing claims to be still pending
   CheckFalse(FToken.UnregisterCleanup(lvId3), 'the registry was emptied');
+end;
+
+// it used to shrink the arrays under the running loop and skip the next cleanup
+procedure TBpCancellationTokenTests.TestACleanupThatUnregistersItselfStopsNothing;
+var
+  lvId2: Integer;
+begin
+  gvSelfToken := FToken;
+  CheckTrue(FToken.RegisterCleanup(LogThenUnregisterSelf, gcTag1, gvSelfId));
+  CheckTrue(FToken.RegisterCleanup(AppendCleanupLog, gcTag2, lvId2));
+
+  FToken.Cancel;
+  CheckEquals('12', gvCleanupLog, 'the cleanup after it still ran');
+  CheckFalse(gvSelfUnregistered, 'Cancel was already running it');
 end;
 
 procedure TBpCancellationTokenTests.TestCancelFromAnotherThread;

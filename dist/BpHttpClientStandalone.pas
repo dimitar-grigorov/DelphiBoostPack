@@ -763,7 +763,10 @@ var
 begin
   EnterCriticalSection(FLock);
   try
-    lvIndex := IndexOfId(aId);
+    // from a cleanup inside Cancel: the loop owns the arrays and runs this one anyway
+    lvIndex := -1;
+    if FCancelled = 0 then
+      lvIndex := IndexOfId(aId);
     Result := lvIndex >= 0;
     if not Result then
       Exit;

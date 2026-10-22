@@ -2,7 +2,6 @@ unit BpDictionaries;
 
 // BpDictionaries.pas - GENERATED FILE, DO NOT EDIT.
 // Single-file bundle amalgamated from the DelphiBoostPack modular units:
-//   src\Core\Units\BpCompat.pas
 //   src\Core\Units\BpKeyFold.pas
 //   src\Core\Units\BpVariantUtils.pas
 //   src\Core\Classes\BpStrDictionary.pas
@@ -22,23 +21,6 @@ uses
 // either off is bracketed, so its setting ends where the unit does.
 {$IFOPT R+}{$DEFINE BPAMALG_R}{$ELSE}{$UNDEF BPAMALG_R}{$ENDIF}
 {$IFOPT Q+}{$DEFINE BPAMALG_Q}{$ELSE}{$UNDEF BPAMALG_Q}{$ENDIF}
-
-// ------------------ begin BpCompat.pas interface ------------------
-
-// Types the older compilers are missing; 18.5 is Delphi 2007, 18.0 is 2006.
-
-type
-{$IF CompilerVersion < 23.0}
-  // no NativeUInt before D2007 and no 64-bit target before XE2, so Cardinal fits
-  TbpUIntPtr = Cardinal;
-{$ELSE}
-  TbpUIntPtr = NativeUInt;
-{$IFEND}
-
-{$IF CompilerVersion < 18.5}
-  TBytes = array of Byte;
-{$IFEND}
-// ------------------- end BpCompat.pas interface -------------------
 
 // ----------------- begin BpKeyFold.pas interface ------------------
 
@@ -115,7 +97,7 @@ type
     FCount: Integer;
     FGrowThreshold: Integer;
     FCaseInsensitive: Boolean;
-    FIterating: Boolean;
+    FIterating: Integer;  // depth, so a nested ForEach keeps the outer one guarded
     procedure CheckNotIterating;
     function HashOf(const aKey: string): Integer;
     function KeysEqual(const aKey1, aKey2: string): Boolean;
@@ -198,7 +180,7 @@ type
     FItems: TbpIntDictItemArray;
     FCount: Integer;
     FGrowThreshold: Integer;
-    FIterating: Boolean;
+    FIterating: Integer;  // depth, so a nested ForEach keeps the outer one guarded
     procedure CheckNotIterating;
     // the slot index when found, else the complement of the first empty slot
     function GetBucketIndex(aKey: Int64; aHashCode: Integer): Integer;
@@ -253,11 +235,6 @@ function BpHashInt64(aKey: Int64): Integer;
 // --------------- end BpIntDictionary.pas interface ----------------
 
 implementation
-
-// --------------- begin BpCompat.pas implementation ----------------
-
-
-// ---------------- end BpCompat.pas implementation -----------------
 
 // --------------- begin BpKeyFold.pas implementation ---------------
 
@@ -664,7 +641,7 @@ end;
 // a callback that adds or removes would make the scan skip or revisit entries
 procedure TbpStrDictionary.CheckNotIterating;
 begin
-  if FIterating then
+  if FIterating > 0 then
     raise EbpStrDictionary.Create('The dictionary cannot be changed while ForEach runs');
 end;
 
@@ -707,21 +684,23 @@ end;
 
 procedure TbpStrDictionary.Rehash(aNewCapacity: Integer);
 var
-  lvOldItems: TbpStrDictItemArray;
+  lvOldItems, lvNewItems: TbpStrDictItemArray;
   lvIndex: Integer;
   i: Integer;
 begin
   // above the early exits: Delphi 7 counts the implicit finalisation as a use
   lvOldItems := nil;
+  lvNewItems := nil;
   if aNewCapacity = Length(FItems) then
     Exit;
   if aNewCapacity < 0 then
     OutOfMemoryError;
-  lvOldItems := FItems;
-  FItems := nil;
-  SetLength(FItems, aNewCapacity);
+  // sized aside, so running out of memory leaves the table as it was
+  SetLength(lvNewItems, aNewCapacity);
   for i := 0 to aNewCapacity - 1 do
-    FItems[i].HashCode := gcStrEmptyHash;
+    lvNewItems[i].HashCode := gcStrEmptyHash;
+  lvOldItems := FItems;
+  FItems := lvNewItems;
   // grow at 75% load; guarantees at least one always-empty slot
   FGrowThreshold := aNewCapacity shr 1 + aNewCapacity shr 2;
   // moved as raw bits: a field copy would pay a refcount pair per string
@@ -884,7 +863,7 @@ begin
   if not Assigned(aCallback) then
     Exit;
   lvStop := False;
-  FIterating := True;
+  Inc(FIterating);
   try
     for i := 0 to Length(FItems) - 1 do
       if FItems[i].HashCode <> gcStrEmptyHash then
@@ -894,7 +873,7 @@ begin
           Exit;
       end;
   finally
-    FIterating := False;
+    Dec(FIterating);
   end;
 end;
 
@@ -1140,7 +1119,7 @@ end;
 // a callback that adds or removes would make the scan skip or revisit entries
 procedure TbpIntDictionary.CheckNotIterating;
 begin
-  if FIterating then
+  if FIterating > 0 then
     raise EbpIntDictionary.Create('The dictionary cannot be changed while ForEach runs');
 end;
 
@@ -1193,21 +1172,23 @@ end;
 
 procedure TbpIntDictionary.Rehash(aNewCapacity: Integer);
 var
-  lvOldItems: TbpIntDictItemArray;
+  lvOldItems, lvNewItems: TbpIntDictItemArray;
   lvIndex: Integer;
   i: Integer;
 begin
   // above the early exits: Delphi 7 counts the implicit finalisation as a use
   lvOldItems := nil;
+  lvNewItems := nil;
   if aNewCapacity = Length(FItems) then
     Exit;
   if aNewCapacity < 0 then
     OutOfMemoryError;
-  lvOldItems := FItems;
-  FItems := nil;
-  SetLength(FItems, aNewCapacity);
+  // sized aside, so running out of memory leaves the table as it was
+  SetLength(lvNewItems, aNewCapacity);
   for i := 0 to aNewCapacity - 1 do
-    FItems[i].HashCode := gcIntEmptyHash;
+    lvNewItems[i].HashCode := gcIntEmptyHash;
+  lvOldItems := FItems;
+  FItems := lvNewItems;
   // grow at 75% load; guarantees at least one always-empty slot
   FGrowThreshold := aNewCapacity shr 1 + aNewCapacity shr 2;
   // moved as raw bits: a field copy would pay a VarCopy per item
@@ -1370,7 +1351,7 @@ begin
   if not Assigned(aCallback) then
     Exit;
   lvStop := False;
-  FIterating := True;
+  Inc(FIterating);
   try
     for i := 0 to Length(FItems) - 1 do
       if FItems[i].HashCode <> gcIntEmptyHash then
@@ -1380,7 +1361,7 @@ begin
           Exit;
       end;
   finally
-    FIterating := False;
+    Dec(FIterating);
   end;
 end;
 

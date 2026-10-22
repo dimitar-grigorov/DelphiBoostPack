@@ -1,6 +1,6 @@
 unit BpMD5;
 
-// MD5 (RFC 1321) with the BpSHA256 interface; for checksums and ETags, never for signatures.
+// MD5 (RFC 1321) with the BpSHA256 hash calls; for checksums and ETags, never for signatures.
 
 // hash arithmetic relies on Cardinal wraparound mod 2^32
 {$Q-}

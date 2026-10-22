@@ -22,7 +22,7 @@ uses
 
 // -------------- begin BpStringBuilder.pas interface ---------------
 
-// A string builder with the XE6 TStringBuilder API that writes through a cached buffer pointer; indexes are 0-based.
+// A string builder with the core of the XE6 TStringBuilder API that writes through a cached buffer pointer; indexes are 0-based.
 
 type
   // raised for out-of-range indexes and invalid capacity or length values

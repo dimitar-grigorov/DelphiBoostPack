@@ -29,7 +29,7 @@ type
     FItems: TbpIntDictItemArray;
     FCount: Integer;
     FGrowThreshold: Integer;
-    FIterating: Boolean;
+    FIterating: Integer;  // depth, so a nested ForEach keeps the outer one guarded
     procedure CheckNotIterating;
     // the slot index when found, else the complement of the first empty slot
     function GetBucketIndex(aKey: Int64; aHashCode: Integer): Integer;
@@ -113,7 +113,7 @@ end;
 // a callback that adds or removes would make the scan skip or revisit entries
 procedure TbpIntDictionary.CheckNotIterating;
 begin
-  if FIterating then
+  if FIterating > 0 then
     raise EbpIntDictionary.Create('The dictionary cannot be changed while ForEach runs');
 end;
 
@@ -166,21 +166,23 @@ end;
 
 procedure TbpIntDictionary.Rehash(aNewCapacity: Integer);
 var
-  lvOldItems: TbpIntDictItemArray;
+  lvOldItems, lvNewItems: TbpIntDictItemArray;
   lvIndex: Integer;
   i: Integer;
 begin
   // above the early exits: Delphi 7 counts the implicit finalisation as a use
   lvOldItems := nil;
+  lvNewItems := nil;
   if aNewCapacity = Length(FItems) then
     Exit;
   if aNewCapacity < 0 then
     OutOfMemoryError;
-  lvOldItems := FItems;
-  FItems := nil;
-  SetLength(FItems, aNewCapacity);
+  // sized aside, so running out of memory leaves the table as it was
+  SetLength(lvNewItems, aNewCapacity);
   for i := 0 to aNewCapacity - 1 do
-    FItems[i].HashCode := gcIntEmptyHash;
+    lvNewItems[i].HashCode := gcIntEmptyHash;
+  lvOldItems := FItems;
+  FItems := lvNewItems;
   // grow at 75% load; guarantees at least one always-empty slot
   FGrowThreshold := aNewCapacity shr 1 + aNewCapacity shr 2;
   // moved as raw bits: a field copy would pay a VarCopy per item
@@ -343,7 +345,7 @@ begin
   if not Assigned(aCallback) then
     Exit;
   lvStop := False;
-  FIterating := True;
+  Inc(FIterating);
   try
     for i := 0 to Length(FItems) - 1 do
       if FItems[i].HashCode <> gcIntEmptyHash then
@@ -353,7 +355,7 @@ begin
           Exit;
       end;
   finally
-    FIterating := False;
+    Dec(FIterating);
   end;
 end;
 

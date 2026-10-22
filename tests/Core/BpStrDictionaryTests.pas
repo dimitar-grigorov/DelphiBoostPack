@@ -23,6 +23,7 @@ type
     procedure CallSetCapacityBelowCount;
     procedure AddInsideCallback(const aKey: string; const aValue: Variant; var aStop: Boolean);
     procedure RemoveInsideCallback(const aKey: string; const aValue: Variant; var aStop: Boolean);
+    procedure NestThenAddCallback(const aKey: string; const aValue: Variant; var aStop: Boolean);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -54,6 +55,7 @@ type
     procedure TestForEachRefusesAnAddFromTheCallback;
     procedure TestForEachRefusesARemoveFromTheCallback;
     procedure TestForEachIsUsableAgainAfterARefusal;
+    procedure TestNestedForEachKeepsTheOuterGuard;
     procedure TestDuplicateAddDoesNotGrow;
     procedure TestGrowKeepsStringsAndVariantArrays;
     procedure TestCaseInsensitiveSurvivesGrow;
@@ -524,6 +526,13 @@ begin
   FDict.Remove(aKey);
 end;
 
+procedure TBpStrDictionaryTests.NestThenAddCallback(const aKey: string;
+  const aValue: Variant; var aStop: Boolean);
+begin
+  FDict.ForEach(VisitCallback);
+  FDict.SetInt('added-after-the-inner-scan', 1);
+end;
+
 // a rehash under the scan would skip or revisit entries, so it is refused
 procedure TBpStrDictionaryTests.TestForEachRefusesAnAddFromTheCallback;
 begin
@@ -566,6 +575,20 @@ begin
   FDict.SetInt('b', 2);
   FDict.ForEach(VisitCallback);
   CheckEquals(2, FVisitCount, 'the dictionary is writable and iterable again');
+end;
+
+// the inner ForEach used to clear the guard while the outer one still scanned
+procedure TBpStrDictionaryTests.TestNestedForEachKeepsTheOuterGuard;
+begin
+  FDict.SetInt('a', 1);
+  try
+    FDict.ForEach(NestThenAddCallback);
+    Fail('an Add after a nested ForEach must still be refused');
+  except
+    on E: EbpStrDictionary do
+      ; // expected
+  end;
+  CheckEquals(1, FDict.Count, 'and must not have happened');
 end;
 
 procedure TBpStrDictionaryTests.TestDuplicateAddDoesNotGrow;

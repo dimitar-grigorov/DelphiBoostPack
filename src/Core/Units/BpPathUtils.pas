@@ -235,9 +235,10 @@ end;
 function BpPathNormalize(const aPath: string): string;
 begin
   Result := BpPathToSlash(aPath);
-  // '/' and '//' are their own root, and trimming that changes the path's shape
+  // '/', '//' and 'C:/' are their own root; 'C:' would be the drive's current folder
   if (Length(Result) > 1) and (Result[Length(Result)] = '/') and
-    not IsSep(Result[Length(Result) - 1]) then
+    not IsSep(Result[Length(Result) - 1]) and
+    not ((Length(Result) = 3) and (Result[2] = ':')) then
     SetLength(Result, Length(Result) - 1);
 end;
 
@@ -325,7 +326,9 @@ begin
     Result := aRelative;
     Exit;
   end;
-  if IsSep(aBase[Length(aBase)]) then
+  // 'C:' names the drive's current folder, so 'C:b' is the .NET answer, not 'C:\b'
+  if IsSep(aBase[Length(aBase)]) or ((BpPathClassify(aBase, lvRootLen) = pkDriveRelative) and
+    (lvRootLen = Length(aBase))) then
   begin
     Result := aBase + aRelative;
     Exit;

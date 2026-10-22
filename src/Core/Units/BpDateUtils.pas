@@ -25,7 +25,7 @@ function BpDateTimeToISO8601Local(aDateTime: TDateTime;
 function BpDateTimeToISO8601Local(aDateTime: TDateTime; aInputIsUTC: Boolean;
   const aZone: TTimeZoneInformation): string; overload;
 
-// UTC <-> wall clock, DST read for the date itself; the header states the two odd hours
+// UTC <-> wall clock, today's DST rule applied to the date itself; the header states the two odd hours
 function BpUtcToLocal(aUtc: TDateTime): TDateTime; overload;
 function BpUtcToLocal(aUtc: TDateTime;
   const aZone: TTimeZoneInformation): TDateTime; overload;

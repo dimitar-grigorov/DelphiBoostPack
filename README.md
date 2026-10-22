@@ -13,7 +13,7 @@ HTTP, JSON, hash dictionaries, SHA-256, background tasks. Pure Pascal source, no
 
 Nothing to install, two ways in:
 
-- **Modular.** Put `src\Core\Classes` and `src\Core\Units` on your library path, or copy the units you use. A few want a companion: the dictionaries want `BpVariantUtils` and `BpKeyFold`, `TbpStringList` wants `BpKeyFold`, `BpJson` wants `BpStringBuilder`, `BpHMACSHA256` and `BpPasswordHash` want `BpBase64`, `BpPathUtils` wants `BpKeyFold`, `BpObjectComparer` wants `BpStrDictionary`, and everything that touches `TBytes` wants `BpCompat`.
+- **Modular.** Put `src\Core\Classes` and `src\Core\Units` on your library path, or copy the units you use. A few want a companion: `BpHttpClient` wants `BpTasks`, `BpHttpTrace` wants `BpHttpClient`, the string dictionary wants `BpVariantUtils` and `BpKeyFold`, the int dictionary `BpVariantUtils`, `TbpStringList` and `BpPathUtils` want `BpKeyFold`, `BpJson` wants `BpStringBuilder`, `BpHMACSHA256` wants `BpSHA256` and `BpBase64`, `BpPasswordHash` wants those and `BpHMACSHA256`, `BpObjectComparer` wants `BpStrDictionary`, and everything that touches `TBytes` wants `BpCompat`.
 - **One file.** Take a bundle from [dist/](dist/) instead. Each is self-contained, so do not also use the modular units it embeds.
 
 An HTTPS call and a JSON parse, on a 2007 compiler, with nothing else installed:
@@ -78,7 +78,7 @@ Full descriptions and examples in the [feature guide](docs/FEATURES.md).
 
 | Unit | What you get |
 |------|--------------|
-| [BpSHA256](docs/FEATURES.md#bpsha256) / [BpMD5](docs/FEATURES.md#bpmd5) | one-shot or streaming digests for buffers, strings and files; hex or Base64 out |
+| [BpSHA256](docs/FEATURES.md#bpsha256) / [BpMD5](docs/FEATURES.md#bpmd5) | one-shot or streaming digests for buffers, strings and files, as bytes or hex |
 | [BpHMACSHA256](docs/FEATURES.md#bphmacsha256) | request signing and webhook verification (RFC 2104) |
 | [BpPasswordHash](docs/FEATURES.md#bppasswordhash) | PBKDF2-HMAC-SHA256 with CSPRNG salt, 600k iterations and a self-describing record |
 | [BpBase64](docs/FEATURES.md#bpbase64) | Base64 and Base64url; the decoder forgives padding and whitespace, and a UTF-8 set for text |
