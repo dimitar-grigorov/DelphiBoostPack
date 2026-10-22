@@ -674,11 +674,16 @@ begin
   lvTruncated.ClaimedLength := 1000;
   lvTruncated.Effect := mseCloseAtEnd;
   FServer.Enqueue(BpMockStatus(404, '<html>not here</html>'));
+  FServer.Enqueue(BpMockStatus(204));
   FServer.Enqueue(lvPartial);
   FServer.Enqueue(lvTruncated);
 
   CheckEquals(404, FClient.DownloadToFile(Url('/gone.bin'), FDest).StatusCode);
   CheckSurvived('404');
+
+  // a 2xx with no file in it used to empty the destination
+  CheckEquals(204, FClient.DownloadToFile(Url('/empty.bin'), FDest).StatusCode);
+  CheckSurvived('204');
 
   // nothing asked for a range, so a fragment must not become the whole file
   try
@@ -907,9 +912,14 @@ procedure TBpHttpRedirectWireTests.TestDownloadFollowsARedirect;
 var
   lvStream: TMemoryStream;
   lvResponse: TbpHttpResponse;
+  lvRedirect: TbpMockResponse;
 begin
-  FServer.Enqueue(BpMockRedirect(302, '/payload.bin'));
+  lvRedirect := BpMockRedirect(302, '/payload.bin');
+  lvRedirect.Body := BpRepeated($41, 4096);
+  FServer.Enqueue(lvRedirect);
   FServer.Enqueue(BpMockOk('0123456789'));
+  // the cap is for buffered bodies; a redirect's body used to be buffered even here
+  FClient.MaxResponseBytes := 1024;
   lvStream := TMemoryStream.Create;
   try
     lvResponse := FClient.Download(Url('/start'), lvStream);

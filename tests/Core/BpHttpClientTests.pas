@@ -48,10 +48,10 @@ end;
 procedure TBpHttpClientTests.TestDefaults;
 begin
   CheckEquals('DelphiBoostPack/1.0', FClient.UserAgent, 'UserAgent');
-  CheckEquals(8000, Integer(FClient.ConnectTimeout), 'ConnectTimeout');
-  CheckEquals(8000, Integer(FClient.SendTimeout), 'SendTimeout');
-  CheckEquals(8000, Integer(FClient.ReceiveTimeout), 'ReceiveTimeout');
-  CheckEquals(100000, Integer(FClient.Timeout), 'Timeout');
+  CheckEquals(10000, Integer(FClient.ConnectTimeout), 'ConnectTimeout');
+  CheckEquals(10000, Integer(FClient.SendTimeout), 'SendTimeout');
+  CheckEquals(10000, Integer(FClient.ReceiveTimeout), 'ReceiveTimeout');
+  CheckEquals(30000, Integer(FClient.Timeout), 'Timeout');
   CheckTrue(FClient.FollowRedirects, 'FollowRedirects');
   CheckEquals(10, FClient.MaxRedirects, 'MaxRedirects');
   CheckTrue(FClient.AutoDecompress, 'AutoDecompress');
@@ -488,7 +488,7 @@ begin
     begin
       try
         case i of
-          0: FClient.Execute(lcUrl, hmGet, '', '', lvToken);
+          0: FClient.Execute(hmGet, lcUrl, '', '', lvToken);
           1: FClient.Get(lcUrl, '', lvToken);
           2: FClient.Post(lcUrl, 'body', '', lvToken);
           3: FClient.PostJson(lcUrl, '{}', lvToken);

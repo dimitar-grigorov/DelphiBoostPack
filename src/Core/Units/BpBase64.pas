@@ -251,21 +251,32 @@ begin
   Move(lvBytes[0], Pointer(Result)^, Length(lvBytes));
 end;
 
-// not UTF8Encode: before Delphi 2009 it breaks surrogate pairs
-function WideToUtf8(const aText: WideString): AnsiString;
+// bp:mirror wide-to-utf8
+// Copied, not shared: tools\CheckMirrors.js fails if the copies stop matching.
+// not UTF8Encode, which breaks surrogate pairs before Delphi 2009
+function WideToUtf8Bytes(const aText: WideString; out aBytes: AnsiString): Boolean;
 var
   lvLen: Integer;
 begin
-  Result := '';
+  aBytes := '';
+  Result := True;
   if aText = '' then
     Exit;
   lvLen := WideCharToMultiByte(CP_UTF8, 0, PWideChar(aText), Length(aText),
     nil, 0, nil, nil);
-  if lvLen <= 0 then
-    raise EbpBase64.Create('Text cannot be encoded as UTF-8');
-  SetLength(Result, lvLen);
+  Result := lvLen > 0;
+  if not Result then
+    Exit;
+  SetLength(aBytes, lvLen);
   WideCharToMultiByte(CP_UTF8, 0, PWideChar(aText), Length(aText),
-    PAnsiChar(Result), lvLen, nil, nil);
+    PAnsiChar(aBytes), lvLen, nil, nil);
+end;
+// bp:mirror-end
+
+function WideToUtf8(const aText: WideString): AnsiString;
+begin
+  if not WideToUtf8Bytes(aText, Result) then
+    raise EbpBase64.Create('Text cannot be encoded as UTF-8');
 end;
 
 function Utf8ToWide(const aBytes: TBytes): WideString;

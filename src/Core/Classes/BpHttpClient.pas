@@ -133,6 +133,8 @@ type
       aToken: TbpCancellationToken; const aHost: string): AnsiString;
     procedure ReadBodyToStream(aRequest: HINTERNET; aDest: TStream; const aTotal: Int64;
       aProgress: TbpHttpProgressEvent; aToken: TbpCancellationToken; const aHost: string);
+    procedure DrainRedirectBody(aRequest: HINTERNET; aToken: TbpCancellationToken;
+      const aHost: string);
     procedure CheckBodyComplete(aRequest: HINTERNET;
       const aReceived, aExpected: Int64; const aHost: string);
     // one request, no redirect of its own; aRedirectTo names the next hop
@@ -163,6 +165,9 @@ type
   public
     // one call without a client: the body of a 2xx, any other status raises EbpHttpClient
     class function FetchUrl(const aUrl: string; const aHeaders: string = ''): AnsiString;
+    // Execute on a fresh client; aTimeoutMs is the whole call, which the send and receive steps may take
+    class function Send(aMethod: TbpHttpMethod; const aUrl: string; const aBody: AnsiString = '';
+      const aHeaders: string = ''; aTimeoutMs: DWORD = 0): TbpHttpResponse;
 
   public
     constructor Create;
@@ -194,7 +199,7 @@ type
     procedure ClearHeaders;
     // changing it drops the session, so set it before the first request
     property UserAgent: string read FUserAgent write SetUserAgent;
-    // a whole buffered call in ms; 0 restores 100000, INFINITE turns it off, Download ignores it
+    // a whole buffered call in ms, a cap above the step timeouts; 0 restores 30000, Download ignores it
     property Timeout: DWORD read FTimeout write SetTimeout;
     property FollowRedirects: Boolean read FFollowRedirects write FFollowRedirects;
 
@@ -206,11 +211,10 @@ type
     function Options(const aUrl: string; const aHeaders: string = '';
       aToken: TbpCancellationToken = nil): TbpHttpResponse;
     // any method; BeginExecute is the async twin of Put, Delete and the rest
-    function Execute(const aUrl: string; aMethod: TbpHttpMethod = hmGet;
-      const aHeaders: string = ''; const aBody: AnsiString = '';
-      aToken: TbpCancellationToken = nil): TbpHttpResponse;
+    function Execute(aMethod: TbpHttpMethod; const aUrl: string; const aBody: AnsiString = '';
+      const aHeaders: string = ''; aToken: TbpCancellationToken = nil): TbpHttpResponse;
     function BeginExecute(aMethod: TbpHttpMethod; const aUrl: string; aOnDone: TbpHttpTaskEvent;
-      const aHeaders: string = ''; const aBody: AnsiString = ''): IbpHttpTask;
+      const aBody: AnsiString = ''; const aHeaders: string = ''): IbpHttpTask;
 
     // streams the body whatever the status; 'Range: bytes=N-' in aHeaders resumes
     function Download(const aUrl: string; aDest: TStream;
@@ -228,11 +232,11 @@ type
     // a server's 401 only, not a proxy's 407; sent in the ANSI code page, SetBasicAuth in UTF-8
     property Username: WideString read FUsername write FUsername;
     property Password: WideString read FPassword write FPassword;
-    // each WinInet step in ms; 0 restores the default, 8000
+    // how long one WinInet step may wait, in ms; 0 restores the default, 10000
     property ConnectTimeout: DWORD read FConnectTimeout write SetConnectTimeout;
     property SendTimeout: DWORD read FSendTimeout write SetSendTimeout;
     property ReceiveTimeout: DWORD read FReceiveTimeout write SetReceiveTimeout;
-    // hops allowed before EbpHttpClient; 0 has the same effect as FollowRedirects False
+    // hops allowed before EbpHttpClient; 0 or less has the same effect as FollowRedirects False
     property MaxRedirects: Integer read FMaxRedirects write FMaxRedirects;
     // gzip and deflate on the buffered verbs; a decoded body has no length to check
     property AutoDecompress: Boolean read FAutoDecompress write FAutoDecompress;
@@ -288,8 +292,8 @@ implementation
 const
   gcBufferSize = 8192;
   gcDownloadBufferSize = 65536;  // bigger chunks pay off on large bodies
-  gcDefaultTimeout = 8000;  // milliseconds
-  gcDefaultTotalTimeout = 100000;  // .NET HttpClient.Timeout's default
+  gcDefaultTimeout = 10000;  // milliseconds, OkHttp's connect, read and write default
+  gcDefaultTotalTimeout = 30000;  // ends a server that trickles bytes inside every step timeout
   gcErrTimeout = 12002;  // ERROR_INTERNET_TIMEOUT
   gcDefaultUserAgent = 'DelphiBoostPack/1.0';
 
@@ -364,21 +368,32 @@ begin
 end;
 // bp:mirror-end
 
-// the Windows tables are all Delphi 7 has to make UTF-8
-function BpHttpUtf8(const aText: WideString): AnsiString;
+// bp:mirror wide-to-utf8
+// Copied, not shared: tools\CheckMirrors.js fails if the copies stop matching.
+// not UTF8Encode, which breaks surrogate pairs before Delphi 2009
+function WideToUtf8Bytes(const aText: WideString; out aBytes: AnsiString): Boolean;
 var
   lvLen: Integer;
 begin
-  Result := '';
+  aBytes := '';
+  Result := True;
   if aText = '' then
     Exit;
   lvLen := WideCharToMultiByte(CP_UTF8, 0, PWideChar(aText), Length(aText),
     nil, 0, nil, nil);
-  if lvLen <= 0 then
-    raise EbpHttpClient.Create('Text cannot be encoded as UTF-8');
-  SetLength(Result, lvLen);
+  Result := lvLen > 0;
+  if not Result then
+    Exit;
+  SetLength(aBytes, lvLen);
   WideCharToMultiByte(CP_UTF8, 0, PWideChar(aText), Length(aText),
-    PAnsiChar(Result), lvLen, nil, nil);
+    PAnsiChar(aBytes), lvLen, nil, nil);
+end;
+// bp:mirror-end
+
+function BpHttpUtf8(const aText: WideString): AnsiString;
+begin
+  if not WideToUtf8Bytes(aText, Result) then
+    raise EbpHttpClient.Create('Text cannot be encoded as UTF-8');
 end;
 
 // the size the encoder above will not check for itself, in this unit's words
@@ -1214,6 +1229,23 @@ begin
   CheckBodyComplete(aRequest, lvSize, aExpected, aHost);
 end;
 
+// read and dropped, which keeps the connection pooled; past 64 KB closing the handle is cheaper
+procedure TbpHttpClient.DrainRedirectBody(aRequest: HINTERNET; aToken: TbpCancellationToken;
+  const aHost: string);
+var
+  lvBuffer: array[0..gcBufferSize - 1] of Byte;
+  lvBytesRead: DWORD;
+  lvTotal: Integer;
+begin
+  lvTotal := 0;
+  repeat
+    CheckCancelled(aToken);
+    if not InternetReadFile(aRequest, @lvBuffer, SizeOf(lvBuffer), lvBytesRead) then
+      RaiseWinInetError(aRequest, 'InternetReadFile', aHost, GetLastError);
+    Inc(lvTotal, lvBytesRead);
+  until (lvBytesRead = 0) or (lvTotal >= gcDownloadBufferSize);
+end;
+
 procedure TbpHttpClient.ReadBodyToStream(aRequest: HINTERNET; aDest: TStream; const aTotal: Int64;
   aProgress: TbpHttpProgressEvent; aToken: TbpCancellationToken; const aHost: string);
 var
@@ -1325,16 +1357,16 @@ begin
         // WinInet honours Content-Length even on a 304, so never read one
         if BpHttpResponseHasBody(aMethod, Result.StatusCode) then
         begin
-          // the else drains a redirect body, which keeps the connection pooled
-          if (aDest <> nil) and (aRedirectTo = '') then
+          if aRedirectTo <> '' then
+            DrainRedirectBody(lvRequest, aToken, lvHost)
+          else if aDest <> nil then
             ReadBodyToStream(lvRequest, aDest, Result.ContentLength,
               aProgress, aToken, lvHost)
           else
           begin
             // WinInet drops both headers when it decodes; one that kept them would not count
             lvExpected := Result.ContentLength;
-            if (aRedirectTo <> '') or (lvDecoding and
-              (BpHttpHeaderValue(Result.Headers, 'Content-Encoding') <> '')) then
+            if lvDecoding and (BpHttpHeaderValue(Result.Headers, 'Content-Encoding') <> '') then
               lvExpected := -1;
             Result.Body := ReadResponseBody(lvRequest, lvExpected, aToken,
               lvHost);
@@ -1370,9 +1402,9 @@ var
   lvCredentials, lvDroppedBody: Boolean;
   lvCall: TbpHttpCall;
   lvTimeout: DWORD;
-  i: Integer;
+  i, lvHops: Integer;
 begin
-  // a stream's length is the caller's business, so a 1 GB download is not cut at 100 s
+  // a stream's length is the caller's business, so a 1 GB download is not cut at 30 s
   if aDest = nil then
     lvTimeout := FTimeout
   else
@@ -1393,8 +1425,12 @@ begin
       if lvAuth <> '' then
         lvHeaders := 'Authorization: ' + lvAuth + #13#10 + lvHeaders;
     end;
+    // a negative budget follows nothing, as 0 does, instead of failing every call
+    lvHops := FMaxRedirects;
+    if lvHops < 0 then
+      lvHops := 0;
     try
-      for i := 0 to FMaxRedirects do
+      for i := 0 to lvHops do
       begin
         Result := PerformHop(lvUrl, lvMethod, lvHeaders, lvBody, lvCredentials,
           lvDroppedBody, aDest, aProgress, lvCall.Token, lvNext);
@@ -1428,8 +1464,8 @@ begin
   end;
 end;
 
-function TbpHttpClient.Execute(const aUrl: string; aMethod: TbpHttpMethod; const aHeaders: string;
-  const aBody: AnsiString; aToken: TbpCancellationToken): TbpHttpResponse;
+function TbpHttpClient.Execute(aMethod: TbpHttpMethod; const aUrl: string; const aBody: AnsiString;
+  const aHeaders: string; aToken: TbpCancellationToken): TbpHttpResponse;
 begin
   Result := PerformRequest(aUrl, MethodToString(aMethod), aHeaders, aBody,
     nil, nil, aToken);
@@ -1438,49 +1474,49 @@ end;
 function TbpHttpClient.Get(const aUrl: string; const aHeaders: string;
   aToken: TbpCancellationToken): TbpHttpResponse;
 begin
-  Result := Execute(aUrl, hmGet, aHeaders, '', aToken);
+  Result := Execute(hmGet, aUrl, '', aHeaders, aToken);
 end;
 
 function TbpHttpClient.Post(const aUrl: string; const aBody: AnsiString;
   const aHeaders: string; aToken: TbpCancellationToken): TbpHttpResponse;
 begin
-  Result := Execute(aUrl, hmPost, aHeaders, aBody, aToken);
+  Result := Execute(hmPost, aUrl, aBody, aHeaders, aToken);
 end;
 
 function TbpHttpClient.PostJson(const aUrl: string; const aJson: AnsiString;
   aToken: TbpCancellationToken): TbpHttpResponse;
 begin
-  Result := Execute(aUrl, hmPost, 'Content-Type: application/json', aJson, aToken);
+  Result := Execute(hmPost, aUrl, aJson, 'Content-Type: application/json', aToken);
 end;
 
 function TbpHttpClient.Put(const aUrl: string; const aBody: AnsiString;
   const aHeaders: string; aToken: TbpCancellationToken): TbpHttpResponse;
 begin
-  Result := Execute(aUrl, hmPut, aHeaders, aBody, aToken);
+  Result := Execute(hmPut, aUrl, aBody, aHeaders, aToken);
 end;
 
 function TbpHttpClient.Delete(const aUrl: string; const aHeaders: string;
   aToken: TbpCancellationToken): TbpHttpResponse;
 begin
-  Result := Execute(aUrl, hmDelete, aHeaders, '', aToken);
+  Result := Execute(hmDelete, aUrl, '', aHeaders, aToken);
 end;
 
 function TbpHttpClient.Patch(const aUrl: string; const aBody: AnsiString;
   const aHeaders: string; aToken: TbpCancellationToken): TbpHttpResponse;
 begin
-  Result := Execute(aUrl, hmPatch, aHeaders, aBody, aToken);
+  Result := Execute(hmPatch, aUrl, aBody, aHeaders, aToken);
 end;
 
 function TbpHttpClient.Head(const aUrl, aHeaders: string;
   aToken: TbpCancellationToken): TbpHttpResponse;
 begin
-  Result := Execute(aUrl, hmHead, aHeaders, '', aToken);
+  Result := Execute(hmHead, aUrl, '', aHeaders, aToken);
 end;
 
 function TbpHttpClient.Options(const aUrl, aHeaders: string;
   aToken: TbpCancellationToken): TbpHttpResponse;
 begin
-  Result := Execute(aUrl, hmOptions, aHeaders, '', aToken);
+  Result := Execute(hmOptions, aUrl, '', aHeaders, aToken);
 end;
 
 // .NET's GetStringAsync raises on a non-2xx too: an error page is no body to parse
@@ -1498,6 +1534,26 @@ begin
         lvClient.HostPort(lvResponse.FinalUrl),
         BpClassifyHttpError(0, lvResponse.StatusCode)]), lvResponse.StatusCode);
     Result := lvResponse.Body;
+  finally
+    lvClient.Free;
+  end;
+end;
+
+class function TbpHttpClient.Send(aMethod: TbpHttpMethod; const aUrl: string;
+  const aBody: AnsiString; const aHeaders: string; aTimeoutMs: DWORD): TbpHttpResponse;
+var
+  lvClient: TbpHttpClient;
+begin
+  lvClient := TbpHttpClient.Create;
+  try
+    lvClient.Timeout := aTimeoutMs;
+    // the 10 s steps would end a slow server's answer long before the deadline
+    if aTimeoutMs > lvClient.ReceiveTimeout then
+    begin
+      lvClient.SendTimeout := aTimeoutMs;
+      lvClient.ReceiveTimeout := aTimeoutMs;
+    end;
+    Result := lvClient.Execute(aMethod, aUrl, aBody, aHeaders);
   finally
     lvClient.Free;
   end;
@@ -1548,11 +1604,13 @@ function TbpHttpClient.DownloadToFile(const aUrl, aFileName: string;
   const aHeaders: string): TbpHttpResponse;
 var
   lvFile: TFileStream;
-  lvTemp: string;
+  lvTemp, lvFileName: string;
   lvDone: Boolean;
 begin
   lvDone := False;
-  lvTemp := BpTempFileNear(aFileName);
+  // once, so the temp file and the rename agree on the folder
+  lvFileName := ExpandFileName(aFileName);
+  lvTemp := BpTempFileNear(lvFileName);
   try
     lvFile := TFileStream.Create(lvTemp, fmCreate);
     try
@@ -1565,9 +1623,10 @@ begin
       raise EbpHttpClient.Create(
         'Server answered 206 Partial Content for a whole-file download',
         Result.StatusCode);
-    if BpHttpResponseIsSuccess(Result) then
+    // only a 200 carries the file; a 204 would empty the destination
+    if Result.StatusCode = 200 then
     begin
-      BpReplaceFile(lvTemp, aFileName);
+      BpReplaceFile(lvTemp, lvFileName);
       lvDone := True;
     end;
   finally
@@ -1603,7 +1662,7 @@ begin
 end;
 
 function TbpHttpClient.BeginExecute(aMethod: TbpHttpMethod; const aUrl: string;
-  aOnDone: TbpHttpTaskEvent; const aHeaders: string; const aBody: AnsiString): IbpHttpTask;
+  aOnDone: TbpHttpTaskEvent; const aBody: AnsiString; const aHeaders: string): IbpHttpTask;
 begin
   Result := BpStartHttpTask(Self, htkBuffered, MethodToString(aMethod), aUrl,
     aHeaders, aBody, nil, '', aOnDone, nil);
@@ -1612,13 +1671,13 @@ end;
 function TbpHttpClient.BeginGet(const aUrl: string; aOnDone: TbpHttpTaskEvent;
   const aHeaders: string): IbpHttpTask;
 begin
-  Result := BeginExecute(hmGet, aUrl, aOnDone, aHeaders);
+  Result := BeginExecute(hmGet, aUrl, aOnDone, '', aHeaders);
 end;
 
 function TbpHttpClient.BeginPost(const aUrl: string; const aBody: AnsiString;
   aOnDone: TbpHttpTaskEvent; const aHeaders: string): IbpHttpTask;
 begin
-  Result := BeginExecute(hmPost, aUrl, aOnDone, aHeaders, aBody);
+  Result := BeginExecute(hmPost, aUrl, aOnDone, aBody, aHeaders);
 end;
 
 function TbpHttpClient.BeginDownload(const aUrl: string; aDest: TStream; aOnDone: TbpHttpTaskEvent;
@@ -1633,8 +1692,9 @@ end;
 function TbpHttpClient.BeginDownloadToFile(const aUrl, aFileName: string; aOnDone: TbpHttpTaskEvent;
   aOnProgress: TbpHttpTaskProgressEvent; const aHeaders: string): IbpHttpTask;
 begin
+  // on the caller's thread, against the folder the caller meant
   Result := BpStartHttpTask(Self, htkFile, 'GET', aUrl, aHeaders, '', nil,
-    aFileName, aOnDone, aOnProgress);
+    ExpandFileName(aFileName), aOnDone, aOnProgress);
 end;
 
 { TbpHttpTaskImpl }

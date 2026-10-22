@@ -25,6 +25,13 @@ uses BpHttpClient;
 
 lvBody := TbpHttpClient.FetchUrl('https://api.example.com/v1/status');
 
+// one call of any verb on a fresh client; a 4xx or 5xx is a response, lvResp.StatusCode says which
+lvResp := TbpHttpClient.Send(hmPost, lvUrl, BpHttpUtf8(lvJsonText), 'Content-Type: application/json', 600000);
+lvText := BpHttpResponseText(lvResp);     // UTF-8 JSON out, text back
+
+lvResp := TbpHttpClient.Send(hmPut, lvUrl, lvBytes, lvHeaders);
+lvBytes := lvResp.Body;                   // bytes out, bytes back
+
 lvClient.BearerToken := TbpCredentials.GetPassword('MyApp', 'api');
 lvClient.AddHeader('X-Api-Version', '2');          // persistent
 lvResp := lvClient.Get('https://api.example.com/v1/items', '', lvToken);
@@ -32,7 +39,7 @@ if BpHttpResponseIsSuccess(lvResp) then
   lvText := BpHttpResponseBodyAsUtf8(lvResp);
 ```
 
-`Get`, `Post`, `PostJson`, `Put`, `Delete`, `Patch`, `Head`, `Options`, `Execute` and the `FetchUrl` class function. Every verb takes an optional header block and a [TbpCancellationToken](#tbpcancellationtoken) last. `MaxResponseBytes` caps a body held in memory, 0 meaning no cap as everywhere else. A `user:pass@` in the URL is sent as Basic auth, the way curl and requests do it, unless the caller set an `Authorization` of their own; like every other credential it stops at a foreign origin.
+`Get`, `Post`, `PostJson`, `Put`, `Delete`, `Patch`, `Head`, `Options`, `Execute`, and the `FetchUrl` and `Send` class functions. Every verb but `PostJson`, which sets its own `Content-Type`, takes an optional header block, and every one takes a [TbpCancellationToken](#tbpcancellationtoken) last; `Execute`, `BeginExecute` and `Send` take method, url, body, headers, as `requests.request` and `THTTPClient.Execute` do. `Send` is `Execute` on a client of its own, freed when it returns, so it sees none of an instance's settings; its `aTimeoutMs` is the whole call, and the send and receive steps may wait that long too, since their 10000 ms would otherwise end a slow server's answer first. It blocks, as `FetchUrl` does; a caller that must not block uses an instance and `BeginExecute`. `MaxResponseBytes` caps a body held in memory, 0 meaning no cap as everywhere else. A `user:pass@` in the URL is sent as Basic auth, the way curl and requests do it, unless the caller set an `Authorization` of their own; like every other credential it stops at a foreign origin.
 
 ```pascal
 TbpHttpResponse = record
@@ -47,7 +54,7 @@ end;
 
 A 404 is a response, not an exception. Only transport failures raise `EbpHttpClient`, which carries `StatusCode` and `WinInetError`. `FetchUrl` is the exception, as .NET's `GetStringAsync` is: it returns the body of a 2xx and raises on any other status, so an error page never reaches a JSON parser.
 
-**Properties.** `UserAgent` (`DelphiBoostPack/1.0`), `ConnectTimeout` / `SendTimeout` / `ReceiveTimeout` (8000 ms, each WinInet step), `Timeout` (100000 ms, the whole buffered call with its redirects, as in .NET; `INFINITE` turns it off, and `Download` is bounded by the step timeouts alone), `FollowRedirects` (`True`), `MaxRedirects` (10), `AutoDecompress` (`True`), `Username` / `Password` (`WideString`) answer a server's 401 challenge, not a proxy's 407; WinInet sends them in the ANSI code page with best-fit, so for a non-ASCII credential use `SetBasicAuth`, which sends UTF-8. Proxy settings come from Internet Options and WPAD with no code. One client owns one WinInet session, so keep the instance: every later request to the same host skips the TCP and TLS handshake. Setting `UserAgent` drops the session. A zero restores the default on all four timeouts. When `Timeout` passes, the call raises `EbpHttpClient` with `WinInetError` 12002 and a message naming `Timeout`; only the caller's own token raises `EbpHttpClientCancelled`.
+**Properties.** `UserAgent` (`DelphiBoostPack/1.0`), `ConnectTimeout` / `SendTimeout` / `ReceiveTimeout` (10000 ms each, OkHttp's defaults: how long one WinInet step may wait, so a server silent for 10 s ends the call), `Timeout` (30000 ms, the whole buffered call with its redirects: a ceiling for a server that keeps sending just inside each step timeout, never extra patience for a silent one; `INFINITE` turns it off, and `Download` is bounded by the step timeouts alone), `FollowRedirects` (`True`), `MaxRedirects` (10), `AutoDecompress` (`True`), `Username` / `Password` (`WideString`) answer a server's 401 challenge, not a proxy's 407; WinInet sends them in the ANSI code page with best-fit, so for a non-ASCII credential use `SetBasicAuth`, which sends UTF-8. Proxy settings come from Internet Options and WPAD with no code. One client owns one WinInet session, so keep the instance: every later request to the same host skips the TCP and TLS handshake. Setting `UserAgent` drops the session. A zero restores the default on all four timeouts. When `Timeout` passes, the call raises `EbpHttpClient` with `WinInetError` 12002 and a message naming `Timeout`; only the caller's own token raises `EbpHttpClientCancelled`.
 
 **Compression.** The buffered verbs send `Accept-Encoding: gzip, deflate` and let WinInet decode the reply, from Vista on; an older WinInet that cannot decode is not asked for gzip. A body shorter than its `Content-Length` raises `Incomplete response` on every verb, but WinInet drops that header from a reply it decodes, so a compressed body has no length to check. Downloads therefore ask for no compression.
 
@@ -55,7 +62,7 @@ A 404 is a response, not an exception. Only transport failures raise `EbpHttpCli
 
 **Redirects.** Followed by the client, not by WinInet, which replays the header block on every hop with no way to edit it. A hop to another origin, so any change of scheme, host or port, loses the persistent headers plus `Authorization`, `Cookie` and `Proxy-Authorization`, and never gets them back. The one exception `requests` also makes: the same host upgraded from `http` to `https` keeps them. Method per [WHATWG fetch](https://fetch.spec.whatwg.org/#http-redirect-fetch): 303 to GET unless HEAD, 301 and 302 only a POST, 307 and 308 unchanged; a downgraded method drops the body and its `Content-*` headers. `FollowRedirects := False` returns the 3xx instead.
 
-**Downloads.** `Download` streams to any `TStream`, `DownloadToFile` to a file, both in constant memory with `Int64` progress and a token. `DownloadToFile` writes to a temporary file beside the destination and renames it over only on a 2xx that is not a 206, so a 404, a cancel, a truncated body or a typo in the url leaves whatever was already there untouched, and no temp file behind. They block, so use `BeginDownloadToFile` (below) or a worker thread of your own.
+**Downloads.** `Download` streams to any `TStream`, `DownloadToFile` to a file, both in constant memory with `Int64` progress and a token. `DownloadToFile` writes to a temporary file beside the destination and renames it over only on a 200, so a 404, a 204, a cancel, a truncated body or a typo in the url leaves whatever was already there untouched, and no temp file behind. They block, so use `BeginDownloadToFile` (below) or a worker thread of your own.
 
 ```pascal
 procedure TMainForm.HandleProgress(aSender: TObject; const aReceived, aTotal: Int64;
@@ -68,7 +75,7 @@ end;
 lvClient.DownloadToFile(lvUrl, 'C:\temp\big.zip', HandleProgress, FToken);
 ```
 
-The file is kept only on a 2xx that is not a 206, and a body short of the advertised `Content-Length` is an error. A 206 is a fragment, so `DownloadToFile` raises rather than write it over the destination; resume by streaming into a positioned `TStream` with `Range: bytes=<n>-` instead.
+The file is kept only on a 200, and a body short of the advertised `Content-Length` is an error. A 206 is a fragment, so `DownloadToFile` raises rather than write it over the destination; resume by streaming into a positioned `TStream` with `Range: bytes=<n>-` instead, and trust what was appended only when the answer is a 206: a server that ignores the range sends the whole file with a 200, and a 416 sends an error page, both written after byte n.
 
 **Async.** `BeginGet`, `BeginPost`, `BeginExecute`, `BeginDownload` and `BeginDownloadToFile` run the same call on a worker thread and return an `IbpHttpTask` at once. Only the network wait moves; parsing the body stays the caller's, as in .NET and fetch.
 
