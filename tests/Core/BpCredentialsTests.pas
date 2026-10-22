@@ -185,7 +185,7 @@ end;
 
 procedure TBpCredentialsTests.TestNestedServiceIsNotThisOne;
 var
-  lvNested, lvSibling: WideString;
+  lvNested, lvSibling, lvSecret: WideString;
 begin
   lvNested := FService + '/Sub';
   lvSibling := FService + '.Sub';
@@ -196,6 +196,9 @@ begin
   SetTracked('alice', 'a');
   CheckEquals(1, Length(TbpCredentials.FindUserNames(FService)), 'only the leaf is listed');
   CheckEquals(1, TbpCredentials.DeleteAll(FService), 'only the leaf is deleted');
+  // a slash in the user name used to reach the nested service's entry
+  CheckFalse(TbpCredentials.TryGetPassword(FService, 'Sub/deep', lvSecret), 'no read through it');
+  CheckFalse(TbpCredentials.DeletePassword(FService, 'Sub/deep'), 'no delete through it');
   CheckWideEquals('d', TbpCredentials.GetPassword(lvNested, 'deep'), 'nested survives');
   CheckWideEquals('s', TbpCredentials.GetPassword(lvSibling, 'apart'), 'sibling survives');
 end;

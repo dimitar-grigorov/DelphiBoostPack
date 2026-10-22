@@ -174,6 +174,10 @@ var
   lvTarget: WideString;
 begin
   aBlob := '';
+  // a name WriteBlob refuses was never written, and 'b/c' would reach service 'a/b'
+  Result := False;
+  if (aService = '') or not IsLeafName(aUserName) then
+    Exit;
   lvTarget := BuildTargetName(aService, aUserName);
   if not CredReadW(PWideChar(lvTarget), gcCredTypeGeneric, 0, lvCred) then
   begin
@@ -262,6 +266,9 @@ class function TbpCredentials.DeletePassword(const aService,
 var
   lvTarget: WideString;
 begin
+  Result := False;
+  if (aService = '') or not IsLeafName(aUserName) then
+    Exit;
   lvTarget := BuildTargetName(aService, aUserName);
   Result := CredDeleteW(PWideChar(lvTarget), gcCredTypeGeneric, 0);
   if (not Result) and (GetLastError <> gcErrorNotFound) then
