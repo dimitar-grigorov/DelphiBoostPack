@@ -341,11 +341,13 @@ var
   lvById: TbpStrDictionary;       // id to the lowest new index still carrying it unmatched
   lvNextSameId: array of Integer; // chains the new indices that share an id, so duplicates pair up in order
   lvMatched: array of Boolean;
+  lvHasId: array of Boolean;      // an id item pairs by id only, so a plain item never takes its slot
 begin
   if aOld.Count <> aNew.Count then
     AddDiff(aState, TPropDifference.Create(aOldPath + '.Count', aNewPath + '.Count', aOld.Count, aNew.Count));
 
   SetLength(lvMatched, aNew.Count);
+  SetLength(lvHasId, aNew.Count);
   SetLength(lvNextSameId, aNew.Count);
   lvById := nil;
   try
@@ -355,6 +357,7 @@ begin
         if lvById = nil then
           lvById := TbpStrDictionary.Create;
         lvId := lvIdIntf.GetUniqueId;
+        lvHasId[i] := True;
         lvNextSameId[i] := lvById.GetIntDef(lvId, -1);
         lvById[lvId] := i;
       end;
@@ -375,8 +378,8 @@ begin
       else
       begin
         lvId := IntToStr(i);
-        // by position, unless an id item of a mixed collection already took that slot
-        if (i < aNew.Count) and not lvMatched[i] then
+        // by position, and only onto another plain item of a mixed collection
+        if (i < aNew.Count) and not lvHasId[i] then
           lvNewIdx := i
         else
           lvNewIdx := -1;

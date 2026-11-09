@@ -328,8 +328,8 @@ type
     procedure SetBasicAuth(const aUser, aPassword: WideString);
     // sent with every request; adding a name again replaces it
     procedure AddHeader(const aName, aValue: string);
+    // BearerToken and SetBasicAuth included
     procedure ClearHeaders;
-    // changing it drops the session, so set it before the first request
     property UserAgent: string read FUserAgent write SetUserAgent;
     // a whole buffered call in ms, a cap above the step timeouts; 0 restores 30000, Download ignores it
     property Timeout: DWORD read FTimeout write SetTimeout;
@@ -1467,15 +1467,22 @@ begin
   inherited;
 end;
 
-// the agent string is baked into the session by InternetOpen
+// set on a live session in place: reopening it would drop its pooled connections and the trace
 procedure TbpHttpClient.SetUserAgent(const aValue: string);
 begin
   // WinInet turns this into the User-Agent line, so it needs the same guard
   BpCheckHeaderPart(aValue, 'value');
   if aValue = FUserAgent then
     Exit;
-  FUserAgent := aValue;
-  CloseSession;
+  EnterCriticalSection(FSessionLock);
+  try
+    if (FSession <> nil) and not InternetSetOption(FSession,
+      INTERNET_OPTION_USER_AGENT, PChar(aValue), Length(aValue)) then
+      RaiseWinInetError(nil, 'InternetSetOption', '', GetLastError);
+    FUserAgent := aValue;
+  finally
+    LeaveCriticalSection(FSessionLock);
+  end;
 end;
 
 // zero is the default, never whatever the session happens to hold
@@ -1528,9 +1535,11 @@ begin
     FHeaders.Values['Authorization'] := '';
 end;
 
+// the token is an Authorization header too, as SetBasicAuth's is
 procedure TbpHttpClient.ClearHeaders;
 begin
   FHeaders.Clear;
+  FBearerToken := '';
 end;
 
 procedure TbpHttpClient.SetBasicAuth(const aUser, aPassword: WideString);
@@ -2294,9 +2303,17 @@ end;
 
 function TbpHttpClient.Download(const aUrl: string; aDest: TStream; aProgress: TbpHttpProgressEvent;
   aToken: TbpCancellationToken; const aHeaders: string; const aMethod: string): TbpHttpResponse;
+var
+  i: Integer;
 begin
   if aDest = nil then
     raise EbpHttpClient.Create('Download destination stream is nil');
+  // the request line takes it verbatim, so a space or CRLF would forge one (RFC 9110 token)
+  if aMethod = '' then
+    raise EbpHttpClient.Create('Download method must not be empty');
+  for i := 1 to Length(aMethod) do
+    if not BpIsHeaderNameChar(aMethod[i]) then
+      raise EbpHttpClient.CreateFmt('Download method must be a token, got %s', [aMethod]);
   Result := PerformRequest(aUrl, aMethod, aHeaders, '', aDest, aProgress,
     aToken);
 end;
@@ -2323,7 +2340,8 @@ procedure BpReplaceFile(const aTemp, aFileName: string);
 var
   lvErr: DWORD;
 begin
-  if MoveFileEx(PChar(aTemp), PChar(aFileName), MOVEFILE_REPLACE_EXISTING) then
+  if MoveFileEx(PChar(aTemp), PChar(aFileName),
+    MOVEFILE_REPLACE_EXISTING or MOVEFILE_WRITE_THROUGH) then
     Exit;
   lvErr := GetLastError;
   raise EbpHttpClient.CreateFmt(
@@ -2348,6 +2366,10 @@ begin
     lvFile := TFileStream.Create(lvTemp, fmCreate);
     try
       Result := Download(aUrl, lvFile, aProgress, aToken, aHeaders);
+      // on disk before the rename, or a power cut can leave the new name on empty data
+      if (Result.StatusCode = 200) and not FlushFileBuffers(lvFile.Handle) then
+        raise EbpHttpClient.CreateFmt('Cannot flush the downloaded file %s: Windows error %d',
+          [lvTemp, GetLastError]);
     finally
       lvFile.Free;
     end;
@@ -3020,7 +3042,7 @@ begin
       lcErrNameNotResolved:
         Result := 'Cannot reach server (DNS or network issue)';
       gcErrTimeout:
-        Result := 'Connection timed out';
+        Result := 'Request timed out';
       gcErrOperationCancelled:
         Result := 'Operation cancelled';
       lcErrCannotConnect:

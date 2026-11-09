@@ -1117,6 +1117,8 @@ begin
     CheckTrue(TbpHttpTrace.Attach(FClient, CollectTraceLine), 'attach');
     try
       FClient.Get(Url('/one'));
+      // a new agent used to reopen the session, which lost the trace and the pooled connection
+      FClient.UserAgent := 'Changed/2';
       FClient.Get(Url('/two'));
       lvOther.Get(Url('/three'));  // untraced, so it must add nothing
     finally
@@ -1141,6 +1143,8 @@ begin
   Check(Pos('127.0.0.1', lvFirst) > 0, 'the remote address: ' + gvTraceLog);
   Check(Pos('reused connection', lvSecond) > 0, 'second summary: ' + gvTraceLog);
   CheckEquals(0, Pos('#3', gvTraceLog), 'another client is not traced: ' + gvTraceLog);
+  CheckEquals('DelphiBoostPack/1.0', NextRequest.HeaderValue('User-Agent'), 'first agent');
+  CheckEquals('Changed/2', NextRequest.HeaderValue('User-Agent'), 'the new agent is sent');
 end;
 
 // errors used to blame "send" for a refused connect and name no host

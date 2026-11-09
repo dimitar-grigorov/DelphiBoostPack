@@ -182,8 +182,7 @@ begin
     FClient.BuildHeaders(''), 'and the bearer token replaces it back');
 
   FClient.ClearHeaders;
-  FClient.BearerToken := '';
-  CheckEquals('', FClient.BuildHeaders(''), 'clear removes everything');
+  CheckEquals('', FClient.BuildHeaders(''), 'clear removes everything, the token too');
 
   // the headers live in a TStrings, so an empty value removes the name
   FClient.AddHeader('X-Gone', 'here');
@@ -311,7 +310,7 @@ end;
 procedure TBpHttpClientTests.TestClassifyHttpError;
 begin
   // WinInet dimension wins when set
-  CheckEquals('Connection timed out', BpClassifyHttpError(12002, 0));
+  CheckEquals('Request timed out', BpClassifyHttpError(12002, 0));
   CheckEquals('Cannot reach server (DNS or network issue)', BpClassifyHttpError(12007, 0));
   CheckEquals('Cannot connect to server', BpClassifyHttpError(12029, 0));
   CheckEquals('SSL/TLS certificate error', BpClassifyHttpError(12045, 0));

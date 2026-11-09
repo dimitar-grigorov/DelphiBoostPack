@@ -156,7 +156,7 @@ type
 
 // -------------- begin BpIntDictionary.pas interface ---------------
 
-// Int64-key dictionary on the TbpStrDictionary engine, with the same strict typed accessors.
+// Int64-key dictionary on the TbpStrDictionary engine, with the same strict typed accessors, IntArray aside.
 
 type
   // raised for missing keys, duplicate keys and failed typed conversions

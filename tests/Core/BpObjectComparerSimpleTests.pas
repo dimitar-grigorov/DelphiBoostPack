@@ -63,6 +63,7 @@ type
     procedure TestCompareCollectionsWithMultipleDifferences;
     procedure TestCompareCollectionsWithItemsInDifferentOrder;
     procedure TestDuplicateIdsPairUpInOrder;
+    procedure TestMixedCollectionPairsEachNewItemOnce;
     procedure TestCompareCollectionsWithSameIndexNoUniqueId;
     procedure TestCompareCollectionsWithDifferentLengthsNoUniqueId;
     procedure TestCompareEmptyAndPopulatedCollectionNoUniqueId;
@@ -815,6 +816,63 @@ begin
     CheckEquals('B', VarToStr(Diffs[0].OldValue), 'old value');
     CheckEquals('C', VarToStr(Diffs[0].NewValue), 'new value');
     CheckEquals('0', Diffs[0].Idx, 'the shared id');
+  finally
+    Obj1.Free;
+    Obj2.Free;
+  end;
+end;
+
+type
+  // TCollection takes only its ItemClass and descendants, so a mixed collection needs one with an id
+  TIdTestItem = class(TSimpleTestItem, IUniqueId)
+  protected
+    function QueryInterface(const IID: TGUID; out Obj): HResult; stdcall;
+    function _AddRef: Integer; stdcall;
+    function _Release: Integer; stdcall;
+  public
+    function GetUniqueId: string;
+  end;
+
+function TIdTestItem.QueryInterface(const IID: TGUID; out Obj): HResult;
+begin
+  if GetInterface(IID, Obj) then Result := S_OK else Result := E_NOINTERFACE;
+end;
+
+function TIdTestItem._AddRef: Integer;
+begin
+  Result := -1;
+end;
+
+function TIdTestItem._Release: Integer;
+begin
+  Result := -1;
+end;
+
+function TIdTestItem.GetUniqueId: string;
+begin
+  Result := IntToStr(ID);
+end;
+
+// a plain item took an id item's slot by position, and that id item was then paired a second time
+procedure TestTBpObjectComparer.TestMixedCollectionPairsEachNewItemOnce;
+var
+  Obj1, Obj2: TTestClassWithCollection;
+  Diffs: TPropDifferences;
+begin
+  Obj1 := TTestClassWithCollection.Create;
+  Obj2 := TTestClassWithCollection.Create;
+  try
+    Obj1.MyCollection.Add.Name := 'plain';
+    TIdTestItem.Create(Obj1.MyCollection).ID := 7;
+    TIdTestItem.Create(Obj2.MyCollection).ID := 7;
+    Obj2.MyCollection.Add.Name := 'plain';
+
+    Diffs := TbpObjectComparer.CompareObjects(Obj1, Obj2);
+    CheckEquals(2, Length(Diffs), 'the plain item moved; the id item is unchanged');
+    CheckEquals('MyCollection[0]', Diffs[0].OldPropPath, 'old plain item');
+    CheckEquals('Missing in new', VarToStr(Diffs[0].NewValue), 'not paired with the id item');
+    CheckEquals('MyCollection[1]', Diffs[1].NewPropPath, 'new plain item');
+    CheckEquals('Exists in new', VarToStr(Diffs[1].NewValue), 'reported once');
   finally
     Obj1.Free;
     Obj2.Free;

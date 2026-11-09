@@ -1,6 +1,6 @@
 unit BpIntDictionary;
 
-// Int64-key dictionary on the TbpStrDictionary engine, with the same strict typed accessors.
+// Int64-key dictionary on the TbpStrDictionary engine, with the same strict typed accessors, IntArray aside.
 
 interface
 

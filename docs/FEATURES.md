@@ -35,7 +35,7 @@ if BpHttpResponseIsSuccess(lvResp) then
   lvText := BpHttpResponseBodyAsUtf8(lvResp);
 ```
 
-`Get`, `Post`, `PostJson`, `Put`, `Delete`, `Patch`, `Head`, `Options`, `Execute`, and the `FetchUrl` and `Send` class functions. Every verb takes a [TbpCancellationToken](#tbpcancellationtoken) last and all but `PostJson` an optional header block; `Execute`, `BeginExecute` and `Send` take method, url, body, headers. `Send` is `Execute` on a client of its own, so no instance setting applies, and its one timeout also bounds the send and receive steps. `MaxResponseBytes` caps a body held in memory, 0 meaning no cap as everywhere else. A `user:pass@` in the URL is sent as Basic auth, the way curl and requests do it, unless the caller set an `Authorization` of their own; like every other credential it stops at a foreign origin.
+`Get`, `Post`, `PostJson`, `Put`, `Delete`, `Patch`, `Head`, `Options`, `Execute`, and the `FetchUrl` and `Send` class functions. Every verb takes a [TbpCancellationToken](#tbpcancellationtoken) last and all but `PostJson` an optional header block; `Execute`, `BeginExecute` and `Send` take method, url, body, headers. `Send` is `Execute` on a client of its own, so no instance setting applies, and its one timeout also bounds the send and receive steps. `MaxResponseBytes` caps a body held in memory, 0 for none. A `user:pass@` in the URL is sent as Basic auth, as curl and requests do, unless the caller set an `Authorization`; like every credential it stops at a foreign origin.
 
 ```pascal
 TbpHttpResponse = record
@@ -50,15 +50,15 @@ end;
 
 A 404 is a response, not an exception. Only transport failures raise `EbpHttpClient`, which carries `StatusCode` and `WinInetError`. `FetchUrl` is the exception, as .NET's `GetStringAsync` is: it returns the body of a 2xx and raises on any other status, so an error page never reaches a JSON parser.
 
-**Properties.** `UserAgent` (`DelphiBoostPack/1.0`), `ConnectTimeout` / `SendTimeout` / `ReceiveTimeout` (10000 ms per WinInet step), `Timeout` (30000 ms for the whole buffered call, redirects included; `INFINITE` turns it off, `Download` has only the step timeouts), `FollowRedirects` (`True`), `MaxRedirects` (10), `AutoDecompress` (`True`). A zero restores a timeout's default. A passed `Timeout` raises `EbpHttpClient` with 12002 and a message naming it, not `EbpHttpClientCancelled`. `Username` / `Password` answer a server's 401, not a proxy's 407, in the ANSI code page; for a non-ASCII credential use `SetBasicAuth`, which sends UTF-8. Proxy settings come from Internet Options and WPAD. One client owns one WinInet session, so keep the instance: later requests to the same host skip the TCP and TLS handshake. Setting `UserAgent` drops the session.
+**Properties.** `UserAgent` (`DelphiBoostPack/1.0`), `ConnectTimeout` / `SendTimeout` / `ReceiveTimeout` (10000 ms per WinInet step), `Timeout` (30000 ms for the whole buffered call, redirects included; `INFINITE` turns it off, `Download` has only the step timeouts), `FollowRedirects` (`True`), `MaxRedirects` (10), `AutoDecompress` (`True`). A zero restores a timeout's default. A passed `Timeout` raises `EbpHttpClient` with 12002 and a message naming it, not `EbpHttpClientCancelled`. `Username` / `Password` answer a server's 401, not a proxy's 407, in the ANSI code page; for a non-ASCII credential use `SetBasicAuth`, which sends UTF-8. Proxy settings come from Internet Options and WPAD. One client owns one WinInet session, so keep the instance: later requests to the same host skip the TCP and TLS handshake.
 
-**Compression.** The buffered verbs send `Accept-Encoding: gzip, deflate` and let WinInet decode the reply, from Vista on; an older WinInet that cannot decode is not asked for gzip. A body shorter than its `Content-Length` raises `Incomplete response` on every verb, but WinInet drops that header from a reply it decodes, so a compressed body has no length to check. Downloads therefore ask for no compression.
+**Compression.** The buffered verbs ask for gzip and deflate and let WinInet decode, from Vista on; an older WinInet is not asked. A body shorter than its `Content-Length` raises `Incomplete response`, but WinInet drops that header from a reply it decodes, so downloads ask for no compression and keep the check.
 
-**Headers.** `AddHeader` replaces a name already set and removes it on an empty value, and `Authorization` has one writer at a time: `AddHeader`, `BearerToken` and `SetBasicAuth` each replace whatever the others left. A name must be a non-empty RFC 7230 token; `BearerToken` and `UserAgent` reject CR and LF; `SetBasicAuth` rejects a colon in the user-id. Per-request headers merge on top. WinInet's cookie jar is off, so the only `Cookie` sent is one the caller set and a `Set-Cookie` is not remembered: that jar belongs to the logged-on user, is keyed by host alone, and would ride straight through the redirect credential strip.
+**Headers.** `AddHeader` replaces a name already set and removes it on an empty value. `Authorization` has one writer at a time: `AddHeader`, `BearerToken` and `SetBasicAuth` each replace what the others left, and `ClearHeaders` removes all three. A name must be an RFC 7230 token; `BearerToken` and `UserAgent` reject CR and LF; `SetBasicAuth` rejects a colon in the user-id. Per-request headers merge on top. WinInet's cookie jar is off: it is shared by every program of the Windows user, keyed by host alone, and would bypass the redirect credential strip. So the only `Cookie` sent is one the caller set, and a `Set-Cookie` is not remembered.
 
-**Redirects.** Followed by the client, not by WinInet, which replays the header block on every hop with no way to edit it. A hop to another origin, so any change of scheme, host or port, loses the persistent headers plus `Authorization`, `Cookie` and `Proxy-Authorization`, and never gets them back. The one exception `requests` also makes: the same host upgraded from `http` to `https` keeps them. Method per [WHATWG fetch](https://fetch.spec.whatwg.org/#http-redirect-fetch): 303 to GET unless HEAD, 301 and 302 only a POST, 307 and 308 unchanged; a downgraded method drops the body and its `Content-*` headers. `FollowRedirects := False` returns the 3xx instead.
+**Redirects.** Followed by the client, since WinInet replays the header block on every hop unedited. A hop to another origin (scheme, host or port) loses the persistent headers plus `Authorization`, `Cookie` and `Proxy-Authorization` for good, except the same host upgraded from `http` to `https`, as in `requests`. Method per [WHATWG fetch](https://fetch.spec.whatwg.org/#http-redirect-fetch): 303 to GET unless HEAD, 301 and 302 only a POST, 307 and 308 unchanged; a downgraded method drops the body and its `Content-*` headers. `FollowRedirects := False` returns the 3xx instead.
 
-**Downloads.** `Download` streams to any `TStream`, `DownloadToFile` to a file, both in constant memory with `Int64` progress and a token. `DownloadToFile` writes to a temporary file beside the destination and renames it over only on a 200, so a 404, a 204, a cancel, a truncated body or a typo in the url leaves whatever was already there untouched, and no temp file behind. They block, so use `BeginDownloadToFile` (below) or a worker thread of your own.
+**Downloads.** `Download` streams to any `TStream`, `DownloadToFile` to a file, both in constant memory with `Int64` progress and a token. `DownloadToFile` writes a temporary file beside the destination, flushed and renamed over it only on a 200, so a 404, a 204, a cancel or a truncated body leaves the old file untouched and no temp file behind. Both block; `BeginDownloadToFile` (below) does not.
 
 ```pascal
 procedure TMainForm.HandleProgress(aSender: TObject; const aReceived, aTotal: Int64;
@@ -71,7 +71,7 @@ end;
 lvClient.DownloadToFile(lvUrl, 'C:\temp\big.zip', HandleProgress, FToken);
 ```
 
-A body short of the advertised `Content-Length` is an error. To resume, stream into a positioned `TStream` with `Range: bytes=<n>-` and check for a 206: a server that ignores the range answers 200 with the whole file.
+To resume, stream into a positioned `TStream` with `Range: bytes=<n>-` and check for a 206: a server that ignores the range answers 200 with the whole file.
 
 **Async.** `BeginGet`, `BeginPost`, `BeginExecute`, `BeginDownload` and `BeginDownloadToFile` run the same call on a worker thread and return an `IbpHttpTask` at once. Only the network wait moves; parsing the body stays the caller's, as in .NET and fetch.
 
@@ -85,9 +85,9 @@ end;
 FTask := FClient.BeginGet(lvUrl, HandleDone);  // FTask: IbpHttpTask, a field of the form
 ```
 
-`OnDone` fires once on every terminal state, on the main thread, which must pump messages; `MarshalTaskEvents := False` keeps it and the progress event on the worker. `Response` returns what the sync call returned or raises what it raised, with the same class and codes, and waits while the task runs. Releasing the last reference cancels, joins and frees, so a form holding the task in a field cleans up when it goes, and any handler may drop it. Delphi keeps a hidden copy of a returned interface until the calling method returns, so `FTask := nil` in the method that called `Begin*` takes effect only then.
+`OnDone` fires once on every terminal state, on the main thread, which must pump messages; `MarshalTaskEvents := False` keeps it and the progress event on the worker. `Response` returns what the sync call returned or raises what it raised, with the same class and codes, and waits while the task runs. Releasing the last reference cancels, joins and frees, so a form holding the task in a field cleans up when it goes, and any handler may drop it. Delphi keeps a hidden copy of a returned interface until the calling method ends, so `FTask := nil` in that method takes effect only then.
 
-**Threads.** Configure a client once, then share it: calls on several threads at once are safe, but they read the properties and the persistent headers without a lock, so change those only while no call runs, and put a per-call credential in the call's own header block. Freeing the client cancels every call in flight on it, from any thread and from any task: a sync call raises `EbpHttpClientCancelled`, a task ends `htsCancelled`, and `Free` returns only once none of them can touch the client again. It waits for them, so never free a client from inside its own call, such as its progress callback.
+**Threads.** Configure a client once, then share it: concurrent calls are safe, but they read the properties and persistent headers without a lock, so change those only while no call runs and put a per-call credential in the call's own header block. Freeing the client cancels every call on it, sync or task: a sync call raises `EbpHttpClientCancelled`, a task ends `htsCancelled`, and `Free` returns once none can touch the client. It waits, so never free a client inside its own call, such as its progress callback. In DLL finalization at process exit, where Windows has already killed the calling threads, it leaves a call in flight to the OS instead.
 
 **Errors.** Every `EbpHttpClient` from a request names the WinInet call that failed and the `host:port`, never the path or a `user:pass@`, and ends with the WinInet code: `HttpSendRequest failed for api.example.com:443: The server name or address could not be resolved (12007)`. `HttpSendRequest` is where WinInet resolves, connects, does TLS and sends, so the text and the code say which of those it was.
 
@@ -130,7 +130,7 @@ FTask := BpRunAsync(DoCrunch, HandleDone);   // HandleDone runs on the main thre
 
 Cancellation is cooperative, so no thread is killed. An exception in the work body lands in `ErrorClass` and `ErrorMessage` instead of crossing the thread boundary; `OnError` fires first, then `OnComplete` on every terminal state.
 
-The caller owns the task and frees it from any thread. `Free` cancels, joins and cleans up in any state, and from the moment it is entered no further event starts: a queued completion is dropped, a running handler finishes first, and a handler may free its own task. With `Create(False)` that means `OnComplete` or `OnError`: `OnProgress` runs inside the work, which would carry on in freed memory. Events go through one hidden dispatcher window, so they run on the main thread whichever thread created the task, and that thread has to pump messages. `Create(False)` runs them on the worker instead. An exception escaping a handler goes to `BpSetTaskExceptionHook`, else to `Classes.ApplicationHandleException`.
+The caller owns the task and frees it from any thread. `Free` cancels, joins and cleans up in any state, and once it is entered no further event starts: a queued completion is dropped and a running handler finishes first. A handler may free its own task, except `OnProgress` under `Create(False)`, which runs inside the work and would carry on in freed memory. Events run on the main thread through one hidden window, so the main thread must pump messages; `Create(False)` runs them on the worker. An exception escaping a handler goes to `BpSetTaskExceptionHook`, else to `Classes.ApplicationHandleException`.
 
 ---
 
@@ -212,7 +212,7 @@ Open addressing, power-of-two capacity, 0.75 load, backward-shift deletion so no
 
 ### [TbpIntDictionary](../src/Core/Classes/BpIntDictionary.pas)
 
-The same map with `Int64` keys and no case option. `GetKeys` returns a `TbpInt64DynArray`. Keys go through the Thomas Wang 64-to-32 mix, exposed as `BpHashInt64`.
+The same map with `Int64` keys, no case option and no `IntArray` accessors. `GetKeys` returns a `TbpInt64DynArray`. Keys go through the Thomas Wang 64-to-32 mix, exposed as `BpHashInt64`.
 
 ### [TbpIntList](../src/Core/Classes/BpIntList.pas)
 
