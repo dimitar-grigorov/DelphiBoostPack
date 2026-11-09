@@ -303,6 +303,8 @@ var
   // guards the call and task bookkeeping of every client and task
   gvHttpLock: TRTLCriticalSection;
   gvLiveTasks: Integer = 0;
+  // ntdll, resolved at load; nil where Windows lacks it
+  gvRtlDllShutdownInProgress: function: ByteBool; stdcall;
 
 // bp:mirror base64-encode
 // Copied, not shared: tools\CheckMirrors.js fails if the copies stop matching.
@@ -643,7 +645,7 @@ type
     FFreePending: Boolean;  // released inside its own work; the last event frees it
     FWorkDone: Boolean;     // the last event began, so even the worker may free it
     function Hold: IbpHttpTask;
-    procedure Detach;
+    procedure Detach(aCancel: Boolean);
     procedure DoWork(aSender: TObject; aToken: TbpCancellationToken);
     procedure HandleWorkerProgress(aSender: TObject; const aReceived,
       aTotal: Int64; var aCancel: Boolean);
@@ -704,20 +706,28 @@ end;
 destructor TbpHttpClient.Destroy;
 var
   i: Integer;
-  lvBusy: Boolean;
+  lvBusy, lvAbandon: Boolean;
 begin
   EnterCriticalSection(gvHttpLock);
   try
     FDestroying := True;
+    // in DLL finalization at process exit the calling threads are dead: their calls never end,
+    // and a cancel would enter WinInet where one stopped
+    lvAbandon := ((FCalls.Count > 0) or (FWorkers > 0)) and
+      Assigned(gvRtlDllShutdownInProgress) and gvRtlDllShutdownInProgress;
     // under the lock, so nothing listed here can be freed meanwhile
     for i := 0 to FTasks.Count - 1 do
-      TbpHttpTaskImpl(FTasks[i]).Detach;
+      TbpHttpTaskImpl(FTasks[i]).Detach(not lvAbandon);
     FTasks.Clear;
-    for i := 0 to FCalls.Count - 1 do
-      TbpHttpCall(FCalls[i]).Token.Cancel;
+    if not lvAbandon then
+      for i := 0 to FCalls.Count - 1 do
+        TbpHttpCall(FCalls[i]).Token.Cancel;
   finally
     LeaveCriticalSection(gvHttpLock);
   end;
+  // the session and lists stay to the process exit: a dead call still points at them
+  if lvAbandon then
+    Exit;
   // a cancelled call unwinds as fast as its closed handle fails
   repeat
     EnterCriticalSection(gvHttpLock);
@@ -1794,10 +1804,11 @@ begin
 end;
 
 // gvHttpLock is held: the client is being destroyed
-procedure TbpHttpTaskImpl.Detach;
+procedure TbpHttpTaskImpl.Detach(aCancel: Boolean);
 begin
   FClient := nil;
-  FTask.Cancel;
+  if aCancel then
+    FTask.Cancel;
 end;
 
 procedure TbpHttpTaskImpl.DoWork(aSender: TObject; aToken: TbpCancellationToken);
@@ -2326,6 +2337,8 @@ end;
 
 initialization
   InitializeCriticalSection(gvHttpLock);
+  @gvRtlDllShutdownInProgress := GetProcAddress(GetModuleHandle('ntdll.dll'),
+    'RtlDllShutdownInProgress');
 
 finalization
   // a task its caller never released may still be running, and would enter a deleted lock
